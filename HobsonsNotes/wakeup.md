@@ -33,36 +33,26 @@ by modelling his own finances. "FUN in the Dwarf Fortress sense."
 - Dan's finance data must never be in any git repo
 - BD gets a fake/sample COA for dev/test. Hobson writes the real SQL inserts for prod.
 
-## Repo Restructure (not yet done)
-Current:
-```
-LeoBloom/
-├── Docs/
-│   └── DataModelSpec-v1.md
-└── HobsonsNotes/
-```
-
-Target:
+## Repo Structure (done)
 ```
 LeoBloom/
 ├── LeoBloom.sln
-├── Specs/                          # Enduring truth — what the system IS
-│   └── DataModelSpec.md
-├── Projects/                       # Delivery stages (waterfall, per Dan)
-│   └── Project1-Database/
-│       └── Requirements.md
+├── Specs/
+│   └── DataModelSpec-v1.md
+├── Projects/                       # Delivery stages (waterfall)
 ├── HobsonsNotes/
 ├── BdsNotes/
 ├── Src/
-│   ├── LeoBloom.Ledger/
-│   ├── LeoBloom.Ledger.Tests/
-│   ├── LeoBloom.Ops/
-│   ├── LeoBloom.Ops.Tests/
-│   ├── LeoBloom.Data/
-│   ├── LeoBloom.Migrations/
-│   └── LeoBloom.Api/
-└── ...
+│   ├── LeoBloom.Ledger/            # classlib — accounting domain
+│   ├── LeoBloom.Ledger.Tests/      # xunit
+│   ├── LeoBloom.Ops/               # classlib — ops domain, refs Ledger
+│   ├── LeoBloom.Ops.Tests/         # xunit
+│   ├── LeoBloom.Data/              # classlib — data access, refs Ledger + Ops
+│   ├── LeoBloom.Migrations/        # console app — DB migrations
+│   └── LeoBloom.Api/               # webapi, refs Ledger + Ops + Data
+└── .gitignore
 ```
+Built on .NET 8.0. May want to upgrade to 9.0.
 
 ## Delivery Plan
 - **Project 1:** Database — schema, migrations, seed data. Get the DB standing so Dan can start using it.
