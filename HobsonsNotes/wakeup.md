@@ -60,11 +60,13 @@ Built on .NET 8.0. May want to upgrade to 9.0.
 - **Project 3:** UI — Fable/Feliz/Elmish frontend
 
 ## Next Steps
-1. Do the repo restructure (move DataModelSpec, create Specs/, Projects/, BdsNotes/, Src/)
-2. Draft Project 1 requirements (BRD for database stage)
-3. Create fake sample COA for BD's dev/test databases
-4. Write real COA SQL inserts (outside repo) for prod
-5. Dan still has open questions in DataModelSpec (tenant table, audit log)
+1. ~~Do the repo restructure~~ Done.
+2. Install .NET 10 SDK, update target frameworks from `net8.0` → `net10.0`, verify build
+3. Push to origin
+4. Draft Project 1 requirements (BRD for database stage)
+5. Create fake sample COA for BD's dev/test databases
+6. Write real COA SQL inserts (outside repo) for prod
+7. Dan still has open questions in DataModelSpec (tenant table, audit log)
 
 ## Open Questions from DataModelSpec
 - Tenant as first-class entity? Currently just a string. YAGNI for now.
