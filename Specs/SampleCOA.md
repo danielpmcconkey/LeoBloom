@@ -97,10 +97,11 @@ and account types are identical to prod. Names are generic.
 
 | Code | Parent | Name | Account Type |
 |------|--------|------|--------------|
-| 7000 | — | Other Income / Expense | expense |
-| 7010 | 7000 | Bank Fees | expense |
-| 7020 | 7000 | Interest Income | revenue |
-| 7030 | 7000 | Investment Fees | expense |
+| 7100 | — | Other Income | revenue |
+| 7110 | 7100 | Interest Income | revenue |
+| 7200 | — | Other Expense | expense |
+| 7210 | 7200 | Bank Fees | expense |
+| 7220 | 7200 | Investment Fees | expense |
 
 ## 9xxx — Memo / Non-Posting
 
