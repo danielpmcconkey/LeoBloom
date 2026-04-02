@@ -399,6 +399,11 @@ Feature: Ops schema structural constraints
     When I insert into obligation_instance with status_id 9999
     Then the insert is rejected with a FK violation
 
+  Scenario: obligation_instance requires an expected_date
+    Given the ops schema exists
+    When I insert into obligation_instance with a null expected_date
+    Then the insert is rejected with a NOT NULL violation
+
   Scenario: obligation_instance journal_entry_id must reference a valid journal_entry
     Given the ops schema exists
     When I insert into obligation_instance with journal_entry_id 9999

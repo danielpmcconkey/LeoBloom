@@ -315,7 +315,7 @@ This is the thing whose status gets tracked.
 | `name` | `varchar(100) NOT NULL` | Human-readable label, e.g. "Apr 2026". Combined with the parent agreement's name for display: "Brian rent — Apr 2026" |
 | `status_id` | `integer NOT NULL FK → obligation_status.id` | Default: `expected` |
 | `amount` | `numeric(12,2)` | The amount for this specific occurrence. Pre-filled from `obligation_agreement.amount` for fixed agreements. Set when the bill arrives for variable agreements. |
-| `expected_date` | `date` | When we expect this to happen |
+| `expected_date` | `date NOT NULL` | When we expect this to happen |
 | `confirmed_date` | `date` | When it actually happened |
 | `due_date` | `date` | For payable agreements — when the bill is due. Nullable. |
 | `document_path` | `varchar(500)` | Path to bill PDF/scan if applicable. Nullable. |
