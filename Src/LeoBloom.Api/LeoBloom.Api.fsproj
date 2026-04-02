@@ -11,9 +11,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LeoBloom.Ledger\LeoBloom.Ledger.fsproj" />
-    <ProjectReference Include="..\LeoBloom.Ops\LeoBloom.Ops.fsproj" />
-    <ProjectReference Include="..\LeoBloom.Data\LeoBloom.Data.fsproj" />
+    <ProjectReference Include="..\LeoBloom.Domain\LeoBloom.Domain.fsproj" />
+    <ProjectReference Include="..\LeoBloom.Dal\LeoBloom.Dal.fsproj" />
   </ItemGroup>
 
 </Project>
