@@ -1,0 +1,9 @@
+-- MIGRONDI:NAME=1712000001000_CreateLedgerSchema.sql
+-- MIGRONDI:TIMESTAMP=1712000001000
+-- ---------- MIGRONDI:UP ----------
+
+CREATE SCHEMA IF NOT EXISTS ledger;
+
+-- ---------- MIGRONDI:DOWN ----------
+
+DROP SCHEMA IF EXISTS ledger CASCADE;

@@ -1,0 +1,219 @@
+Feature: Ops schema structural constraints
+
+  All scenarios verify database-level enforcement. No application logic.
+
+  # --- obligation_type ---
+
+  Scenario: obligation_type name must be unique
+    Given an obligation_type "receivable" exists
+    When I insert another obligation_type with name "receivable"
+    Then the insert is rejected with a UNIQUE violation
+
+  Scenario: obligation_type requires a name
+    Given the ops schema exists
+    When I insert into obligation_type with a null name
+    Then the insert is rejected with a NOT NULL violation
+
+  # --- obligation_status ---
+
+  Scenario: obligation_status name must be unique
+    Given an obligation_status "expected" exists
+    When I insert another obligation_status with name "expected"
+    Then the insert is rejected with a UNIQUE violation
+
+  Scenario: obligation_status requires a name
+    Given the ops schema exists
+    When I insert into obligation_status with a null name
+    Then the insert is rejected with a NOT NULL violation
+
+  # --- cadence ---
+
+  Scenario: cadence name must be unique
+    Given a cadence "monthly" exists
+    When I insert another cadence with name "monthly"
+    Then the insert is rejected with a UNIQUE violation
+
+  Scenario: cadence requires a name
+    Given the ops schema exists
+    When I insert into cadence with a null name
+    Then the insert is rejected with a NOT NULL violation
+
+  # --- payment_method ---
+
+  Scenario: payment_method name must be unique
+    Given a payment_method "zelle" exists
+    When I insert another payment_method with name "zelle"
+    Then the insert is rejected with a UNIQUE violation
+
+  Scenario: payment_method requires a name
+    Given the ops schema exists
+    When I insert into payment_method with a null name
+    Then the insert is rejected with a NOT NULL violation
+
+  # --- obligation_agreement ---
+
+  Scenario: obligation_agreement requires a name
+    Given the ops schema exists
+    When I insert into obligation_agreement with a null name
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: obligation_agreement requires an obligation_type_id
+    Given the ops schema exists
+    When I insert into obligation_agreement with a null obligation_type_id
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: obligation_agreement obligation_type_id must reference a valid obligation_type
+    Given the ops schema exists
+    When I insert into obligation_agreement with obligation_type_id 9999
+    Then the insert is rejected with a FK violation
+
+  Scenario: obligation_agreement requires a cadence_id
+    Given the ops schema exists
+    When I insert into obligation_agreement with a null cadence_id
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: obligation_agreement cadence_id must reference a valid cadence
+    Given the ops schema exists
+    When I insert into obligation_agreement with cadence_id 9999
+    Then the insert is rejected with a FK violation
+
+  Scenario: obligation_agreement payment_method_id must reference a valid payment_method
+    Given the ops schema exists
+    When I insert into obligation_agreement with payment_method_id 9999
+    Then the insert is rejected with a FK violation
+
+  Scenario: obligation_agreement source_account_id must reference a valid ledger account
+    Given the ops schema exists
+    When I insert into obligation_agreement with source_account_id 9999
+    Then the insert is rejected with a FK violation
+
+  Scenario: obligation_agreement dest_account_id must reference a valid ledger account
+    Given the ops schema exists
+    When I insert into obligation_agreement with dest_account_id 9999
+    Then the insert is rejected with a FK violation
+
+  Scenario: obligation_agreement amount is nullable
+    Given the ops schema exists
+    When I insert a valid obligation_agreement with a null amount
+    Then the insert succeeds
+
+  # --- obligation_instance ---
+
+  Scenario: obligation_instance requires an obligation_agreement_id
+    Given the ops schema exists
+    When I insert into obligation_instance with a null obligation_agreement_id
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: obligation_instance obligation_agreement_id must reference a valid agreement
+    Given the ops schema exists
+    When I insert into obligation_instance with obligation_agreement_id 9999
+    Then the insert is rejected with a FK violation
+
+  Scenario: obligation_instance requires a name
+    Given the ops schema exists
+    When I insert into obligation_instance with a null name
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: obligation_instance requires a status_id
+    Given the ops schema exists
+    When I insert into obligation_instance with a null status_id
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: obligation_instance status_id must reference a valid obligation_status
+    Given the ops schema exists
+    When I insert into obligation_instance with status_id 9999
+    Then the insert is rejected with a FK violation
+
+  Scenario: obligation_instance requires an expected_date
+    Given the ops schema exists
+    When I insert into obligation_instance with a null expected_date
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: obligation_instance journal_entry_id must reference a valid journal_entry
+    Given the ops schema exists
+    When I insert into obligation_instance with journal_entry_id 9999
+    Then the insert is rejected with a FK violation
+
+  Scenario: obligation_instance journal_entry_id is nullable
+    Given the ops schema exists
+    When I insert a valid obligation_instance with null journal_entry_id
+    Then the insert succeeds
+
+  # --- transfer ---
+
+  Scenario: transfer requires a from_account_id
+    Given the ops schema exists
+    When I insert into transfer with a null from_account_id
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: transfer from_account_id must reference a valid ledger account
+    Given the ops schema exists
+    When I insert into transfer with from_account_id 9999
+    Then the insert is rejected with a FK violation
+
+  Scenario: transfer requires a to_account_id
+    Given the ops schema exists
+    When I insert into transfer with a null to_account_id
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: transfer to_account_id must reference a valid ledger account
+    Given the ops schema exists
+    When I insert into transfer with to_account_id 9999
+    Then the insert is rejected with a FK violation
+
+  Scenario: transfer requires an amount
+    Given the ops schema exists
+    When I insert into transfer with a null amount
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: transfer requires a status
+    Given the ops schema exists
+    When I insert into transfer with a null status
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: transfer requires an initiated_date
+    Given the ops schema exists
+    When I insert into transfer with a null initiated_date
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: transfer journal_entry_id must reference a valid journal_entry
+    Given the ops schema exists
+    When I insert into transfer with journal_entry_id 9999
+    Then the insert is rejected with a FK violation
+
+  # --- invoice ---
+
+  Scenario: invoice requires a tenant
+    Given the ops schema exists
+    When I insert into invoice with a null tenant
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: invoice requires a fiscal_period_id
+    Given the ops schema exists
+    When I insert into invoice with a null fiscal_period_id
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: invoice fiscal_period_id must reference a valid fiscal_period
+    Given the ops schema exists
+    When I insert into invoice with fiscal_period_id 9999
+    Then the insert is rejected with a FK violation
+
+  Scenario: invoice requires rent_amount
+    Given the ops schema exists
+    When I insert into invoice with a null rent_amount
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: invoice requires utility_share
+    Given the ops schema exists
+    When I insert into invoice with a null utility_share
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: invoice requires total_amount
+    Given the ops schema exists
+    When I insert into invoice with a null total_amount
+    Then the insert is rejected with a NOT NULL violation
+
+  Scenario: invoice tenant and fiscal_period_id must be unique together
+    Given an invoice for tenant "Brian" and fiscal_period "2026-03" exists
+    When I insert another invoice for tenant "Brian" and fiscal_period "2026-03"
+    Then the insert is rejected with a UNIQUE violation
