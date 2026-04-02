@@ -1,4 +1,4 @@
-# Data Model Spec — v1 Draft
+# Data Model Spec — Draft
 
 Cash basis, double-entry, append-only ledger. PostgreSQL. Schema defined by SQL
 migration files; F# types mirror the schema but are not the source of truth.
@@ -18,12 +18,13 @@ live in the application layer, covered by BDD-style tests.
 
 | Name | Purpose | Who uses it |
 |------|---------|-------------|
-| `leobloom_prod` | Real financial data | Dan / Hobson |
-| `leobloom_dev` | Interactive sandbox (persists between sessions) | BD |
-| `leobloom_test` | Automated test runs — ephemeral (created, seeded, tested, destroyed) | BD / CI |
+| `leobloom_prod` | Real financial data | Dan / Hobson (host machine) |
+| `leobloom_dev` | Development and test | BD (Docker sandbox) |
 
 Separate Postgres roles per database. Prod credentials not available to BD's
-environment.
+environment. Same migrations run against both databases. Configuration
+(connection strings) in `appsettings.{Environment}.json`; secrets (passwords)
+injected via environment variables, never in the repo.
 
 ---
 
