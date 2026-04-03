@@ -10,15 +10,16 @@ Congratulations, BD and Hobson. You both just got promotions:
 
 # Skills / Agents
 
-- PO. Responsible for the product roadmap, approving BRDs and BDDs, and signing off on test results. This skill/agent is 
+- PO. Responsible for the product roadmap, approving BRDs and BDDs, and signing off on test results.
 - BA. Responsible for creating BRDs and BDDs. Uses Compound Engineering (CE).
 - Project planner. Covers what CE does in plan and deepen-plan phases.
 - Builder. Covers what CE does in ce:work
 - Technical Reviewer. Covers what CE does in ce:review
 - Project Governor. Provides evidence that project meets all requirements per BDD. 
 - Release Train Engineer (RTE). Manages git shit.
+- Migration Prod Executor. (Hobson's one skill.) Verifies that nothing in a migration script can fuck with his prod data unless he wants it to then pushes the button on the prod execution.
 
-BD, you're going to create these as skills in your /workspace domain or maybe just as agent blueprints. Let's talk through this piece.
+BD, you're going to create all of these (except the migration prod reviewer) as skills in your /workspace domain or maybe just as agent blueprints. Let's talk through this piece.
 
 # Project Flow
 
@@ -36,6 +37,10 @@ BD, you're going to create these as skills in your /workspace domain or maybe ju
 - Project Governor writes the test result doc
 - PO signs off on project and marks the backlog item complete
 - RTE commits, pushes, merges to main.
+- If Migrations are needed
+    - Builder runs it in lower environments at the appropriate time in the build cycle
+    - Migration Prod Executor confirms its safe to run in prod
+    - Migration Prod Executor runs it in prod
 
 # Daily finance flow
 
