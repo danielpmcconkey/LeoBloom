@@ -22,3 +22,8 @@ let ``Ops structural constraints`` (scenario: XunitSerializableScenario) =
 [<Trait("Category", "Structural")>]
 let ``Delete restriction constraints`` (scenario: XunitSerializableScenario) =
     source.RunScenario(scenario)
+
+[<Theory; MemberData("scenarios", "LeoBloom.Dal.Tests.PostJournalEntry.feature")>]
+[<Trait("Category", "Behavioral")>]
+let ``Post journal entry`` (scenario: XunitSerializableScenario) =
+    source.RunScenario(scenario)

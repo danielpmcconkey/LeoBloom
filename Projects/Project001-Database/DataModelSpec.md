@@ -204,6 +204,31 @@ Three lines, two debits and one credit, total debits = total credits = $1,500.
 
 ---
 
+## Key Mutations
+
+### Post Journal Entry (Project 005)
+
+The write path for creating journal entries. Inserts atomically into three tables
+within a single transaction:
+
+1. `journal_entry` — header row (date, description, source, fiscal_period_id)
+2. `journal_entry_line` — one row per debit/credit line
+3. `journal_entry_reference` — zero or more external reference rows
+
+**Validation (application layer, before any SQL):**
+- Pure: line count >= 2, amounts > 0, debits = credits, description non-empty,
+  entry_type is debit/credit, source non-empty when provided, reference fields non-empty
+- DB-dependent: fiscal period exists and is open, entry_date within period range,
+  all accounts exist and are active
+
+**Atomicity:** All-or-nothing. If any insert fails, the transaction rolls back.
+No partial state.
+
+**Implementation:** `LeoBloom.Dal.JournalEntryService.post` (production) and
+`JournalEntryService.postInTransaction` (test-friendly variant).
+
+---
+
 ## Schema: `ops`
 
 Operational tracking — obligations, bills, transfers, invoices. The "nagging

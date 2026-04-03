@@ -177,7 +177,7 @@ This is the heartbeat of the accounting engine.
 
 | Project | Story | Depends On | Status |
 |---------|-------|------------|--------|
-| 005 | **Post journal entry** | 004, 029 | Backlog |
+| 005 | **Post journal entry** | 004, 029 | Done |
 | 006 | **Void journal entry** | 005, 029 | Backlog |
 | 028 | **Write-level ledger validation** | 005, 006 | Backlog |
 

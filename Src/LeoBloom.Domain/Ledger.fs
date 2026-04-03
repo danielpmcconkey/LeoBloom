@@ -89,3 +89,87 @@ module Ledger =
         | Some _, Some reason when not (String.IsNullOrWhiteSpace reason) -> Ok ()
         | Some _, None -> Error [ "Void reason is required when entry is voided" ]
         | Some _, Some _ -> Error [ "Void reason cannot be empty when entry is voided" ]
+
+    // --- Command DTOs for the write path ---
+
+    type PostLineCommand =
+        { accountId: int
+          amount: decimal
+          entryType: EntryType
+          memo: string option }
+
+    type PostReferenceCommand =
+        { referenceType: string
+          referenceValue: string }
+
+    type PostJournalEntryCommand =
+        { entryDate: DateOnly
+          description: string
+          source: string option
+          fiscalPeriodId: int
+          lines: PostLineCommand list
+          references: PostReferenceCommand list }
+
+    type PostedJournalEntry =
+        { entry: JournalEntry
+          lines: JournalEntryLine list
+          references: JournalEntryReference list }
+
+    // --- Additional pure validators for the write path ---
+
+    module EntryType =
+        let fromString (s: string) : Result<EntryType, string> =
+            match s.ToLowerInvariant() with
+            | "debit" -> Ok EntryType.Debit
+            | "credit" -> Ok EntryType.Credit
+            | _ -> Error (sprintf "Invalid entry_type: '%s'. Must be 'debit' or 'credit'" s)
+
+        let toDbString (et: EntryType) =
+            match et with
+            | EntryType.Debit -> "debit"
+            | EntryType.Credit -> "credit"
+
+    let validateDescription (desc: string) : Result<unit, string list> =
+        if String.IsNullOrWhiteSpace desc then
+            Error [ "Description is required and cannot be empty" ]
+        else Ok ()
+
+    let validateSource (source: string option) : Result<unit, string list> =
+        match source with
+        | None -> Ok ()
+        | Some s when String.IsNullOrWhiteSpace s ->
+            Error [ "Source cannot be empty when provided" ]
+        | Some _ -> Ok ()
+
+    let validateReferences (refs: PostReferenceCommand list) : Result<unit, string list> =
+        let errors =
+            refs
+            |> List.collect (fun r ->
+                [ if String.IsNullOrWhiteSpace r.referenceType then
+                      "reference_type cannot be empty"
+                  if String.IsNullOrWhiteSpace r.referenceValue then
+                      "reference_value cannot be empty" ])
+        if errors.IsEmpty then Ok () else Error errors
+
+    /// Runs all pure (no-DB) validations. Collects all errors.
+    let validateCommand (cmd: PostJournalEntryCommand) : Result<unit, string list> =
+        let toLines =
+            cmd.lines
+            |> List.map (fun l ->
+                { id = 0; journalEntryId = 0; accountId = l.accountId
+                  amount = l.amount; entryType = l.entryType; memo = l.memo })
+
+        let lineErrors =
+            [ validateMinimumLineCount toLines
+              validateAmountsPositive toLines
+              validateBalanced toLines ]
+            |> List.collect (function Error errs -> errs | Ok _ -> [])
+
+        let headerErrors =
+            [ validateDescription cmd.description
+              validateSource cmd.source
+              validateReferences cmd.references ]
+            |> List.collect (function Error errs -> errs | Ok _ -> [])
+
+        let allErrors = headerErrors @ lineErrors
+        if allErrors.IsEmpty then Ok () else Error allErrors

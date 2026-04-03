@@ -10,6 +10,7 @@
     <Compile Include="LedgerStepDefinitions.fs" />
     <Compile Include="OpsStepDefinitions.fs" />
     <Compile Include="DeleteRestrictionStepDefinitions.fs" />
+    <Compile Include="PostJournalEntryStepDefinitions.fs" />
     <Compile Include="FeatureFixture.fs" />
   </ItemGroup>
 
@@ -35,6 +36,8 @@
                       Link="OpsStructuralConstraints.feature" />
     <EmbeddedResource Include="..\..\Specs\Structural\DeleteRestrictionConstraints.feature"
                       Link="DeleteRestrictionConstraints.feature" />
+    <EmbeddedResource Include="..\..\Specs\Behavioral\PostJournalEntry.feature"
+                      Link="PostJournalEntry.feature" />
   </ItemGroup>
 
   <ItemGroup>
