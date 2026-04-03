@@ -81,7 +81,7 @@ module Ops =
           fromAccountId: int
           toAccountId: int
           amount: decimal
-          status: string
+          status: TransferStatus
           initiatedDate: DateOnly
           expectedSettlement: DateOnly option
           confirmedDate: DateOnly option

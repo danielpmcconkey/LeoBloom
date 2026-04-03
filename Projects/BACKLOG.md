@@ -30,7 +30,7 @@ Stories reference it by section. CE should read it before writing any BRD.
 
 ---
 
-## Foundation (Projects 001–004)
+## Foundation (Projects 001–004, 029)
 
 | Project | Description | Status |
 |---------|-------------|--------|
@@ -38,11 +38,134 @@ Stories reference it by section. CE should read it before writing any BRD.
 | 002 | Test harness — TickSpec/xUnit, 88 Gherkin scenarios, shared config | Done |
 | 003 | BDD infrastructure — FT tags, feature file reorg, DeleteTarget refactor, docs | Done |
 | 004 | Domain types — F# types in Domain, business logic BDD in Domain.Tests | Done |
+| 029 | Lookup table elimination — replace integer FK lookups with DU-backed strings | Backlog |
 
 Project 004 delivers F# record/DU types mirroring every schema table, plus pure
 validation functions for the fundamental invariants (balance rule, amount
 positivity, entry_type values). No persistence. No status machine. Those come in
 later stories that build on these types.
+
+### 029 — Eliminate Lookup Tables, Replace with DU-Backed String Columns
+
+**Executive decision (Dan):** F# discriminated unions in the Domain layer are
+the source of truth for valid enumerated values. The database should store
+human-readable strings, not integer foreign keys to lookup tables. This project
+eliminates every pure lookup table and replaces the integer FK columns on
+dependent tables with `varchar` columns containing the DU case name as a string.
+
+**Why now:** Projects 005 (Post Journal Entry) and 006 (Void Journal Entry) are
+about to build service and persistence layers on top of the current schema. If
+we build write paths that resolve integer FKs against lookup tables, then rip
+those tables out later, we're rewriting the Dal, the service layer, and every
+test that touches them. Do it now while the only consumers are Domain types and
+raw SQL migrations.
+
+**What is a "pure lookup table"?** A table that exists solely to assign meaning
+to an integer primary key. It has an `id` column, a `name` column, and nothing
+else. No business data. No user-created rows. No additional attributes that
+serve a normalization purpose. The valid values are fixed by the application and
+already defined as F# DUs in the Domain layer.
+
+**Tables to eliminate (4 total):**
+
+| Lookup Table | Schema | Values | Corresponding DU | Dependent Table(s) | FK Column(s) |
+|---|---|---|---|---|---|
+| `obligation_type` | `ops` | receivable, payable | `Ops.ObligationDirection` | `ops.obligation_agreement` | `obligation_type_id` |
+| `obligation_status` | `ops` | expected, in_flight, confirmed, posted, overdue, skipped | `Ops.InstanceStatus` | `ops.obligation_instance` | `status_id` |
+| `cadence` | `ops` | monthly, quarterly, annual, one_time | `Ops.RecurrenceCadence` | `ops.obligation_agreement` | `cadence_id` |
+| `payment_method` | `ops` | autopay_pull, ach, zelle, cheque, bill_pay, manual | `Ops.PaymentMethodType` | `ops.obligation_agreement` | `payment_method_id` |
+
+**Why `account_type` stays:** `account_type` carries `normal_balance` — that's
+a real attribute, not just a name. Without the table, every row in
+`ledger.account` would need both `account_type` and `normal_balance` columns,
+which is denormalization. The relationship between account type and normal
+balance is a domain constant (assets are always normal-debit), but storing it
+once in a normalized table is the right call. `account_type` is 3NF, not a
+lookup. It stays, along with `account` and `fiscal_period` — those are real
+entities with real data.
+
+**Migration strategy (per lookup table):**
+
+1. **Add new column(s):** `ALTER TABLE ... ADD COLUMN <name> varchar(N) NOT NULL DEFAULT '<placeholder>';`
+2. **Populate from existing FK:** `UPDATE ... SET <name> = (SELECT name FROM <lookup> WHERE id = <fk_col>);`
+3. **Drop the FK constraint:** `ALTER TABLE ... DROP CONSTRAINT ...;`
+4. **Drop the old integer column:** `ALTER TABLE ... DROP COLUMN <fk_col>;`
+5. **Drop the lookup table:** `DROP TABLE <lookup>;`
+
+Steps 1-5 run in a single migration per lookup table (or one combined migration
+if the team prefers).
+
+**Rollback story:** Each migration has a DOWN section that reverses the process:
+recreate the lookup table, re-seed it, add the integer column back, populate it
+from the string column, re-add the FK constraint, drop the string column. This
+is mechanical but must be tested. The BDD should include a rollback scenario or
+at minimum verify the DOWN migration compiles.
+
+**What changes in the Domain layer:**
+
+- Remove the record types that mirror eliminated lookup tables:
+  `Ops.ObligationType`, `Ops.ObligationStatus`, `Ops.Cadence`,
+  `Ops.PaymentMethod` (the `{id: int; name: string}` records).
+  `Ledger.AccountType` stays — it mirrors a real table, not a lookup.
+- The DU types (`ObligationDirection`, `InstanceStatus`, `RecurrenceCadence`,
+  `PaymentMethodType`, `EntryType`, `NormalBalance`) already exist and are
+  correct. They become the sole representation.
+- Add string conversion functions: `ObligationDirection.toString` /
+  `ObligationDirection.fromString` (or a module-level function) for each DU.
+  These are the serialization boundary between Domain and Dal.
+- Update any record types that currently hold `int` FK fields to hold string
+  or DU fields instead. E.g., `ObligationAgreement.obligationTypeId: int`
+  becomes `ObligationAgreement.obligationType: ObligationDirection` (or
+  `obligationType: string` at the Dal boundary).
+
+**What changes in the Dal layer:**
+
+- Queries that currently `JOIN` on lookup tables become simpler -- just read the
+  string column directly.
+- Insert/update statements write the string value instead of looking up an
+  integer ID.
+- Any existing Dal code (currently just `ConnectionString.fs`) is unaffected,
+  but future Dal work (Projects 005+) will be built against the new schema.
+
+**What Hobson (the Comptroller) needs to know:**
+
+- `ledger.account` is unchanged — `account_type_id` FK stays, `account_type`
+  table stays. Hobson's existing ledger queries keep working.
+- `SELECT * FROM ops.obligation_agreement` will show `obligation_type = 'receivable'`,
+  `cadence = 'monthly'`, `payment_method = 'ach'` instead of integer IDs.
+- `SELECT * FROM ops.obligation_instance` will show `status = 'expected'`
+  instead of `status_id = 1`.
+- The lookup tables (`obligation_type`, `obligation_status`, `cadence`,
+  `payment_method`) will no longer exist. If Hobson has any saved queries that
+  join on them, those queries need updating.
+
+**What this does NOT cover:**
+
+- `entry_type` on `journal_entry_line` -- already a `varchar(6)` column
+  storing `'debit'`/`'credit'` as strings. No lookup table exists. No change
+  needed.
+- `transfer.status` -- already a string column (`'initiated'`/`'confirmed'`).
+  No lookup table. DataModelSpec explicitly chose not to create one.
+- `journal_entry.source` -- already a free-form string. No change needed.
+- Creating new DU types that don't already exist -- the DUs are already in
+  `Ops.fs` and `Ledger.fs` from Project 004.
+- Updating the DataModelSpec -- that is a separate concern. The spec should be
+  updated to reflect the new schema, but whether that's part of this project or
+  a follow-up is a BRD decision.
+
+**Dependency note for the BA:** Projects 014 (Obligation Agreements), 015
+(Spawn Obligation Instances), and 016 (Status Transitions) all reference the
+lookup tables being eliminated here. Their backlog descriptions currently
+mention `obligation_type_id`, `cadence_id`, `payment_method_id`, and
+`status_id`. Those descriptions will need to be read as referring to the
+replacement string columns after this project lands. The BA should flag this
+when writing BRDs for those stories, but we are NOT updating those backlog
+descriptions now -- they were written against the original schema and will be
+reinterpreted in context.
+
+**DataModelSpec references:** `obligation_type`, `obligation_status`, `cadence`,
+`payment_method` table definitions. `obligation_agreement`, `obligation_instance`
+FK columns.
 
 ---
 
@@ -54,8 +177,9 @@ This is the heartbeat of the accounting engine.
 
 | Project | Story | Depends On | Status |
 |---------|-------|------------|--------|
-| 005 | **Post journal entry** | 004 | Backlog |
-| 006 | **Void journal entry** | 005 | Backlog |
+| 005 | **Post journal entry** | 004, 029 | Backlog |
+| 006 | **Void journal entry** | 005, 029 | Backlog |
+| 028 | **Write-level ledger validation** | 005, 006 | Backlog |
 
 ### 005 — Post Journal Entry
 
@@ -153,6 +277,64 @@ Mark an existing journal entry as void. The entry remains in the ledger
 
 **DataModelSpec references:** `journal_entry.voided_at`, `journal_entry.void_reason`.
 All balance queries (key queries #1, #2) filter on `voided_at IS NULL`.
+
+---
+
+### 028 — Write-Level Ledger Validation
+
+Full validation suite at the service/persistence layer for every write
+operation to ledger tables. Domain types (Project 004) define the rules;
+this story proves those rules are enforced at the boundary where data
+actually gets persisted — not just in isolated unit tests.
+
+**Scope:** Every add or edit that touches `journal_entry`,
+`journal_entry_line`, `journal_entry_reference`, or the void fields on
+`journal_entry` must run domain validation before persisting. This is the
+service layer, not the domain layer — we're testing the integration between
+the domain validation functions and the persistence code that calls them.
+
+**What this covers:**
+
+- All validations from Story 005 (post journal entry) exercised through the
+  service/persistence write path: balance rule, minimum two lines, amount
+  positivity, entry_type values, fiscal period open/date-range checks,
+  account active checks, non-empty description, non-empty source.
+- All validations from Story 006 (void journal entry) exercised through the
+  service/persistence write path: non-null/non-whitespace void_reason,
+  idempotent void behavior.
+- **Specifically:** `IsNullOrWhiteSpace` validation on `void_reason` must be
+  tested at the write level. An isolated domain unit test proves the
+  validation function works. This story proves the service layer actually
+  calls it before persisting. If someone bypasses or forgets to wire the
+  check, this catches it.
+- Reference validation: `journal_entry_reference` rows attached during
+  creation are validated (non-empty type and value).
+
+**What this does NOT cover:**
+
+- Read operations (balance queries, reports) — those are Epic B/D.
+- New domain validation rules — Project 004 owns the rules. This story owns
+  the proof that the write path calls them.
+- Database-level constraints (CHECK, NOT NULL, FK) — those are Project 001's
+  territory. This story is about the application layer rejecting bad data
+  before it even hits the database.
+- Ops tables (obligations, transfers) — those are Epic E/F.
+
+**Edge cases CE should address in the BRD:**
+
+- What happens when a valid domain object is constructed but the service
+  layer skips validation before persisting? This story should make that
+  scenario impossible to miss.
+- Whitespace-only void_reason (`"   "`, `"\t"`, `"\n"`) must be rejected
+  identically to null/empty. The write path must call the same
+  `IsNullOrWhiteSpace` check the domain exposes.
+- Validation error messages: the service layer should surface the domain
+  validation errors clearly, not swallow them into a generic persistence
+  failure.
+
+**DataModelSpec references:** `journal_entry`, `journal_entry_line`,
+`journal_entry_reference` tables. `journal_entry.voided_at`,
+`journal_entry.void_reason`.
 
 ---
 
@@ -1032,8 +1214,10 @@ Not scoped, not sized. Noted so we don't forget they exist.
 
 ## Sequencing Notes
 
-- **Critical path:** 004 → 005 → 007 → 008 → 011/012 → 013. This is the
-  ledger engine from types to financial statements.
+- **Critical path:** 004 → 029 → 005 → 007 → 008 → 011/012 → 013. This is
+  the ledger engine from types to financial statements. Project 029 (lookup
+  table elimination) slots in before 005 because the write path must be built
+  against the cleaned-up schema.
 - **Parallel track:** 004 → 014 → 015 → 016 → 017. Obligation lifecycle can
   be built in parallel with the ledger reporting epics once Project 004 is done.
 - **Convergence point:** Story 018 (obligation→ledger posting) requires both
