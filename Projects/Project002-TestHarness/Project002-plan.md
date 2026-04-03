@@ -1,7 +1,7 @@
 ---
 title: "feat: Project 2 — Test Harness & Configuration"
 type: feat
-status: active
+status: completed
 date: 2026-04-03
 deepened: 2026-04-03
 ---
@@ -403,16 +403,16 @@ Each feature file gets a header comment documenting scope:
 
 ## Acceptance Criteria
 
-- [ ] `dotnet test` from solution root runs all 88 Gherkin scenarios against `leobloom_dev` — all pass
-- [ ] `LeoBloom.Migrations` uses `Dal.ConnectionString.resolve` — no duplicated config loading
-- [ ] `LEOBLOOM_ENV` is the sole mechanism for environment selection across all projects
-- [ ] No test data persists in the database after a test run (transaction rollback)
-- [ ] Solution builds clean with zero warnings
-- [ ] `LeoBloom.Domain.Tests` builds and runs (placeholder test passes, unchanged)
-- [ ] Feature files remain in `Projects/Project001-Database/Specs/Acceptance/` (single source of truth, linked into test project)
-- [ ] All Then steps use try/finally for cleanup — no connection leaks on assertion failure
-- [ ] No `appsettings.Production.json` in Dal.Tests
-- [ ] Runtime database name guard prevents accidental prod execution
+- [x]`dotnet test` from solution root runs all 88 Gherkin scenarios against `leobloom_dev` — all pass
+- [x]`LeoBloom.Migrations` uses `Dal.ConnectionString.resolve` — no duplicated config loading
+- [x]`LEOBLOOM_ENV` is the sole mechanism for environment selection across all projects
+- [x]No test data persists in the database after a test run (transaction rollback)
+- [x]Solution builds clean with zero warnings
+- [x]`LeoBloom.Domain.Tests` builds and runs (placeholder test passes, unchanged)
+- [x]Feature files remain in `Projects/Project001-Database/Specs/Acceptance/` (single source of truth, linked into test project)
+- [x]All Then steps use try/finally for cleanup — no connection leaks on assertion failure
+- [x]No `appsettings.Production.json` in Dal.Tests
+- [x]Runtime database name guard prevents accidental prod execution
 
 ## Success Metrics
 
