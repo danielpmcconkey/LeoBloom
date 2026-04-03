@@ -35,7 +35,7 @@ Stories reference it by section. CE should read it before writing any BRD.
 | Project | Description | Status |
 |---------|-------------|--------|
 | 001 | Database schema, migrations, seed data, structural constraint specs | Done |
-| 002 | Test harness — TickSpec/xUnit, 88 Gherkin scenarios, shared config | In Progress |
+| 002 | Test harness — TickSpec/xUnit, 88 Gherkin scenarios, shared config | Done |
 | 003 | BDD infrastructure — FT tags, feature file reorg, DeleteTarget refactor, docs | Ready |
 | 004 | Domain types — F# types in Domain, business logic BDD in Domain.Tests | Backlog |
 
