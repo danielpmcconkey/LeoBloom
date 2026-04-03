@@ -97,18 +97,6 @@ let getValidFiscalPeriodId (ctx: ScenarioContext) =
     use cmd = new NpgsqlCommand("SELECT id FROM ledger.fiscal_period LIMIT 1", ctx.Transaction.Connection, ctx.Transaction)
     cmd.ExecuteScalar() :?> int
 
-let getValidObligationTypeId (ctx: ScenarioContext) =
-    use cmd = new NpgsqlCommand("SELECT id FROM ops.obligation_type LIMIT 1", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.ExecuteScalar() :?> int
-
-let getValidCadenceId (ctx: ScenarioContext) =
-    use cmd = new NpgsqlCommand("SELECT id FROM ops.cadence LIMIT 1", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.ExecuteScalar() :?> int
-
-let getValidObligationStatusId (ctx: ScenarioContext) =
-    use cmd = new NpgsqlCommand("SELECT id FROM ops.obligation_status LIMIT 1", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.ExecuteScalar() :?> int
-
 let insertAccountType (ctx: ScenarioContext) (name: string) =
     use cmd = new NpgsqlCommand(
         "INSERT INTO ledger.account_type (name, normal_balance) VALUES (@n, 'debit') RETURNING id",
@@ -139,43 +127,11 @@ let insertJournalEntry (ctx: ScenarioContext) (fpId: int) =
     cmd.Parameters.AddWithValue("@fp", fpId) |> ignore
     cmd.ExecuteScalar() :?> int
 
-let insertObligationType (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_type (name) VALUES (@n) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let insertCadence (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.cadence (name) VALUES (@n) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let insertPaymentMethod (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.payment_method (name) VALUES (@n) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let insertObligationStatus (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_status (name) VALUES (@n) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
 let insertObligationAgreement (ctx: ScenarioContext) (name: string) =
-    let otId = getValidObligationTypeId ctx
-    let cId = getValidCadenceId ctx
     use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES (@n, @ot, @c) RETURNING id",
+        "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence) VALUES (@n, 'receivable', 'monthly') RETURNING id",
         ctx.Transaction.Connection, ctx.Transaction)
     cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-    cmd.Parameters.AddWithValue("@c", cId) |> ignore
     cmd.ExecuteScalar() :?> int
 
 // ---------------------------------------------------------------------

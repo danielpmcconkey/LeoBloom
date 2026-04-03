@@ -94,38 +94,6 @@ Feature: ON DELETE RESTRICT constraints
     When I delete the parent record
     Then the delete is rejected with a FK violation
 
-  # --- ops.obligation_type as parent ---
-
-  @FT-DR-014
-  Scenario: cannot delete obligation_type with dependent agreement
-    Given an obligation_type with a dependent agreement exists
-    When I delete the parent record
-    Then the delete is rejected with a FK violation
-
-  # --- ops.cadence as parent ---
-
-  @FT-DR-015
-  Scenario: cannot delete cadence with dependent agreement
-    Given a cadence with a dependent agreement exists
-    When I delete the parent record
-    Then the delete is rejected with a FK violation
-
-  # --- ops.payment_method as parent ---
-
-  @FT-DR-016
-  Scenario: cannot delete payment_method with dependent agreement
-    Given a payment_method with a dependent agreement exists
-    When I delete the parent record
-    Then the delete is rejected with a FK violation
-
-  # --- ops.obligation_status as parent ---
-
-  @FT-DR-017
-  Scenario: cannot delete obligation_status with dependent instance
-    Given an obligation_status with a dependent instance exists
-    When I delete the parent record
-    Then the delete is rejected with a FK violation
-
   # --- ops.obligation_agreement as parent ---
 
   @FT-DR-018

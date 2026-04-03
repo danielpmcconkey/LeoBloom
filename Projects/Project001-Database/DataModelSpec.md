@@ -213,58 +213,6 @@ The `ops` schema knows about the `ledger` schema. The `ledger` schema knows
 nothing about `ops`. One-way dependency. The accounting engine is self-contained;
 the operational layer is a consumer of it.
 
-### `obligation_type`
-
-Lookup table for obligation directions.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | `serial PK` | |
-| `name` | `varchar(20) UNIQUE NOT NULL` | `receivable` or `payable` |
-
-Seeded once. Two rows.
-
----
-
-### `obligation_status`
-
-Lookup table for obligation instance lifecycle states.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | `serial PK` | |
-| `name` | `varchar(20) UNIQUE NOT NULL` | `expected`, `in_flight`, `confirmed`, `posted`, `overdue`, `skipped` |
-
-Seeded once. Six rows.
-
----
-
-### `cadence`
-
-Lookup table for recurrence patterns.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | `serial PK` | |
-| `name` | `varchar(20) UNIQUE NOT NULL` | `monthly`, `quarterly`, `annual`, `one_time` |
-
-Seeded once. Four rows.
-
----
-
-### `payment_method`
-
-Lookup table for how money moves.
-
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | `serial PK` | |
-| `name` | `varchar(30) UNIQUE NOT NULL` | `autopay_pull`, `ach`, `zelle`, `cheque`, `bill_pay`, `manual` |
-
-Seeded once. Extended as new methods arise.
-
----
-
 ### `obligation_agreement`
 
 The terms of a financial obligation — one side of a contractual relationship.
@@ -275,12 +223,12 @@ from this for each occurrence.
 |--------|------|-------|
 | `id` | `serial PK` | |
 | `name` | `varchar(100) NOT NULL` | e.g. "Brian rent", "Enbridge gas bill" |
-| `obligation_type_id` | `integer NOT NULL FK → obligation_type.id` | Receivable or payable |
+| `obligation_type` | `varchar(20) NOT NULL` | `receivable` or `payable`. DU-backed: `ObligationDirection` in Domain layer. |
 | `counterparty` | `varchar(100)` | The non-Dan side of the arrangement: "Brian", "Enbridge", "Rocket Mortgage". Dan is always implicit. |
 | `amount` | `numeric(12,2)` | The agreed-upon amount. Null when the agreement doesn't specify a fixed amount (metered utilities, variable-rate). Updated when terms change (escrow adjustment, new contract rate). |
-| `cadence_id` | `integer NOT NULL FK → cadence.id` | |
+| `cadence` | `varchar(20) NOT NULL` | `monthly`, `quarterly`, `annual`, `one_time`. DU-backed: `RecurrenceCadence` in Domain layer. |
 | `expected_day` | `integer` | Day of month/quarter when expected. Nullable for irregular. |
-| `payment_method_id` | `integer FK → payment_method.id` | Nullable — some agreements don't have a fixed method |
+| `payment_method` | `varchar(30)` | `autopay_pull`, `ach`, `zelle`, `cheque`, `bill_pay`, `manual`. Nullable — some agreements don't have a fixed method. DU-backed: `PaymentMethodType` in Domain layer. |
 | `source_account_id` | `integer FK → ledger.account.id` | Where money comes from |
 | `dest_account_id` | `integer FK → ledger.account.id` | Where money goes to |
 | `is_active` | `boolean NOT NULL DEFAULT true` | Soft-disable without deleting |
@@ -313,7 +261,7 @@ This is the thing whose status gets tracked.
 | `id` | `serial PK` | |
 | `obligation_agreement_id` | `integer NOT NULL FK → obligation_agreement.id` | |
 | `name` | `varchar(100) NOT NULL` | Human-readable label, e.g. "Apr 2026". Combined with the parent agreement's name for display: "Brian rent — Apr 2026" |
-| `status_id` | `integer NOT NULL FK → obligation_status.id` | Default: `expected` |
+| `status` | `varchar(20) NOT NULL` | `expected`, `in_flight`, `confirmed`, `posted`, `overdue`, `skipped`. DU-backed: `InstanceStatus` in Domain layer. |
 | `amount` | `numeric(12,2)` | The amount for this specific occurrence. Pre-filled from `obligation_agreement.amount` for fixed agreements. Set when the bill arrives for variable agreements. |
 | `expected_date` | `date NOT NULL` | When we expect this to happen |
 | `confirmed_date` | `date` | When it actually happened |
@@ -498,7 +446,7 @@ These inform indexing and should become test cases:
 
 4. **Audit log**: The journal is inherently an audit log (append-only). But
    the ops tables have mutable status fields
-   (`obligation_instance.status_id`, `transfer.status`). Should we log
+   (`obligation_instance.status`, `transfer.status`). Should we log
    status changes in an `event_log` table? The `modified_at` timestamps
    capture *when* but not *what changed* or *from what*.
 

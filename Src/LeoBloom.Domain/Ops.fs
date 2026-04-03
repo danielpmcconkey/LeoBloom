@@ -28,31 +28,80 @@ module Ops =
 
     type TransferStatus = Initiated | Confirmed
 
-    type ObligationType =
-        { id: int
-          name: string }
+    module ObligationDirection =
+        let toString = function
+            | Receivable -> "receivable"
+            | Payable -> "payable"
 
-    type ObligationStatus =
-        { id: int
-          name: string }
+        let fromString (s: string) =
+            match s with
+            | "receivable" -> Ok Receivable
+            | "payable" -> Ok Payable
+            | _ -> Error (sprintf "Invalid ObligationDirection: '%s'" s)
 
-    type Cadence =
-        { id: int
-          name: string }
+    module InstanceStatus =
+        let toString (s: InstanceStatus) =
+            match s with
+            | InstanceStatus.Expected -> "expected"
+            | InstanceStatus.InFlight -> "in_flight"
+            | InstanceStatus.Confirmed -> "confirmed"
+            | InstanceStatus.Posted -> "posted"
+            | InstanceStatus.Overdue -> "overdue"
+            | InstanceStatus.Skipped -> "skipped"
 
-    type PaymentMethod =
-        { id: int
-          name: string }
+        let fromString (s: string) =
+            match s with
+            | "expected" -> Ok InstanceStatus.Expected
+            | "in_flight" -> Ok InstanceStatus.InFlight
+            | "confirmed" -> Ok InstanceStatus.Confirmed
+            | "posted" -> Ok InstanceStatus.Posted
+            | "overdue" -> Ok InstanceStatus.Overdue
+            | "skipped" -> Ok InstanceStatus.Skipped
+            | _ -> Error (sprintf "Invalid InstanceStatus: '%s'" s)
+
+    module RecurrenceCadence =
+        let toString = function
+            | Monthly -> "monthly"
+            | Quarterly -> "quarterly"
+            | Annual -> "annual"
+            | OneTime -> "one_time"
+
+        let fromString (s: string) =
+            match s with
+            | "monthly" -> Ok Monthly
+            | "quarterly" -> Ok Quarterly
+            | "annual" -> Ok Annual
+            | "one_time" -> Ok OneTime
+            | _ -> Error (sprintf "Invalid RecurrenceCadence: '%s'" s)
+
+    module PaymentMethodType =
+        let toString = function
+            | AutopayPull -> "autopay_pull"
+            | Ach -> "ach"
+            | Zelle -> "zelle"
+            | Cheque -> "cheque"
+            | BillPay -> "bill_pay"
+            | Manual -> "manual"
+
+        let fromString (s: string) =
+            match s with
+            | "autopay_pull" -> Ok AutopayPull
+            | "ach" -> Ok Ach
+            | "zelle" -> Ok Zelle
+            | "cheque" -> Ok Cheque
+            | "bill_pay" -> Ok BillPay
+            | "manual" -> Ok Manual
+            | _ -> Error (sprintf "Invalid PaymentMethodType: '%s'" s)
 
     type ObligationAgreement =
         { id: int
           name: string
-          obligationTypeId: int
+          obligationType: ObligationDirection
           counterparty: string option
           amount: decimal option
-          cadenceId: int
+          cadence: RecurrenceCadence
           expectedDay: int option
-          paymentMethodId: int option
+          paymentMethod: PaymentMethodType option
           sourceAccountId: int option
           destAccountId: int option
           isActive: bool
@@ -64,7 +113,7 @@ module Ops =
         { id: int
           obligationAgreementId: int
           name: string
-          statusId: int
+          status: InstanceStatus
           amount: decimal option
           expectedDate: DateOnly
           confirmedDate: DateOnly option

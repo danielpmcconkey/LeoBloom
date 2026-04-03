@@ -5,156 +5,35 @@ open TickSpec
 open LeoBloom.Dal.Tests.SharedSteps
 
 // =====================================================================
-// obligation_type
-// =====================================================================
-
-let [<Given>] ``an obligation_type "receivable" exists`` () =
-    // Seed data from migrations — 'receivable' already exists.
-    openContext ()
-
-let [<When>] ``I insert another obligation_type with name "receivable"`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ops.obligation_type (name) VALUES ('receivable')"
-    { ctx with LastException = ex }
-
-let [<When>] ``I insert into obligation_type with a null name`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ops.obligation_type (name) VALUES (NULL)"
-    { ctx with LastException = ex }
-
-// =====================================================================
-// obligation_status
-// =====================================================================
-
-let [<Given>] ``an obligation_status "expected" exists`` () =
-    // Seed data from migrations — 'expected' already exists.
-    openContext ()
-
-let [<When>] ``I insert another obligation_status with name "expected"`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ops.obligation_status (name) VALUES ('expected')"
-    { ctx with LastException = ex }
-
-let [<When>] ``I insert into obligation_status with a null name`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ops.obligation_status (name) VALUES (NULL)"
-    { ctx with LastException = ex }
-
-// =====================================================================
-// cadence
-// =====================================================================
-
-let [<Given>] ``a cadence "monthly" exists`` () =
-    // Seed data from migrations — 'monthly' already exists.
-    openContext ()
-
-let [<When>] ``I insert another cadence with name "monthly"`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ops.cadence (name) VALUES ('monthly')"
-    { ctx with LastException = ex }
-
-let [<When>] ``I insert into cadence with a null name`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ops.cadence (name) VALUES (NULL)"
-    { ctx with LastException = ex }
-
-// =====================================================================
-// payment_method
-// =====================================================================
-
-let [<Given>] ``a payment_method "zelle" exists`` () =
-    // Seed data from migrations — 'zelle' already exists.
-    openContext ()
-
-let [<When>] ``I insert another payment_method with name "zelle"`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ops.payment_method (name) VALUES ('zelle')"
-    { ctx with LastException = ex }
-
-let [<When>] ``I insert into payment_method with a null name`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ops.payment_method (name) VALUES (NULL)"
-    { ctx with LastException = ex }
-
-// =====================================================================
 // obligation_agreement
 // =====================================================================
 
 let [<When>] ``I insert into obligation_agreement with a null name`` (ctx: ScenarioContext) =
-    let otId = getValidObligationTypeId ctx
-    let cId = getValidCadenceId ctx
-    let ex = tryExec ctx
-                "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES (NULL, @ot, @c)"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-                    cmd.Parameters.AddWithValue("@c", cId) |> ignore)
+    let ex = tryInsert ctx "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence) VALUES (NULL, 'receivable', 'monthly')"
     { ctx with LastException = ex }
 
-let [<When>] ``I insert into obligation_agreement with a null obligation_type_id`` (ctx: ScenarioContext) =
-    let cId = getValidCadenceId ctx
-    let ex = tryExec ctx
-                "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', NULL, @c)"
-                (fun cmd -> cmd.Parameters.AddWithValue("@c", cId) |> ignore)
+let [<When>] ``I insert into obligation_agreement with a null obligation_type`` (ctx: ScenarioContext) =
+    let ex = tryInsert ctx "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence) VALUES ('Test', NULL, 'monthly')"
     { ctx with LastException = ex }
 
-let [<When>] ``I insert into obligation_agreement with obligation_type_id 9999`` (ctx: ScenarioContext) =
-    let cId = getValidCadenceId ctx
-    let ex = tryExec ctx
-                "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', @ot, @c)"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@ot", 9999) |> ignore
-                    cmd.Parameters.AddWithValue("@c", cId) |> ignore)
-    { ctx with LastException = ex }
-
-let [<When>] ``I insert into obligation_agreement with a null cadence_id`` (ctx: ScenarioContext) =
-    let otId = getValidObligationTypeId ctx
-    let ex = tryExec ctx
-                "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', @ot, NULL)"
-                (fun cmd -> cmd.Parameters.AddWithValue("@ot", otId) |> ignore)
-    { ctx with LastException = ex }
-
-let [<When>] ``I insert into obligation_agreement with cadence_id 9999`` (ctx: ScenarioContext) =
-    let otId = getValidObligationTypeId ctx
-    let ex = tryExec ctx
-                "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', @ot, @c)"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-                    cmd.Parameters.AddWithValue("@c", 9999) |> ignore)
-    { ctx with LastException = ex }
-
-let [<When>] ``I insert into obligation_agreement with payment_method_id 9999`` (ctx: ScenarioContext) =
-    let otId = getValidObligationTypeId ctx
-    let cId = getValidCadenceId ctx
-    let ex = tryExec ctx
-                "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id, payment_method_id) VALUES ('Test', @ot, @c, @pm)"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-                    cmd.Parameters.AddWithValue("@c", cId) |> ignore
-                    cmd.Parameters.AddWithValue("@pm", 9999) |> ignore)
+let [<When>] ``I insert into obligation_agreement with a null cadence`` (ctx: ScenarioContext) =
+    let ex = tryInsert ctx "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence) VALUES ('Test', 'receivable', NULL)"
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_agreement with source_account_id 9999`` (ctx: ScenarioContext) =
-    let otId = getValidObligationTypeId ctx
-    let cId = getValidCadenceId ctx
     let ex = tryExec ctx
-                "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id, source_account_id) VALUES ('Test', @ot, @c, @sa)"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-                    cmd.Parameters.AddWithValue("@c", cId) |> ignore
-                    cmd.Parameters.AddWithValue("@sa", 9999) |> ignore)
+                "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence, source_account_id) VALUES ('Test', 'receivable', 'monthly', @sa)"
+                (fun cmd -> cmd.Parameters.AddWithValue("@sa", 9999) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_agreement with dest_account_id 9999`` (ctx: ScenarioContext) =
-    let otId = getValidObligationTypeId ctx
-    let cId = getValidCadenceId ctx
     let ex = tryExec ctx
-                "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id, dest_account_id) VALUES ('Test', @ot, @c, @da)"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-                    cmd.Parameters.AddWithValue("@c", cId) |> ignore
-                    cmd.Parameters.AddWithValue("@da", 9999) |> ignore)
+                "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence, dest_account_id) VALUES ('Test', 'receivable', 'monthly', @da)"
+                (fun cmd -> cmd.Parameters.AddWithValue("@da", 9999) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert a valid obligation_agreement with a null amount`` (ctx: ScenarioContext) =
-    let otId = getValidObligationTypeId ctx
-    let cId = getValidCadenceId ctx
-    let ex = tryExec ctx
-                "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id, amount) VALUES ('Test', @ot, @c, NULL)"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-                    cmd.Parameters.AddWithValue("@c", cId) |> ignore)
+    let ex = tryInsert ctx "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence, amount) VALUES ('Test', 'receivable', 'monthly', NULL)"
     { ctx with LastException = ex }
 
 // =====================================================================
@@ -162,76 +41,50 @@ let [<When>] ``I insert a valid obligation_agreement with a null amount`` (ctx: 
 // =====================================================================
 
 let [<When>] ``I insert into obligation_instance with a null obligation_agreement_id`` (ctx: ScenarioContext) =
-    let sId = getValidObligationStatusId ctx
-    let ex = tryExec ctx
-                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (NULL, 'Test', @s, '2026-04-01')"
-                (fun cmd -> cmd.Parameters.AddWithValue("@s", sId) |> ignore)
+    let ex = tryInsert ctx "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (NULL, 'Test', 'expected', '2026-04-01')"
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_instance with obligation_agreement_id 9999`` (ctx: ScenarioContext) =
-    let sId = getValidObligationStatusId ctx
     let ex = tryExec ctx
-                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (@oa, 'Test', @s, '2026-04-01')"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@oa", 9999) |> ignore
-                    cmd.Parameters.AddWithValue("@s", sId) |> ignore)
+                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (@oa, 'Test', 'expected', '2026-04-01')"
+                (fun cmd -> cmd.Parameters.AddWithValue("@oa", 9999) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_instance with a null name`` (ctx: ScenarioContext) =
     let oaId = insertObligationAgreement ctx "TestAgreement"
-    let sId = getValidObligationStatusId ctx
     let ex = tryExec ctx
-                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (@oa, NULL, @s, '2026-04-01')"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
-                    cmd.Parameters.AddWithValue("@s", sId) |> ignore)
-    { ctx with LastException = ex }
-
-let [<When>] ``I insert into obligation_instance with a null status_id`` (ctx: ScenarioContext) =
-    let oaId = insertObligationAgreement ctx "TestAgreement"
-    let ex = tryExec ctx
-                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (@oa, 'Test', NULL, '2026-04-01')"
+                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (@oa, NULL, 'expected', '2026-04-01')"
                 (fun cmd -> cmd.Parameters.AddWithValue("@oa", oaId) |> ignore)
     { ctx with LastException = ex }
 
-let [<When>] ``I insert into obligation_instance with status_id 9999`` (ctx: ScenarioContext) =
+let [<When>] ``I insert into obligation_instance with a null status`` (ctx: ScenarioContext) =
     let oaId = insertObligationAgreement ctx "TestAgreement"
     let ex = tryExec ctx
-                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (@oa, 'Test', @s, '2026-04-01')"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
-                    cmd.Parameters.AddWithValue("@s", 9999) |> ignore)
+                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (@oa, 'Test', NULL, '2026-04-01')"
+                (fun cmd -> cmd.Parameters.AddWithValue("@oa", oaId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_instance with a null expected_date`` (ctx: ScenarioContext) =
     let oaId = insertObligationAgreement ctx "TestAgreement"
-    let sId = getValidObligationStatusId ctx
     let ex = tryExec ctx
-                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (@oa, 'Test', @s, NULL)"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
-                    cmd.Parameters.AddWithValue("@s", sId) |> ignore)
+                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (@oa, 'Test', 'expected', NULL)"
+                (fun cmd -> cmd.Parameters.AddWithValue("@oa", oaId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_instance with journal_entry_id 9999`` (ctx: ScenarioContext) =
     let oaId = insertObligationAgreement ctx "TestAgreement"
-    let sId = getValidObligationStatusId ctx
     let ex = tryExec ctx
-                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date, journal_entry_id) VALUES (@oa, 'Test', @s, '2026-04-01', @je)"
+                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date, journal_entry_id) VALUES (@oa, 'Test', 'expected', '2026-04-01', @je)"
                 (fun cmd ->
                     cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
-                    cmd.Parameters.AddWithValue("@s", sId) |> ignore
                     cmd.Parameters.AddWithValue("@je", 9999) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert a valid obligation_instance with null journal_entry_id`` (ctx: ScenarioContext) =
     let oaId = insertObligationAgreement ctx "TestAgreement"
-    let sId = getValidObligationStatusId ctx
     let ex = tryExec ctx
-                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date, journal_entry_id) VALUES (@oa, 'Test', @s, '2026-04-01', NULL)"
-                (fun cmd ->
-                    cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
-                    cmd.Parameters.AddWithValue("@s", sId) |> ignore)
+                "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date, journal_entry_id) VALUES (@oa, 'Test', 'expected', '2026-04-01', NULL)"
+                (fun cmd -> cmd.Parameters.AddWithValue("@oa", oaId) |> ignore)
     { ctx with LastException = ex }
 
 // =====================================================================

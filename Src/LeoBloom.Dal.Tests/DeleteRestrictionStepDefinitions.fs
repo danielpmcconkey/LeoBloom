@@ -83,13 +83,9 @@ let [<Given>] ``an account with a dependent journal_entry_line exists`` () =
 let private setupAgreementWithAccount (ctx: ScenarioContext) (code: string) (fkColumn: string) =
     let atId = insertAccountType ctx $"del_{code}_type"
     let acctId = insertAccount ctx code $"{code} Account" atId
-    let otId = insertObligationType ctx $"del_{code}_ot"
-    let cId = insertCadence ctx $"del_{code}_cad"
     use cmd = new NpgsqlCommand(
-        $"INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id, {fkColumn}) VALUES ('Test', @ot, @c, @acct)",
+        $"INSERT INTO ops.obligation_agreement (name, obligation_type, cadence, {fkColumn}) VALUES ('Test', 'receivable', 'monthly', @acct)",
         ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-    cmd.Parameters.AddWithValue("@c", cId) |> ignore
     cmd.Parameters.AddWithValue("@acct", acctId) |> ignore
     cmd.ExecuteNonQuery() |> ignore
     ctx |> withTarget
@@ -197,20 +193,11 @@ let [<Given>] ``a journal_entry with a dependent line exists`` () =
 let [<Given>] ``a journal_entry with a dependent obligation_instance exists`` () =
     let ctx = openContext ()
     let (_, _, _, jeId) = setupJournalEntryParent ctx
-    let otId = insertObligationType ctx "del_je_oi_ot"
-    let cId = insertCadence ctx "del_je_oi_cad"
-    let sId = insertObligationStatus ctx "del_je_oi_status"
-    use cmdOa = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', @ot, @c) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmdOa.Parameters.AddWithValue("@ot", otId) |> ignore
-    cmdOa.Parameters.AddWithValue("@c", cId) |> ignore
-    let oaId = cmdOa.ExecuteScalar() :?> int
+    let oaId = insertObligationAgreement ctx "del_je_oi_agreement"
     use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date, journal_entry_id) VALUES (@oa, 'Test', @s, '2026-04-01', @je)",
+        "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date, journal_entry_id) VALUES (@oa, 'Test', 'expected', '2026-04-01', @je)",
         ctx.Transaction.Connection, ctx.Transaction)
     cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
-    cmd.Parameters.AddWithValue("@s", sId) |> ignore
     cmd.Parameters.AddWithValue("@je", jeId) |> ignore
     cmd.ExecuteNonQuery() |> ignore
     withJournalEntryTarget ctx
@@ -230,106 +217,16 @@ let [<Given>] ``a journal_entry with a dependent transfer exists`` () =
     withJournalEntryTarget ctx
 
 // =====================================================================
-// 14. obligation_type → obligation_agreement
-// =====================================================================
-
-let [<Given>] ``an obligation_type with a dependent agreement exists`` () =
-    let ctx = openContext ()
-    let otId = insertObligationType ctx "del_ot_test"
-    let cId = insertCadence ctx "del_ot_cad"
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', @ot, @c)",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-    cmd.Parameters.AddWithValue("@c", cId) |> ignore
-    cmd.ExecuteNonQuery() |> ignore
-    ctx |> withTarget
-        "DELETE FROM ops.obligation_type WHERE name = 'del_ot_test'"
-        ignore
-
-// =====================================================================
-// 15. cadence → obligation_agreement
-// =====================================================================
-
-let [<Given>] ``a cadence with a dependent agreement exists`` () =
-    let ctx = openContext ()
-    let otId = insertObligationType ctx "del_cad_ot"
-    let cId = insertCadence ctx "del_cad_test"
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', @ot, @c)",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-    cmd.Parameters.AddWithValue("@c", cId) |> ignore
-    cmd.ExecuteNonQuery() |> ignore
-    ctx |> withTarget
-        "DELETE FROM ops.cadence WHERE name = 'del_cad_test'"
-        ignore
-
-// =====================================================================
-// 16. payment_method → obligation_agreement
-// =====================================================================
-
-let [<Given>] ``a payment_method with a dependent agreement exists`` () =
-    let ctx = openContext ()
-    let otId = insertObligationType ctx "del_pm_ot"
-    let cId = insertCadence ctx "del_pm_cad"
-    let pmId = insertPaymentMethod ctx "del_pm_test"
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id, payment_method_id) VALUES ('Test', @ot, @c, @pm)",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-    cmd.Parameters.AddWithValue("@c", cId) |> ignore
-    cmd.Parameters.AddWithValue("@pm", pmId) |> ignore
-    cmd.ExecuteNonQuery() |> ignore
-    ctx |> withTarget
-        "DELETE FROM ops.payment_method WHERE name = 'del_pm_test'"
-        ignore
-
-// =====================================================================
-// 17. obligation_status → obligation_instance
-// =====================================================================
-
-let [<Given>] ``an obligation_status with a dependent instance exists`` () =
-    let ctx = openContext ()
-    let otId = insertObligationType ctx "del_os_ot"
-    let cId = insertCadence ctx "del_os_cad"
-    let sId = insertObligationStatus ctx "del_os_test"
-    use cmdOa = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', @ot, @c) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmdOa.Parameters.AddWithValue("@ot", otId) |> ignore
-    cmdOa.Parameters.AddWithValue("@c", cId) |> ignore
-    let oaId = cmdOa.ExecuteScalar() :?> int
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (@oa, 'Test', @s, '2026-04-01')",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
-    cmd.Parameters.AddWithValue("@s", sId) |> ignore
-    cmd.ExecuteNonQuery() |> ignore
-    ctx |> withTarget
-        "DELETE FROM ops.obligation_status WHERE name = 'del_os_test'"
-        ignore
-
-// =====================================================================
 // 18. obligation_agreement → obligation_instance
 // =====================================================================
 
 let [<Given>] ``an obligation_agreement with a dependent instance exists`` () =
     let ctx = openContext ()
-    let otId = insertObligationType ctx "del_oa_ot"
-    let cId = insertCadence ctx "del_oa_cad"
-    let sId = insertObligationStatus ctx "del_oa_status"
-    use cmdOa = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('del_oa_test', @ot, @c) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmdOa.Parameters.AddWithValue("@ot", otId) |> ignore
-    cmdOa.Parameters.AddWithValue("@c", cId) |> ignore
-    let oaId = cmdOa.ExecuteScalar() :?> int
+    let oaId = insertObligationAgreement ctx "del_oa_test"
     use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (@oa, 'Test', @s, '2026-04-01')",
+        "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (@oa, 'Test', 'expected', '2026-04-01')",
         ctx.Transaction.Connection, ctx.Transaction)
     cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
-    cmd.Parameters.AddWithValue("@s", sId) |> ignore
     cmd.ExecuteNonQuery() |> ignore
     ctx |> withTarget
         "DELETE FROM ops.obligation_agreement WHERE name = 'del_oa_test'"

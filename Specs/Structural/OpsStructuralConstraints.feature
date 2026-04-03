@@ -7,62 +7,6 @@ Feature: Ops schema structural constraints
   # Intentionally untested: freeform nullable text/date columns (memo, notes, source,
   # description, etc.) and NOT NULL + DEFAULT columns (is_active, created_at, modified_at).
 
-  # --- obligation_type ---
-
-  @FT-OSC-001
-  Scenario: obligation_type name must be unique
-    Given an obligation_type "receivable" exists
-    When I insert another obligation_type with name "receivable"
-    Then the insert is rejected with a UNIQUE violation
-
-  @FT-OSC-002
-  Scenario: obligation_type requires a name
-    Given the ops schema exists
-    When I insert into obligation_type with a null name
-    Then the insert is rejected with a NOT NULL violation
-
-  # --- obligation_status ---
-
-  @FT-OSC-003
-  Scenario: obligation_status name must be unique
-    Given an obligation_status "expected" exists
-    When I insert another obligation_status with name "expected"
-    Then the insert is rejected with a UNIQUE violation
-
-  @FT-OSC-004
-  Scenario: obligation_status requires a name
-    Given the ops schema exists
-    When I insert into obligation_status with a null name
-    Then the insert is rejected with a NOT NULL violation
-
-  # --- cadence ---
-
-  @FT-OSC-005
-  Scenario: cadence name must be unique
-    Given a cadence "monthly" exists
-    When I insert another cadence with name "monthly"
-    Then the insert is rejected with a UNIQUE violation
-
-  @FT-OSC-006
-  Scenario: cadence requires a name
-    Given the ops schema exists
-    When I insert into cadence with a null name
-    Then the insert is rejected with a NOT NULL violation
-
-  # --- payment_method ---
-
-  @FT-OSC-007
-  Scenario: payment_method name must be unique
-    Given a payment_method "zelle" exists
-    When I insert another payment_method with name "zelle"
-    Then the insert is rejected with a UNIQUE violation
-
-  @FT-OSC-008
-  Scenario: payment_method requires a name
-    Given the ops schema exists
-    When I insert into payment_method with a null name
-    Then the insert is rejected with a NOT NULL violation
-
   # --- obligation_agreement ---
 
   @FT-OSC-009
@@ -70,36 +14,6 @@ Feature: Ops schema structural constraints
     Given the ops schema exists
     When I insert into obligation_agreement with a null name
     Then the insert is rejected with a NOT NULL violation
-
-  @FT-OSC-010
-  Scenario: obligation_agreement requires an obligation_type_id
-    Given the ops schema exists
-    When I insert into obligation_agreement with a null obligation_type_id
-    Then the insert is rejected with a NOT NULL violation
-
-  @FT-OSC-011
-  Scenario: obligation_agreement obligation_type_id must reference a valid obligation_type
-    Given the ops schema exists
-    When I insert into obligation_agreement with obligation_type_id 9999
-    Then the insert is rejected with a FK violation
-
-  @FT-OSC-012
-  Scenario: obligation_agreement requires a cadence_id
-    Given the ops schema exists
-    When I insert into obligation_agreement with a null cadence_id
-    Then the insert is rejected with a NOT NULL violation
-
-  @FT-OSC-013
-  Scenario: obligation_agreement cadence_id must reference a valid cadence
-    Given the ops schema exists
-    When I insert into obligation_agreement with cadence_id 9999
-    Then the insert is rejected with a FK violation
-
-  @FT-OSC-014
-  Scenario: obligation_agreement payment_method_id must reference a valid payment_method
-    Given the ops schema exists
-    When I insert into obligation_agreement with payment_method_id 9999
-    Then the insert is rejected with a FK violation
 
   @FT-OSC-015
   Scenario: obligation_agreement source_account_id must reference a valid ledger account
@@ -138,18 +52,6 @@ Feature: Ops schema structural constraints
     Given the ops schema exists
     When I insert into obligation_instance with a null name
     Then the insert is rejected with a NOT NULL violation
-
-  @FT-OSC-021
-  Scenario: obligation_instance requires a status_id
-    Given the ops schema exists
-    When I insert into obligation_instance with a null status_id
-    Then the insert is rejected with a NOT NULL violation
-
-  @FT-OSC-022
-  Scenario: obligation_instance status_id must reference a valid obligation_status
-    Given the ops schema exists
-    When I insert into obligation_instance with status_id 9999
-    Then the insert is rejected with a FK violation
 
   @FT-OSC-023
   Scenario: obligation_instance requires an expected_date
@@ -268,3 +170,23 @@ Feature: Ops schema structural constraints
     Given an invoice for tenant "Brian" and fiscal_period "2026-03" exists
     When I insert another invoice for tenant "Brian" and fiscal_period "2026-03"
     Then the insert is rejected with a UNIQUE violation
+
+  # --- New NOT NULL constraints for varchar columns replacing lookup FKs ---
+
+  @FT-OSC-042
+  Scenario: obligation_agreement requires an obligation_type
+    Given the ops schema exists
+    When I insert into obligation_agreement with a null obligation_type
+    Then the insert is rejected with a NOT NULL violation
+
+  @FT-OSC-043
+  Scenario: obligation_agreement requires a cadence
+    Given the ops schema exists
+    When I insert into obligation_agreement with a null cadence
+    Then the insert is rejected with a NOT NULL violation
+
+  @FT-OSC-044
+  Scenario: obligation_instance requires a status
+    Given the ops schema exists
+    When I insert into obligation_instance with a null status
+    Then the insert is rejected with a NOT NULL violation

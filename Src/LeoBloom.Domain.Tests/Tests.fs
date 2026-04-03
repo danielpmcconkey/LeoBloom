@@ -1,8 +1,9 @@
-module LeoBloom.Domain.Tests.LedgerValidationTests
+module LeoBloom.Domain.Tests.DomainTests
 
 open System
 open Xunit
 open LeoBloom.Domain.Ledger
+open LeoBloom.Domain.Ops
 
 let makeLine (accountId: int) (amount: decimal) (entryType: EntryType) : JournalEntryLine =
     { id = 0
@@ -128,5 +129,79 @@ let ``voidedAt Some with reason None fails`` () =
 [<Fact>]
 let ``voidedAt Some with empty reason fails`` () =
     match validateVoidReason (Some DateTimeOffset.UtcNow) (Some "") with
+    | Error _ -> ()
+    | Ok _ -> Assert.Fail("Expected Error")
+
+// --- ObligationDirection conversion tests ---
+
+[<Theory>]
+[<InlineData("receivable")>]
+[<InlineData("payable")>]
+let ``ObligationDirection round-trips`` (s: string) =
+    match ObligationDirection.fromString s with
+    | Ok v -> Assert.Equal(s, ObligationDirection.toString v)
+    | Error msg -> Assert.Fail(msg)
+
+[<Fact>]
+let ``ObligationDirection.fromString rejects invalid`` () =
+    match ObligationDirection.fromString "invalid" with
+    | Error _ -> ()
+    | Ok _ -> Assert.Fail("Expected Error")
+
+// --- InstanceStatus conversion tests ---
+
+[<Theory>]
+[<InlineData("expected")>]
+[<InlineData("in_flight")>]
+[<InlineData("confirmed")>]
+[<InlineData("posted")>]
+[<InlineData("overdue")>]
+[<InlineData("skipped")>]
+let ``InstanceStatus round-trips`` (s: string) =
+    match InstanceStatus.fromString s with
+    | Ok v -> Assert.Equal(s, InstanceStatus.toString v)
+    | Error msg -> Assert.Fail(msg)
+
+[<Fact>]
+let ``InstanceStatus.fromString rejects invalid`` () =
+    match InstanceStatus.fromString "invalid" with
+    | Error _ -> ()
+    | Ok _ -> Assert.Fail("Expected Error")
+
+// --- RecurrenceCadence conversion tests ---
+
+[<Theory>]
+[<InlineData("monthly")>]
+[<InlineData("quarterly")>]
+[<InlineData("annual")>]
+[<InlineData("one_time")>]
+let ``RecurrenceCadence round-trips`` (s: string) =
+    match RecurrenceCadence.fromString s with
+    | Ok v -> Assert.Equal(s, RecurrenceCadence.toString v)
+    | Error msg -> Assert.Fail(msg)
+
+[<Fact>]
+let ``RecurrenceCadence.fromString rejects invalid`` () =
+    match RecurrenceCadence.fromString "invalid" with
+    | Error _ -> ()
+    | Ok _ -> Assert.Fail("Expected Error")
+
+// --- PaymentMethodType conversion tests ---
+
+[<Theory>]
+[<InlineData("autopay_pull")>]
+[<InlineData("ach")>]
+[<InlineData("zelle")>]
+[<InlineData("cheque")>]
+[<InlineData("bill_pay")>]
+[<InlineData("manual")>]
+let ``PaymentMethodType round-trips`` (s: string) =
+    match PaymentMethodType.fromString s with
+    | Ok v -> Assert.Equal(s, PaymentMethodType.toString v)
+    | Error msg -> Assert.Fail(msg)
+
+[<Fact>]
+let ``PaymentMethodType.fromString rejects invalid`` () =
+    match PaymentMethodType.fromString "invalid" with
     | Error _ -> ()
     | Ok _ -> Assert.Fail("Expected Error")
