@@ -9,7 +9,7 @@
     <Compile Include="SharedSteps.fs" />
     <Compile Include="LedgerStepDefinitions.fs" />
     <Compile Include="OpsStepDefinitions.fs" />
-    <Compile Include="DeleteRestrictionSteps.fs" />
+    <Compile Include="DeleteRestrictionStepDefinitions.fs" />
     <Compile Include="FeatureFixture.fs" />
   </ItemGroup>
 

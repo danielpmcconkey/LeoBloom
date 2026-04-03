@@ -1,76 +1,11 @@
 /// Step definitions for ON DELETE RESTRICT scenarios.
 /// Each scenario inserts a parent + child chain within a transaction,
 /// attempts to DELETE the parent, and asserts the FK violation.
-module LeoBloom.Dal.Tests.DeleteRestrictionSteps
+module LeoBloom.Dal.Tests.DeleteRestrictionStepDefinitions
 
 open Npgsql
 open TickSpec
 open LeoBloom.Dal.Tests.SharedSteps
-
-// =====================================================================
-// Helpers — insert test data within the transaction and return IDs
-// =====================================================================
-
-let private insertAccountType (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ledger.account_type (name, normal_balance) VALUES (@n, 'debit') RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private insertAccount (ctx: ScenarioContext) (code: string) (name: string) (atId: int) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ledger.account (code, name, account_type_id) VALUES (@c, @n, @at) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@c", code) |> ignore
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.Parameters.AddWithValue("@at", atId) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private insertFiscalPeriod (ctx: ScenarioContext) (key: string) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ledger.fiscal_period (period_key, start_date, end_date) VALUES (@k, '2099-01-01', '2099-01-31') RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@k", key) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private insertJournalEntry (ctx: ScenarioContext) (fpId: int) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ledger.journal_entry (entry_date, description, fiscal_period_id) VALUES ('2026-01-01', 'Test JE', @fp) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@fp", fpId) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private insertObligationType (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_type (name) VALUES (@n) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private insertCadence (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.cadence (name) VALUES (@n) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private insertPaymentMethod (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.payment_method (name) VALUES (@n) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private insertObligationStatus (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_status (name) VALUES (@n) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private tryDelete (ctx: ScenarioContext) (sql: string) (paramSetup: NpgsqlCommand -> unit) =
-    tryExec ctx sql paramSetup
 
 // =====================================================================
 // 1. account_type → account
@@ -83,7 +18,7 @@ let [<Given>] ``an account_type with a dependent account exists`` () =
     ctx
 
 let [<When>] ``I delete the parent account_type`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ledger.account_type WHERE name = @n"
                 (fun cmd -> cmd.Parameters.AddWithValue("@n", "del_test_type") |> ignore)
     { ctx with LastException = ex }
@@ -104,7 +39,7 @@ let [<Given>] ``an account with a dependent child account exists`` () =
     ctx
 
 let [<When>] ``I delete the parent account`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ledger.account WHERE code = @c"
                 (fun cmd -> cmd.Parameters.AddWithValue("@c", "DP01") |> ignore)
     { ctx with LastException = ex }
@@ -128,7 +63,7 @@ let [<Given>] ``an account with a dependent journal_entry_line exists`` () =
     ctx
 
 let [<When>] ``I delete the account referenced by journal_entry_line`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ledger.account WHERE code = @c"
                 (fun cmd -> cmd.Parameters.AddWithValue("@c", "DJ01") |> ignore)
     { ctx with LastException = ex }
@@ -156,7 +91,7 @@ let [<Given>] ``an account with a dependent obligation_agreement source exists``
     setupAgreementWithAccount ctx "DS01" "source_account_id"
 
 let [<When>] ``I delete the account referenced as source_account`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ledger.account WHERE code = @c"
                 (fun cmd -> cmd.Parameters.AddWithValue("@c", "DS01") |> ignore)
     { ctx with LastException = ex }
@@ -166,7 +101,7 @@ let [<Given>] ``an account with a dependent obligation_agreement dest exists`` (
     setupAgreementWithAccount ctx "DD01" "dest_account_id"
 
 let [<When>] ``I delete the account referenced as dest_account`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ledger.account WHERE code = @c"
                 (fun cmd -> cmd.Parameters.AddWithValue("@c", "DD01") |> ignore)
     { ctx with LastException = ex }
@@ -195,7 +130,7 @@ let [<Given>] ``an account with a dependent transfer from exists`` () =
     setupTransferWithAccount ctx "TF01" "TF02" "from_account_id"
 
 let [<When>] ``I delete the account referenced as from_account`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ledger.account WHERE code = @c"
                 (fun cmd -> cmd.Parameters.AddWithValue("@c", "TF01") |> ignore)
     { ctx with LastException = ex }
@@ -205,7 +140,7 @@ let [<Given>] ``an account with a dependent transfer to exists`` () =
     setupTransferWithAccount ctx "TT01" "TT02" "to_account_id"
 
 let [<When>] ``I delete the account referenced as to_account`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ledger.account WHERE code = @c"
                 (fun cmd -> cmd.Parameters.AddWithValue("@c", "TT01") |> ignore)
     { ctx with LastException = ex }
@@ -216,13 +151,13 @@ let [<When>] ``I delete the account referenced as to_account`` (ctx: ScenarioCon
 
 let [<Given>] ``a fiscal_period with a dependent journal_entry exists`` () =
     let ctx = openContext ()
-    let fpId = insertFiscalPeriod ctx "2099-02"
+    let fpId = insertFiscalPeriod ctx "2099-99"
     insertJournalEntry ctx fpId |> ignore
     ctx
 
 let [<Given>] ``a fiscal_period with a dependent invoice exists`` () =
     let ctx = openContext ()
-    let fpId = insertFiscalPeriod ctx "2099-03"
+    let fpId = insertFiscalPeriod ctx "2099-99"
     use cmd = new NpgsqlCommand(
         "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Test', @fp, 1000.00, 200.00, 1200.00)",
         ctx.Transaction.Connection, ctx.Transaction)
@@ -231,12 +166,9 @@ let [<Given>] ``a fiscal_period with a dependent invoice exists`` () =
     ctx
 
 let [<When>] ``I delete the parent fiscal_period`` (ctx: ScenarioContext) =
-    // We need to figure out which fiscal_period to delete. Use the test-inserted one.
-    // Since we're in a transaction, the test-inserted period is the one with a known key.
-    // But the When step doesn't know which key was used. We'll delete by the latest inserted id.
-    let ex = tryDelete ctx
-                "DELETE FROM ledger.fiscal_period WHERE period_key LIKE '2099-%'"
-                ignore
+    let ex = tryExec ctx
+                "DELETE FROM ledger.fiscal_period WHERE period_key = @k"
+                (fun cmd -> cmd.Parameters.AddWithValue("@k", "2099-99") |> ignore)
     { ctx with LastException = ex }
 
 // =====================================================================
@@ -307,7 +239,7 @@ let [<Given>] ``a journal_entry with a dependent transfer exists`` () =
     ctx
 
 let [<When>] ``I delete the parent journal_entry`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ledger.journal_entry WHERE description = 'Test JE'"
                 ignore
     { ctx with LastException = ex }
@@ -329,7 +261,7 @@ let [<Given>] ``an obligation_type with a dependent agreement exists`` () =
     ctx
 
 let [<When>] ``I delete the parent obligation_type`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ops.obligation_type WHERE name = 'del_ot_test'"
                 ignore
     { ctx with LastException = ex }
@@ -351,7 +283,7 @@ let [<Given>] ``a cadence with a dependent agreement exists`` () =
     ctx
 
 let [<When>] ``I delete the parent cadence`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ops.cadence WHERE name = 'del_cad_test'"
                 ignore
     { ctx with LastException = ex }
@@ -375,7 +307,7 @@ let [<Given>] ``a payment_method with a dependent agreement exists`` () =
     ctx
 
 let [<When>] ``I delete the parent payment_method`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ops.payment_method WHERE name = 'del_pm_test'"
                 ignore
     { ctx with LastException = ex }
@@ -404,7 +336,7 @@ let [<Given>] ``an obligation_status with a dependent instance exists`` () =
     ctx
 
 let [<When>] ``I delete the parent obligation_status`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ops.obligation_status WHERE name = 'del_os_test'"
                 ignore
     { ctx with LastException = ex }
@@ -433,7 +365,7 @@ let [<Given>] ``an obligation_agreement with a dependent instance exists`` () =
     ctx
 
 let [<When>] ``I delete the parent obligation_agreement`` (ctx: ScenarioContext) =
-    let ex = tryDelete ctx
+    let ex = tryExec ctx
                 "DELETE FROM ops.obligation_agreement WHERE name = 'del_oa_test'"
                 ignore
     { ctx with LastException = ex }

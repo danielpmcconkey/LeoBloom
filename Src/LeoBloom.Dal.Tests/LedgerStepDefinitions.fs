@@ -29,24 +29,32 @@ let [<When>] ``I insert into account_type with a null normal_balance`` (ctx: Sce
 // =====================================================================
 
 let [<Given>] ``an account with code "1010" exists`` () =
-    // Seed data from migrations — code '1010' should not exist in seed.
-    // We need to insert it within the transaction.
     let ctx = openContext ()
-    // Get a valid account_type_id from seed data
-    use cmd = new NpgsqlCommand("INSERT INTO ledger.account (code, name, account_type_id) VALUES ('1010', 'Test Account', 1)", ctx.Transaction.Connection, ctx.Transaction)
+    let atId = getValidAccountTypeId ctx
+    use cmd = new NpgsqlCommand("INSERT INTO ledger.account (code, name, account_type_id) VALUES ('1010', 'Test Account', @at)", ctx.Transaction.Connection, ctx.Transaction)
+    cmd.Parameters.AddWithValue("@at", atId) |> ignore
     cmd.ExecuteNonQuery() |> ignore
     ctx
 
 let [<When>] ``I insert into account with a null code`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ledger.account (code, name, account_type_id) VALUES (NULL, 'Test', 1)"
+    let atId = getValidAccountTypeId ctx
+    let ex = tryExec ctx
+                "INSERT INTO ledger.account (code, name, account_type_id) VALUES (NULL, 'Test', @at)"
+                (fun cmd -> cmd.Parameters.AddWithValue("@at", atId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert another account with code "1010"`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ledger.account (code, name, account_type_id) VALUES ('1010', 'Duplicate', 1)"
+    let atId = getValidAccountTypeId ctx
+    let ex = tryExec ctx
+                "INSERT INTO ledger.account (code, name, account_type_id) VALUES ('1010', 'Duplicate', @at)"
+                (fun cmd -> cmd.Parameters.AddWithValue("@at", atId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into account with a null name`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ledger.account (code, name, account_type_id) VALUES ('ZZZZ', NULL, 1)"
+    let atId = getValidAccountTypeId ctx
+    let ex = tryExec ctx
+                "INSERT INTO ledger.account (code, name, account_type_id) VALUES ('ZZZZ', NULL, @at)"
+                (fun cmd -> cmd.Parameters.AddWithValue("@at", atId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into account with a null account_type_id`` (ctx: ScenarioContext) =
@@ -60,13 +68,19 @@ let [<When>] ``I insert into account with account_type_id 9999`` (ctx: ScenarioC
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into account with parent_code "XXXX" that does not exist`` (ctx: ScenarioContext) =
+    let atId = getValidAccountTypeId ctx
     let ex = tryExec ctx
-                "INSERT INTO ledger.account (code, name, account_type_id, parent_code) VALUES ('ZZZZ', 'Test', 1, @pc)"
-                (fun cmd -> cmd.Parameters.AddWithValue("@pc", "XXXX") |> ignore)
+                "INSERT INTO ledger.account (code, name, account_type_id, parent_code) VALUES ('ZZZZ', 'Test', @at, @pc)"
+                (fun cmd ->
+                    cmd.Parameters.AddWithValue("@at", atId) |> ignore
+                    cmd.Parameters.AddWithValue("@pc", "XXXX") |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert a valid account with a null parent_code`` (ctx: ScenarioContext) =
-    let ex = tryInsert ctx "INSERT INTO ledger.account (code, name, account_type_id, parent_code) VALUES ('ZZZZ', 'Test', 1, NULL)"
+    let atId = getValidAccountTypeId ctx
+    let ex = tryExec ctx
+                "INSERT INTO ledger.account (code, name, account_type_id, parent_code) VALUES ('ZZZZ', 'Test', @at, NULL)"
+                (fun cmd -> cmd.Parameters.AddWithValue("@at", atId) |> ignore)
     { ctx with LastException = ex }
 
 // =====================================================================
@@ -97,19 +111,15 @@ let [<When>] ``I insert into fiscal_period with a null end_date`` (ctx: Scenario
 // journal_entry
 // =====================================================================
 
-let private getFirstFiscalPeriodId (ctx: ScenarioContext) =
-    use cmd = new NpgsqlCommand("SELECT id FROM ledger.fiscal_period LIMIT 1", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.ExecuteScalar() :?> int
-
 let [<When>] ``I insert into journal_entry with a null entry_date`` (ctx: ScenarioContext) =
-    let fpId = getFirstFiscalPeriodId ctx
+    let fpId = getValidFiscalPeriodId ctx
     let ex = tryExec ctx
                 "INSERT INTO ledger.journal_entry (entry_date, description, fiscal_period_id) VALUES (NULL, 'Test', @fp)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into journal_entry with a null description`` (ctx: ScenarioContext) =
-    let fpId = getFirstFiscalPeriodId ctx
+    let fpId = getValidFiscalPeriodId ctx
     let ex = tryExec ctx
                 "INSERT INTO ledger.journal_entry (entry_date, description, fiscal_period_id) VALUES ('2026-01-01', NULL, @fp)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
@@ -126,7 +136,7 @@ let [<When>] ``I insert into journal_entry with fiscal_period_id 9999`` (ctx: Sc
     { ctx with LastException = ex }
 
 let [<When>] ``I insert a valid journal_entry with null voided_at`` (ctx: ScenarioContext) =
-    let fpId = getFirstFiscalPeriodId ctx
+    let fpId = getValidFiscalPeriodId ctx
     let ex = tryExec ctx
                 "INSERT INTO ledger.journal_entry (entry_date, description, fiscal_period_id, voided_at) VALUES ('2026-01-01', 'Test', @fp, NULL)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
@@ -136,11 +146,9 @@ let [<When>] ``I insert a valid journal_entry with null voided_at`` (ctx: Scenar
 // journal_entry_reference
 // =====================================================================
 
-let private insertJournalEntry (ctx: ScenarioContext) =
-    let fpId = getFirstFiscalPeriodId ctx
-    use cmd = new NpgsqlCommand("INSERT INTO ledger.journal_entry (entry_date, description, fiscal_period_id) VALUES ('2026-01-01', 'Test JE', @fp) RETURNING id", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@fp", fpId) |> ignore
-    cmd.ExecuteScalar() :?> int
+let private insertJournalEntryLocal (ctx: ScenarioContext) =
+    let fpId = getValidFiscalPeriodId ctx
+    insertJournalEntry ctx fpId
 
 let [<When>] ``I insert into journal_entry_reference with a null journal_entry_id`` (ctx: ScenarioContext) =
     let ex = tryInsert ctx "INSERT INTO ledger.journal_entry_reference (journal_entry_id, reference_type, reference_value) VALUES (NULL, 'invoice', 'INV-001')"
@@ -153,14 +161,14 @@ let [<When>] ``I insert into journal_entry_reference with journal_entry_id 9999`
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into journal_entry_reference with a null reference_type`` (ctx: ScenarioContext) =
-    let jeId = insertJournalEntry ctx
+    let jeId = insertJournalEntryLocal ctx
     let ex = tryExec ctx
                 "INSERT INTO ledger.journal_entry_reference (journal_entry_id, reference_type, reference_value) VALUES (@je, NULL, 'INV-001')"
                 (fun cmd -> cmd.Parameters.AddWithValue("@je", jeId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into journal_entry_reference with a null reference_value`` (ctx: ScenarioContext) =
-    let jeId = insertJournalEntry ctx
+    let jeId = insertJournalEntryLocal ctx
     let ex = tryExec ctx
                 "INSERT INTO ledger.journal_entry_reference (journal_entry_id, reference_type, reference_value) VALUES (@je, 'invoice', NULL)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@je", jeId) |> ignore)
@@ -170,19 +178,15 @@ let [<When>] ``I insert into journal_entry_reference with a null reference_value
 // journal_entry_line
 // =====================================================================
 
-let private getFirstAccountId (ctx: ScenarioContext) =
-    use cmd = new NpgsqlCommand("SELECT id FROM ledger.account LIMIT 1", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.ExecuteScalar() :?> int
-
 let [<When>] ``I insert into journal_entry_line with a null journal_entry_id`` (ctx: ScenarioContext) =
-    let acctId = getFirstAccountId ctx
+    let acctId = getValidAccountId ctx
     let ex = tryExec ctx
                 "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) VALUES (NULL, @acct, 100.00, 'debit')"
                 (fun cmd -> cmd.Parameters.AddWithValue("@acct", acctId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into journal_entry_line with journal_entry_id 9999`` (ctx: ScenarioContext) =
-    let acctId = getFirstAccountId ctx
+    let acctId = getValidAccountId ctx
     let ex = tryExec ctx
                 "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) VALUES (@je, @acct, 100.00, 'debit')"
                 (fun cmd ->
@@ -191,14 +195,14 @@ let [<When>] ``I insert into journal_entry_line with journal_entry_id 9999`` (ct
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into journal_entry_line with a null account_id`` (ctx: ScenarioContext) =
-    let jeId = insertJournalEntry ctx
+    let jeId = insertJournalEntryLocal ctx
     let ex = tryExec ctx
                 "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) VALUES (@je, NULL, 100.00, 'debit')"
                 (fun cmd -> cmd.Parameters.AddWithValue("@je", jeId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into journal_entry_line with account_id 9999`` (ctx: ScenarioContext) =
-    let jeId = insertJournalEntry ctx
+    let jeId = insertJournalEntryLocal ctx
     let ex = tryExec ctx
                 "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) VALUES (@je, @acct, 100.00, 'debit')"
                 (fun cmd ->
@@ -207,8 +211,8 @@ let [<When>] ``I insert into journal_entry_line with account_id 9999`` (ctx: Sce
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into journal_entry_line with a null amount`` (ctx: ScenarioContext) =
-    let jeId = insertJournalEntry ctx
-    let acctId = getFirstAccountId ctx
+    let jeId = insertJournalEntryLocal ctx
+    let acctId = getValidAccountId ctx
     let ex = tryExec ctx
                 "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) VALUES (@je, @acct, NULL, 'debit')"
                 (fun cmd ->
@@ -217,8 +221,8 @@ let [<When>] ``I insert into journal_entry_line with a null amount`` (ctx: Scena
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into journal_entry_line with a null entry_type`` (ctx: ScenarioContext) =
-    let jeId = insertJournalEntry ctx
-    let acctId = getFirstAccountId ctx
+    let jeId = insertJournalEntryLocal ctx
+    let acctId = getValidAccountId ctx
     let ex = tryExec ctx
                 "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) VALUES (@je, @acct, 100.00, NULL)"
                 (fun cmd ->

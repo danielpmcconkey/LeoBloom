@@ -5,61 +5,6 @@ open TickSpec
 open LeoBloom.Dal.Tests.SharedSteps
 
 // =====================================================================
-// Helpers for ops tables — insert prerequisite rows within the transaction
-// =====================================================================
-
-let private getFirstAccountId (ctx: ScenarioContext) =
-    use cmd = new NpgsqlCommand("SELECT id FROM ledger.account LIMIT 1", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.ExecuteScalar() :?> int
-
-let private getFirstFiscalPeriodId (ctx: ScenarioContext) =
-    use cmd = new NpgsqlCommand("SELECT id FROM ledger.fiscal_period LIMIT 1", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.ExecuteScalar() :?> int
-
-let private insertObligationType (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand("INSERT INTO ops.obligation_type (name) VALUES (@n) RETURNING id", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private insertObligationStatus (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand("INSERT INTO ops.obligation_status (name) VALUES (@n) RETURNING id", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private insertCadence (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand("INSERT INTO ops.cadence (name) VALUES (@n) RETURNING id", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private insertPaymentMethod (ctx: ScenarioContext) (name: string) =
-    use cmd = new NpgsqlCommand("INSERT INTO ops.payment_method (name) VALUES (@n) RETURNING id", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private getFirstObligationTypeId (ctx: ScenarioContext) =
-    use cmd = new NpgsqlCommand("SELECT id FROM ops.obligation_type LIMIT 1", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.ExecuteScalar() :?> int
-
-let private getFirstCadenceId (ctx: ScenarioContext) =
-    use cmd = new NpgsqlCommand("SELECT id FROM ops.cadence LIMIT 1", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.ExecuteScalar() :?> int
-
-let private insertObligationAgreement (ctx: ScenarioContext) (name: string) =
-    let otId = getFirstObligationTypeId ctx
-    let cId = getFirstCadenceId ctx
-    use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES (@n, @ot, @c) RETURNING id",
-        ctx.Transaction.Connection, ctx.Transaction)
-    cmd.Parameters.AddWithValue("@n", name) |> ignore
-    cmd.Parameters.AddWithValue("@ot", otId) |> ignore
-    cmd.Parameters.AddWithValue("@c", cId) |> ignore
-    cmd.ExecuteScalar() :?> int
-
-let private getFirstObligationStatusId (ctx: ScenarioContext) =
-    use cmd = new NpgsqlCommand("SELECT id FROM ops.obligation_status LIMIT 1", ctx.Transaction.Connection, ctx.Transaction)
-    cmd.ExecuteScalar() :?> int
-
-// =====================================================================
 // obligation_type
 // =====================================================================
 
@@ -128,8 +73,8 @@ let [<When>] ``I insert into payment_method with a null name`` (ctx: ScenarioCon
 // =====================================================================
 
 let [<When>] ``I insert into obligation_agreement with a null name`` (ctx: ScenarioContext) =
-    let otId = getFirstObligationTypeId ctx
-    let cId = getFirstCadenceId ctx
+    let otId = getValidObligationTypeId ctx
+    let cId = getValidCadenceId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES (NULL, @ot, @c)"
                 (fun cmd ->
@@ -138,14 +83,14 @@ let [<When>] ``I insert into obligation_agreement with a null name`` (ctx: Scena
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_agreement with a null obligation_type_id`` (ctx: ScenarioContext) =
-    let cId = getFirstCadenceId ctx
+    let cId = getValidCadenceId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', NULL, @c)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@c", cId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_agreement with obligation_type_id 9999`` (ctx: ScenarioContext) =
-    let cId = getFirstCadenceId ctx
+    let cId = getValidCadenceId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', @ot, @c)"
                 (fun cmd ->
@@ -154,14 +99,14 @@ let [<When>] ``I insert into obligation_agreement with obligation_type_id 9999``
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_agreement with a null cadence_id`` (ctx: ScenarioContext) =
-    let otId = getFirstObligationTypeId ctx
+    let otId = getValidObligationTypeId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', @ot, NULL)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@ot", otId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_agreement with cadence_id 9999`` (ctx: ScenarioContext) =
-    let otId = getFirstObligationTypeId ctx
+    let otId = getValidObligationTypeId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id) VALUES ('Test', @ot, @c)"
                 (fun cmd ->
@@ -170,8 +115,8 @@ let [<When>] ``I insert into obligation_agreement with cadence_id 9999`` (ctx: S
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_agreement with payment_method_id 9999`` (ctx: ScenarioContext) =
-    let otId = getFirstObligationTypeId ctx
-    let cId = getFirstCadenceId ctx
+    let otId = getValidObligationTypeId ctx
+    let cId = getValidCadenceId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id, payment_method_id) VALUES ('Test', @ot, @c, @pm)"
                 (fun cmd ->
@@ -181,8 +126,8 @@ let [<When>] ``I insert into obligation_agreement with payment_method_id 9999`` 
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_agreement with source_account_id 9999`` (ctx: ScenarioContext) =
-    let otId = getFirstObligationTypeId ctx
-    let cId = getFirstCadenceId ctx
+    let otId = getValidObligationTypeId ctx
+    let cId = getValidCadenceId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id, source_account_id) VALUES ('Test', @ot, @c, @sa)"
                 (fun cmd ->
@@ -192,8 +137,8 @@ let [<When>] ``I insert into obligation_agreement with source_account_id 9999`` 
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_agreement with dest_account_id 9999`` (ctx: ScenarioContext) =
-    let otId = getFirstObligationTypeId ctx
-    let cId = getFirstCadenceId ctx
+    let otId = getValidObligationTypeId ctx
+    let cId = getValidCadenceId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id, dest_account_id) VALUES ('Test', @ot, @c, @da)"
                 (fun cmd ->
@@ -203,8 +148,8 @@ let [<When>] ``I insert into obligation_agreement with dest_account_id 9999`` (c
     { ctx with LastException = ex }
 
 let [<When>] ``I insert a valid obligation_agreement with a null amount`` (ctx: ScenarioContext) =
-    let otId = getFirstObligationTypeId ctx
-    let cId = getFirstCadenceId ctx
+    let otId = getValidObligationTypeId ctx
+    let cId = getValidCadenceId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_agreement (name, obligation_type_id, cadence_id, amount) VALUES ('Test', @ot, @c, NULL)"
                 (fun cmd ->
@@ -217,14 +162,14 @@ let [<When>] ``I insert a valid obligation_agreement with a null amount`` (ctx: 
 // =====================================================================
 
 let [<When>] ``I insert into obligation_instance with a null obligation_agreement_id`` (ctx: ScenarioContext) =
-    let sId = getFirstObligationStatusId ctx
+    let sId = getValidObligationStatusId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (NULL, 'Test', @s, '2026-04-01')"
                 (fun cmd -> cmd.Parameters.AddWithValue("@s", sId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into obligation_instance with obligation_agreement_id 9999`` (ctx: ScenarioContext) =
-    let sId = getFirstObligationStatusId ctx
+    let sId = getValidObligationStatusId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (@oa, 'Test', @s, '2026-04-01')"
                 (fun cmd ->
@@ -234,7 +179,7 @@ let [<When>] ``I insert into obligation_instance with obligation_agreement_id 99
 
 let [<When>] ``I insert into obligation_instance with a null name`` (ctx: ScenarioContext) =
     let oaId = insertObligationAgreement ctx "TestAgreement"
-    let sId = getFirstObligationStatusId ctx
+    let sId = getValidObligationStatusId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (@oa, NULL, @s, '2026-04-01')"
                 (fun cmd ->
@@ -260,7 +205,7 @@ let [<When>] ``I insert into obligation_instance with status_id 9999`` (ctx: Sce
 
 let [<When>] ``I insert into obligation_instance with a null expected_date`` (ctx: ScenarioContext) =
     let oaId = insertObligationAgreement ctx "TestAgreement"
-    let sId = getFirstObligationStatusId ctx
+    let sId = getValidObligationStatusId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date) VALUES (@oa, 'Test', @s, NULL)"
                 (fun cmd ->
@@ -270,7 +215,7 @@ let [<When>] ``I insert into obligation_instance with a null expected_date`` (ct
 
 let [<When>] ``I insert into obligation_instance with journal_entry_id 9999`` (ctx: ScenarioContext) =
     let oaId = insertObligationAgreement ctx "TestAgreement"
-    let sId = getFirstObligationStatusId ctx
+    let sId = getValidObligationStatusId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date, journal_entry_id) VALUES (@oa, 'Test', @s, '2026-04-01', @je)"
                 (fun cmd ->
@@ -281,7 +226,7 @@ let [<When>] ``I insert into obligation_instance with journal_entry_id 9999`` (c
 
 let [<When>] ``I insert a valid obligation_instance with null journal_entry_id`` (ctx: ScenarioContext) =
     let oaId = insertObligationAgreement ctx "TestAgreement"
-    let sId = getFirstObligationStatusId ctx
+    let sId = getValidObligationStatusId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status_id, expected_date, journal_entry_id) VALUES (@oa, 'Test', @s, '2026-04-01', NULL)"
                 (fun cmd ->
@@ -386,7 +331,7 @@ let [<When>] ``I insert a valid transfer with null journal_entry_id`` (ctx: Scen
 
 let [<Given>] ``an invoice for tenant "Brian" and fiscal_period "2026-03" exists`` () =
     let ctx = openContext ()
-    let fpId = getFirstFiscalPeriodId ctx
+    let fpId = getValidFiscalPeriodId ctx
     use cmd = new NpgsqlCommand(
         "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Brian', @fp, 1000.00, 200.00, 1200.00)",
         ctx.Transaction.Connection, ctx.Transaction)
@@ -395,7 +340,7 @@ let [<Given>] ``an invoice for tenant "Brian" and fiscal_period "2026-03" exists
     ctx
 
 let [<When>] ``I insert into invoice with a null tenant`` (ctx: ScenarioContext) =
-    let fpId = getFirstFiscalPeriodId ctx
+    let fpId = getValidFiscalPeriodId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES (NULL, @fp, 1000.00, 200.00, 1200.00)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
@@ -412,28 +357,28 @@ let [<When>] ``I insert into invoice with fiscal_period_id 9999`` (ctx: Scenario
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into invoice with a null rent_amount`` (ctx: ScenarioContext) =
-    let fpId = getFirstFiscalPeriodId ctx
+    let fpId = getValidFiscalPeriodId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Test', @fp, NULL, 200.00, 1200.00)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into invoice with a null utility_share`` (ctx: ScenarioContext) =
-    let fpId = getFirstFiscalPeriodId ctx
+    let fpId = getValidFiscalPeriodId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Test', @fp, 1000.00, NULL, 1200.00)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert into invoice with a null total_amount`` (ctx: ScenarioContext) =
-    let fpId = getFirstFiscalPeriodId ctx
+    let fpId = getValidFiscalPeriodId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Test', @fp, 1000.00, 200.00, NULL)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
     { ctx with LastException = ex }
 
 let [<When>] ``I insert another invoice for tenant "Brian" and fiscal_period "2026-03"`` (ctx: ScenarioContext) =
-    let fpId = getFirstFiscalPeriodId ctx
+    let fpId = getValidFiscalPeriodId ctx
     let ex = tryExec ctx
                 "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Brian', @fp, 500.00, 100.00, 600.00)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
