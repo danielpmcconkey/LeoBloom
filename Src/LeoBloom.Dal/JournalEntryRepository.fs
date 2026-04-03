@@ -70,6 +70,42 @@ module JournalEntryRepository =
             reader.Close()
             line)
 
+    let voidEntry (txn: NpgsqlTransaction) (entryId: int) (reason: string) : JournalEntry option =
+        // Attempt to set voided_at on non-voided entries. If already voided, affects 0 rows.
+        use upd = new NpgsqlCommand(
+            "UPDATE ledger.journal_entry
+             SET voided_at = now(), void_reason = @reason, modified_at = now()
+             WHERE id = @id AND voided_at IS NULL",
+            txn.Connection, txn)
+        upd.Parameters.AddWithValue("@id", entryId) |> ignore
+        upd.Parameters.AddWithValue("@reason", reason) |> ignore
+        upd.ExecuteNonQuery() |> ignore
+
+        // Return current state (whether we just updated or it was already voided)
+        use sel = new NpgsqlCommand(
+            "SELECT id, entry_date, description, source, fiscal_period_id,
+                    voided_at, void_reason, created_at, modified_at
+             FROM ledger.journal_entry WHERE id = @id",
+            txn.Connection, txn)
+        sel.Parameters.AddWithValue("@id", entryId) |> ignore
+        use reader = sel.ExecuteReader()
+        if reader.Read() then
+            let entry =
+                { id = reader.GetInt32(0)
+                  entryDate = reader.GetFieldValue<DateOnly>(1)
+                  description = reader.GetString(2)
+                  source = if reader.IsDBNull(3) then None else Some (reader.GetString(3))
+                  fiscalPeriodId = reader.GetInt32(4)
+                  voidedAt = if reader.IsDBNull(5) then None else Some (reader.GetFieldValue<DateTimeOffset>(5))
+                  voidReason = if reader.IsDBNull(6) then None else Some (reader.GetString(6))
+                  createdAt = reader.GetFieldValue<DateTimeOffset>(7)
+                  modifiedAt = reader.GetFieldValue<DateTimeOffset>(8) }
+            reader.Close()
+            Some entry
+        else
+            reader.Close()
+            None
+
     let insertReferences (txn: NpgsqlTransaction) (entryId: int) (refs: PostReferenceCommand list) : JournalEntryReference list =
         refs
         |> List.map (fun r ->
