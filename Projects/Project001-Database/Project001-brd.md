@@ -489,8 +489,8 @@ Feature: Ops schema structural constraints
     Then the insert is rejected with a NOT NULL violation
 
   Scenario: invoice tenant and fiscal_period_id must be unique together
-    Given an invoice for tenant "Brian" and fiscal_period "2026-03" exists
-    When I insert another invoice for tenant "Brian" and fiscal_period "2026-03"
+    Given an invoice for tenant "Jeffrey" and fiscal_period "2026-03" exists
+    When I insert another invoice for tenant "Jeffrey" and fiscal_period "2026-03"
     Then the insert is rejected with a UNIQUE violation
 ```
 

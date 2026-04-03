@@ -55,7 +55,7 @@ The chart of accounts. See `ChartOfAccountsDraft.md` for the initial set.
 |--------|------|-------|
 | `id` | `serial PK` | Surrogate key for FK references |
 | `code` | `varchar(10) UNIQUE NOT NULL` | Business identifier, e.g. "1010", "4010". Numbering convention (not GAAP-mandated): 1xxx assets, 2xxx liabilities, 3xxx equity, 4xxx revenue, 5xxx investment property expenses, 6xxx personal expenses |
-| `name` | `varchar(100) NOT NULL` | e.g. "Fidelity CMA", "Rental Income — Brian" |
+| `name` | `varchar(100) NOT NULL` | e.g. "Fidelity CMA", "Rental Income — Jeffrey" |
 | `account_type_id` | `integer NOT NULL FK → account_type.id` | |
 | `parent_code` | `varchar(10) FK → account.code` | Hierarchical COA structure. Nullable (top-level accounts have no parent). The account hierarchy serves as the sole classification mechanism — no separate "category" concept |
 | `is_active` | `boolean NOT NULL DEFAULT true` | Soft-disable without deleting |
@@ -112,7 +112,7 @@ date, description, and metadata are shared across all lines.
 |--------|------|-------|
 | `id` | `serial PK` | |
 | `entry_date` | `date NOT NULL` | When the money moved (cash basis). The financial date. |
-| `description` | `varchar(500) NOT NULL` | Human-readable: "Brian March rent", "Enbridge gas Feb 2026" |
+| `description` | `varchar(500) NOT NULL` | Human-readable: "Jeffrey March rent", "Enbridge gas Feb 2026" |
 | `source` | `varchar(50)` | How this entry was created: `manual`, `import`, `invoice`, `agent` |
 | `fiscal_period_id` | `integer NOT NULL FK → fiscal_period.id` | |
 | `voided_at` | `timestamptz` | Null = active entry. Not null = voided. Replaces a separate `is_void` flag. |
@@ -142,7 +142,7 @@ date, description, and metadata are shared across all lines.
 ### `journal_entry_reference`
 
 External reference numbers associated with a journal entry. One entry can have
-multiple references (Dan's invoice number, Brian's cheque number, Ally's
+multiple references (Dan's invoice number, Jeffrey's cheque number, Ally's
 transaction ID — all for the same real-world event).
 
 | Column | Type | Notes |
@@ -163,12 +163,12 @@ A journal entry has one or more lines. Each line debits or credits a single
 account for a specific amount. The lines within an entry must balance: total
 debits = total credits.
 
-Example — Brian pays $1,000 rent into the CMA:
+Example — Jeffrey pays $1,000 rent into the CMA:
 
 | Line | Account | Amount | Type |
 |------|---------|--------|------|
 | 1 | Fidelity CMA (asset) | 1,000.00 | debit |
-| 2 | Rental Income — Brian (revenue) | 1,000.00 | credit |
+| 2 | Rental Income — Jeffrey (revenue) | 1,000.00 | credit |
 
 Debit to an asset = balance goes UP. Credit to revenue = balance goes UP.
 Both sides increase, both sides balance. This is the "left side / right side"
@@ -247,9 +247,9 @@ from this for each occurrence.
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | `serial PK` | |
-| `name` | `varchar(100) NOT NULL` | e.g. "Brian rent", "Enbridge gas bill" |
+| `name` | `varchar(100) NOT NULL` | e.g. "Jeffrey rent", "Enbridge gas bill" |
 | `obligation_type` | `varchar(20) NOT NULL` | `receivable` or `payable`. DU-backed: `ObligationDirection` in Domain layer. |
-| `counterparty` | `varchar(100)` | The non-Dan side of the arrangement: "Brian", "Enbridge", "Rocket Mortgage". Dan is always implicit. |
+| `counterparty` | `varchar(100)` | The non-Dan side of the arrangement: "Jeffrey", "Enbridge", "Rocket Mortgage". Dan is always implicit. |
 | `amount` | `numeric(12,2)` | The agreed-upon amount. Null when the agreement doesn't specify a fixed amount (metered utilities, variable-rate). Updated when terms change (escrow adjustment, new contract rate). |
 | `cadence` | `varchar(20) NOT NULL` | `monthly`, `quarterly`, `annual`, `one_time`. DU-backed: `RecurrenceCadence` in Domain layer. |
 | `expected_day` | `integer` | Day of month/quarter when expected. Nullable for irregular. |
@@ -278,14 +278,14 @@ from this for each occurrence.
 
 ### `obligation_instance`
 
-A specific occurrence of an obligation agreement. "Brian rent — Apr 2026."
+A specific occurrence of an obligation agreement. "Jeffrey rent — Apr 2026."
 This is the thing whose status gets tracked.
 
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | `serial PK` | |
 | `obligation_agreement_id` | `integer NOT NULL FK → obligation_agreement.id` | |
-| `name` | `varchar(100) NOT NULL` | Human-readable label, e.g. "Apr 2026". Combined with the parent agreement's name for display: "Brian rent — Apr 2026" |
+| `name` | `varchar(100) NOT NULL` | Human-readable label, e.g. "Apr 2026". Combined with the parent agreement's name for display: "Jeffrey rent — Apr 2026" |
 | `status` | `varchar(20) NOT NULL` | `expected`, `in_flight`, `confirmed`, `posted`, `overdue`, `skipped`. DU-backed: `InstanceStatus` in Domain layer. |
 | `amount` | `numeric(12,2)` | The amount for this specific occurrence. Pre-filled from `obligation_agreement.amount` for fixed agreements. Set when the bill arrives for variable agreements. |
 | `expected_date` | `date NOT NULL` | When we expect this to happen |
@@ -330,7 +330,7 @@ expected → skipped
 - `due_date` and `document_path` absorb what was previously the separate `bill`
   table. A bill arriving is just an update to the obligation_instance: set
   `amount`, `due_date`, `document_path`, and advance status.
-- Partial payments are not modelled. If Brian owes $1,000 and pays $500, handle
+- Partial payments are not modelled. If Jeffrey owes $1,000 and pays $500, handle
   it manually. Revisit if this becomes a real problem.
 
 ---
@@ -379,9 +379,9 @@ invoice IS a monthly financial document ("here's what you owe for March").
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | `serial PK` | |
-| `tenant` | `varchar(50) NOT NULL` | "Brian", "Alex", "Justin" |
+| `tenant` | `varchar(50) NOT NULL` | "Jeffrey", "Alice", "Matthew" |
 | `fiscal_period_id` | `integer NOT NULL FK → ledger.fiscal_period.id` | The period this invoice covers |
-| `rent_amount` | `numeric(12,2) NOT NULL` | Fixed per tenant (Brian=1000, Alex=700, Justin=0) |
+| `rent_amount` | `numeric(12,2) NOT NULL` | Fixed per tenant (Jeffrey=1000, Alice=700, Matthew=0) |
 | `utility_share` | `numeric(12,2) NOT NULL` | 1/3 of total utilities for the period |
 | `total_amount` | `numeric(12,2) NOT NULL` | rent + utility_share |
 | `generated_at` | `timestamptz NOT NULL DEFAULT now()` | |
@@ -459,7 +459,7 @@ These inform indexing and should become test cases:
    debits = credits, regardless of line count. Mortgage splits, multi-account
    transactions, all supported from day one.
 
-2. **Tenant as a first-class entity?** Currently "Brian" is just a string on
+2. **Tenant as a first-class entity?** Currently "Jeffrey" is just a string on
    `invoice` and `obligation_agreement.counterparty`. If tenants come and go,
    or if there's ever a fourth, a `tenant` table with lease dates and rent
    amounts might be cleaner. But for three people who aren't going anywhere

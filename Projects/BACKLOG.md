@@ -536,8 +536,8 @@ Revenue minus expenses for a fiscal period. The "did we make money?" report.
 
 ```
 Revenue (4xxx accounts)
-  Rental Income — Brian          1,000.00
-  Rental Income — Alex             700.00
+  Rental Income — Jeffrey          1,000.00
+  Rental Income — Alice             700.00
   ...
   ─────────────────────────────
   Total Revenue                  X,XXX.XX
@@ -673,8 +673,8 @@ not string matching on codes.
 
 ## Epic E: Obligation Lifecycle
 
-The ops engine. Agreements define the contractual terms ("Brian owes $1,000 rent
-monthly"). Instances track each occurrence ("Brian rent — Apr 2026, expected").
+The ops engine. Agreements define the contractual terms ("Jeffrey owes $1,000 rent
+monthly"). Instances track each occurrence ("Jeffrey rent — Apr 2026, expected").
 The status machine tracks reality ("received? posted to ledger?").
 
 The ops schema depends on the ledger schema. The ledger knows nothing about ops.
@@ -689,7 +689,7 @@ One-way dependency.
 
 ### 014 — Obligation Agreements
 
-CRUD for obligation agreements. These are the standing arrangements: "Brian pays
+CRUD for obligation agreements. These are the standing arrangements: "Jeffrey pays
 $1,000 rent monthly," "Enbridge sends a gas bill monthly (variable amount),"
 "Property insurance is $1,500 annually."
 
@@ -746,7 +746,7 @@ be tracked through the status lifecycle.
 - Variable-amount agreements (`amount IS NULL`): leave `instance.amount` null.
   It gets set when the bill arrives (status transition to confirmed).
 - Instance `name` = period label, e.g., "Apr 2026". Combined with the agreement
-  name for display: "Brian rent — Apr 2026".
+  name for display: "Jeffrey rent — Apr 2026".
 
 **Unique constraint (application layer):** No two instances for the same
 agreement with the same `expected_date`. If you try to spawn instances for a
@@ -840,7 +840,7 @@ All active `obligation_instance` rows where:
 
 **Output per overdue instance:**
 
-- Agreement name + instance name (e.g., "Brian rent — Apr 2026")
+- Agreement name + instance name (e.g., "Jeffrey rent — Apr 2026")
 - Counterparty
 - Expected amount (from agreement or instance)
 - Expected date
@@ -1049,7 +1049,7 @@ Create the invoice record for a tenant + fiscal period.
 **Unique constraint:** One invoice per `(tenant, fiscal_period_id)`. Reject
 duplicates.
 
-**Current tenants (from DataModelSpec):** Brian, Alex, Justin. Justin's rent is
+**Current tenants (from DataModelSpec):** Jeffrey, Alice, Matthew. Matthew's rent is
 $0 (living arrangement — the invoice still exists for the utility share).
 
 **Edge cases CE should address in the BRD:**
@@ -1058,7 +1058,7 @@ $0 (living arrangement — the invoice still exists for the utility share).
   nearest cent. Rounding differences (total of rounded shares != original total)
   are a real thing. **Decision:** round each share normally. Accept the
   penny discrepancy. Don't over-engineer.
-- Justin's rent is $0 but utility share is non-zero → valid invoice. `total_amount`
+- Matthew's rent is $0 but utility share is non-zero → valid invoice. `total_amount`
   = `utility_share`.
 - What if a tenant has no receivable agreement? → error. Every tenant must have
   an agreement for invoicing to work.

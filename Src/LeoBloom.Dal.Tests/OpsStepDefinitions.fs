@@ -182,11 +182,11 @@ let [<When>] ``I insert a valid transfer with null journal_entry_id`` (ctx: Scen
 // invoice
 // =====================================================================
 
-let [<Given>] ``an invoice for tenant "Brian" and fiscal_period "2026-03" exists`` () =
+let [<Given>] ``an invoice for tenant "Jeffrey" and fiscal_period "2026-03" exists`` () =
     let ctx = openContext ()
     let fpId = getValidFiscalPeriodId ctx
     use cmd = new NpgsqlCommand(
-        "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Brian', @fp, 1000.00, 200.00, 1200.00)",
+        "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Jeffrey', @fp, 1000.00, 200.00, 1200.00)",
         ctx.Transaction.Connection, ctx.Transaction)
     cmd.Parameters.AddWithValue("@fp", fpId) |> ignore
     cmd.ExecuteNonQuery() |> ignore
@@ -230,9 +230,9 @@ let [<When>] ``I insert into invoice with a null total_amount`` (ctx: ScenarioCo
                 (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
     { ctx with LastException = ex }
 
-let [<When>] ``I insert another invoice for tenant "Brian" and fiscal_period "2026-03"`` (ctx: ScenarioContext) =
+let [<When>] ``I insert another invoice for tenant "Jeffrey" and fiscal_period "2026-03"`` (ctx: ScenarioContext) =
     let fpId = getValidFiscalPeriodId ctx
     let ex = tryExec ctx
-                "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Brian', @fp, 500.00, 100.00, 600.00)"
+                "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Jeffrey', @fp, 500.00, 100.00, 600.00)"
                 (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
     { ctx with LastException = ex }
