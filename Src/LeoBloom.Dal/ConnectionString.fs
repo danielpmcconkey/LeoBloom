@@ -7,6 +7,8 @@ open Microsoft.Extensions.Configuration
 /// Shared connection string resolver.
 /// Reads LEOBLOOM_ENV, loads the matching appsettings.{env}.json,
 /// substitutes LEOBLOOM_DB_PASSWORD, returns a ready-to-use connection string.
+/// Note: Search Path is per-consumer (in each project's appsettings, not here).
+/// Migrations uses "migrondi", Dal.Tests uses "ledger,ops,public".
 module ConnectionString =
 
     let resolve (basePath: string) =

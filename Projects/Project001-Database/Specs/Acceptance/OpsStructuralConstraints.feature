@@ -2,6 +2,11 @@ Feature: Ops schema structural constraints
 
   All scenarios verify database-level enforcement. No application logic.
 
+  # Scope: NOT NULL constraints (user-defined, not DEFAULT-backed), UNIQUE constraints,
+  # FK constraints (insert direction), and nullable FK/business-significant fields.
+  # Intentionally untested: freeform nullable text/date columns (memo, notes, source,
+  # description, etc.) and NOT NULL + DEFAULT columns (is_active, created_at, modified_at).
+
   # --- obligation_type ---
 
   Scenario: obligation_type name must be unique
@@ -180,6 +185,11 @@ Feature: Ops schema structural constraints
     Given the ops schema exists
     When I insert into transfer with journal_entry_id 9999
     Then the insert is rejected with a FK violation
+
+  Scenario: transfer journal_entry_id is nullable
+    Given the ops schema exists
+    When I insert a valid transfer with null journal_entry_id
+    Then the insert succeeds
 
   # --- invoice ---
 

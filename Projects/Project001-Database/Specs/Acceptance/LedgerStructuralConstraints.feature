@@ -2,6 +2,11 @@ Feature: Ledger schema structural constraints
 
   All scenarios verify database-level enforcement. No application logic.
 
+  # Scope: NOT NULL constraints (user-defined, not DEFAULT-backed), UNIQUE constraints,
+  # FK constraints (insert direction), and nullable FK/business-significant fields.
+  # Intentionally untested: freeform nullable text/date columns (memo, notes, source,
+  # description, etc.) and NOT NULL + DEFAULT columns (is_active, created_at, modified_at).
+
   # --- account_type ---
 
   Scenario: account_type requires a name

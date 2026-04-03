@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -6,12 +6,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Tests.fs" />
+    <Compile Include="SharedSteps.fs" />
+    <Compile Include="LedgerStepDefinitions.fs" />
+    <Compile Include="OpsStepDefinitions.fs" />
+    <Compile Include="DeleteRestrictionSteps.fs" />
+    <Compile Include="FeatureFixture.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+    <PackageReference Include="TickSpec" Version="2.0.4" />
+    <PackageReference Include="TickSpec.Xunit" Version="2.0.4" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
@@ -19,6 +26,19 @@
   <ItemGroup>
     <ProjectReference Include="..\LeoBloom.Dal\LeoBloom.Dal.fsproj" />
     <ProjectReference Include="..\LeoBloom.Domain\LeoBloom.Domain.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\Projects\Project001-Database\Specs\Acceptance\LedgerStructuralConstraints.feature"
+                      Link="LedgerStructuralConstraints.feature" />
+    <EmbeddedResource Include="..\..\Projects\Project001-Database\Specs\Acceptance\OpsStructuralConstraints.feature"
+                      Link="OpsStructuralConstraints.feature" />
+    <EmbeddedResource Include="..\..\Projects\Project001-Database\Specs\Acceptance\DeleteRestrictionConstraints.feature"
+                      Link="DeleteRestrictionConstraints.feature" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="appsettings.Development.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

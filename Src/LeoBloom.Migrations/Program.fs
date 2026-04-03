@@ -1,39 +1,18 @@
 open System
 open System.IO
-open Microsoft.Extensions.Configuration
 open Migrondi.Core
 open Npgsql
 
 [<EntryPoint>]
-let main args =
-    let environment =
-        args
-        |> Array.tryHead
+let main _args =
+    let connString = LeoBloom.Dal.ConnectionString.resolve AppContext.BaseDirectory
+
+    let env =
+        Environment.GetEnvironmentVariable "LEOBLOOM_ENV"
+        |> Option.ofObj
         |> Option.defaultValue "Development"
 
-    printfn "Leo Bloom Migrations — Environment: %s" environment
-
-    let config =
-        ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.Development.json", optional = true)
-            .AddJsonFile($"appsettings.{environment}.json", optional = true)
-            .AddEnvironmentVariables()
-            .Build()
-
-    let connTemplate = config["ConnectionStrings:LeoBloom"]
-
-    if String.IsNullOrWhiteSpace connTemplate then
-        eprintfn "ERROR: ConnectionStrings:LeoBloom not found in configuration."
-        1
-    else
-
-    let password =
-        Environment.GetEnvironmentVariable "LEOBLOOM_DB_PASSWORD"
-        |> Option.ofObj
-        |> Option.defaultValue ""
-
-    let connString = connTemplate.Replace("{LEOBLOOM_DB_PASSWORD}", password)
+    printfn "Leo Bloom Migrations — Environment: %s" env
 
     let migrationsDir =
         Path.Combine(AppContext.BaseDirectory, "Migrations")
