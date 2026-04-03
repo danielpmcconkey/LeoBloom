@@ -10,108 +10,126 @@ Feature: ON DELETE RESTRICT constraints
 
   # --- ledger.account_type as parent ---
 
+  @FT-DR-001
   Scenario: cannot delete account_type with dependent account
     Given an account_type with a dependent account exists
-    When I delete the parent account_type
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
   # --- ledger.account as parent ---
 
+  @FT-DR-002
   Scenario: cannot delete account with dependent child account via parent_code
     Given an account with a dependent child account exists
-    When I delete the parent account
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
+  @FT-DR-003
   Scenario: cannot delete account with dependent journal_entry_line
     Given an account with a dependent journal_entry_line exists
-    When I delete the account referenced by journal_entry_line
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
+  @FT-DR-004
   Scenario: cannot delete account with dependent obligation_agreement source
     Given an account with a dependent obligation_agreement source exists
-    When I delete the account referenced as source_account
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
+  @FT-DR-005
   Scenario: cannot delete account with dependent obligation_agreement dest
     Given an account with a dependent obligation_agreement dest exists
-    When I delete the account referenced as dest_account
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
+  @FT-DR-006
   Scenario: cannot delete account with dependent transfer from
     Given an account with a dependent transfer from exists
-    When I delete the account referenced as from_account
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
+  @FT-DR-007
   Scenario: cannot delete account with dependent transfer to
     Given an account with a dependent transfer to exists
-    When I delete the account referenced as to_account
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
   # --- ledger.fiscal_period as parent ---
 
+  @FT-DR-008
   Scenario: cannot delete fiscal_period with dependent journal_entry
     Given a fiscal_period with a dependent journal_entry exists
-    When I delete the parent fiscal_period
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
+  @FT-DR-009
   Scenario: cannot delete fiscal_period with dependent invoice
     Given a fiscal_period with a dependent invoice exists
-    When I delete the parent fiscal_period
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
   # --- ledger.journal_entry as parent ---
 
+  @FT-DR-010
   Scenario: cannot delete journal_entry with dependent reference
     Given a journal_entry with a dependent reference exists
-    When I delete the parent journal_entry
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
+  @FT-DR-011
   Scenario: cannot delete journal_entry with dependent line
     Given a journal_entry with a dependent line exists
-    When I delete the parent journal_entry
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
+  @FT-DR-012
   Scenario: cannot delete journal_entry with dependent obligation_instance
     Given a journal_entry with a dependent obligation_instance exists
-    When I delete the parent journal_entry
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
+  @FT-DR-013
   Scenario: cannot delete journal_entry with dependent transfer
     Given a journal_entry with a dependent transfer exists
-    When I delete the parent journal_entry
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
   # --- ops.obligation_type as parent ---
 
+  @FT-DR-014
   Scenario: cannot delete obligation_type with dependent agreement
     Given an obligation_type with a dependent agreement exists
-    When I delete the parent obligation_type
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
   # --- ops.cadence as parent ---
 
+  @FT-DR-015
   Scenario: cannot delete cadence with dependent agreement
     Given a cadence with a dependent agreement exists
-    When I delete the parent cadence
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
   # --- ops.payment_method as parent ---
 
+  @FT-DR-016
   Scenario: cannot delete payment_method with dependent agreement
     Given a payment_method with a dependent agreement exists
-    When I delete the parent payment_method
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
   # --- ops.obligation_status as parent ---
 
+  @FT-DR-017
   Scenario: cannot delete obligation_status with dependent instance
     Given an obligation_status with a dependent instance exists
-    When I delete the parent obligation_status
+    When I delete the parent record
     Then the delete is rejected with a FK violation
 
   # --- ops.obligation_agreement as parent ---
 
+  @FT-DR-018
   Scenario: cannot delete obligation_agreement with dependent instance
     Given an obligation_agreement with a dependent instance exists
-    When I delete the parent obligation_agreement
+    When I delete the parent record
     Then the delete is rejected with a FK violation

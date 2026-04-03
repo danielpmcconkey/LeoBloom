@@ -19,9 +19,15 @@ do ()
 // breaks downstream assertions (LastException stays None).
 // ---------------------------------------------------------------------
 
+type DeleteTarget = {
+    Sql: string
+    ParamSetup: NpgsqlCommand -> unit
+}
+
 type ScenarioContext = {
     Transaction: NpgsqlTransaction
     LastException: exn option
+    DeleteTarget: DeleteTarget option
 }
 
 // ---------------------------------------------------------------------
@@ -55,7 +61,7 @@ let openContext () =
         conn.Dispose()
         failwith $"SAFETY: Tests connected to '{dbName}' instead of 'leobloom_dev'. Aborting."
 
-    { Transaction = txn; LastException = None }
+    { Transaction = txn; LastException = None; DeleteTarget = None }
 
 // ---------------------------------------------------------------------
 // Helper to attempt a SQL command and capture any PostgresException.

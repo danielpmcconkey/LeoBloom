@@ -29,11 +29,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="..\..\Projects\Project001-Database\Specs\Acceptance\LedgerStructuralConstraints.feature"
+    <EmbeddedResource Include="..\..\Specs\Structural\LedgerStructuralConstraints.feature"
                       Link="LedgerStructuralConstraints.feature" />
-    <EmbeddedResource Include="..\..\Projects\Project001-Database\Specs\Acceptance\OpsStructuralConstraints.feature"
+    <EmbeddedResource Include="..\..\Specs\Structural\OpsStructuralConstraints.feature"
                       Link="OpsStructuralConstraints.feature" />
-    <EmbeddedResource Include="..\..\Projects\Project001-Database\Specs\Acceptance\DeleteRestrictionConstraints.feature"
+    <EmbeddedResource Include="..\..\Specs\Structural\DeleteRestrictionConstraints.feature"
                       Link="DeleteRestrictionConstraints.feature" />
   </ItemGroup>
 
