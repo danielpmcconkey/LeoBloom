@@ -11,6 +11,7 @@
     <Compile Include="OpsStepDefinitions.fs" />
     <Compile Include="DeleteRestrictionStepDefinitions.fs" />
     <Compile Include="PostJournalEntryStepDefinitions.fs" />
+    <Compile Include="VoidJournalEntryStepDefinitions.fs" />
     <Compile Include="FeatureFixture.fs" />
   </ItemGroup>
 
@@ -38,6 +39,8 @@
                       Link="DeleteRestrictionConstraints.feature" />
     <EmbeddedResource Include="..\..\Specs\Behavioral\PostJournalEntry.feature"
                       Link="PostJournalEntry.feature" />
+    <EmbeddedResource Include="..\..\Specs\Behavioral\VoidJournalEntry.feature"
+                      Link="VoidJournalEntry.feature" />
   </ItemGroup>
 
   <ItemGroup>

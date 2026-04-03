@@ -27,3 +27,8 @@ let ``Delete restriction constraints`` (scenario: XunitSerializableScenario) =
 [<Trait("Category", "Behavioral")>]
 let ``Post journal entry`` (scenario: XunitSerializableScenario) =
     source.RunScenario(scenario)
+
+[<Theory; MemberData("scenarios", "LeoBloom.Dal.Tests.VoidJournalEntry.feature")>]
+[<Trait("Category", "Behavioral")>]
+let ``Void journal entry`` (scenario: XunitSerializableScenario) =
+    source.RunScenario(scenario)

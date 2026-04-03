@@ -115,6 +115,10 @@ module Ledger =
           lines: JournalEntryLine list
           references: JournalEntryReference list }
 
+    type VoidJournalEntryCommand =
+        { journalEntryId: int
+          voidReason: string }
+
     // --- Additional pure validators for the write path ---
 
     module EntryType =

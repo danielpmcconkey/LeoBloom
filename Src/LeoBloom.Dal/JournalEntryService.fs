@@ -118,3 +118,42 @@ module JournalEntryService =
                 let lines = JournalEntryRepository.insertLines txn entry.id cmd.lines
                 let refs = JournalEntryRepository.insertReferences txn entry.id cmd.references
                 Ok { entry = entry; lines = lines; references = refs }
+
+    // --- Void operations ---
+
+    let private validateVoidCommand (cmd: VoidJournalEntryCommand) : Result<unit, string list> =
+        if String.IsNullOrWhiteSpace cmd.voidReason then
+            Error [ "Void reason is required and cannot be empty" ]
+        else Ok ()
+
+    /// Void a journal entry within an existing transaction (for testing).
+    let voidInTransaction (txn: NpgsqlTransaction) (cmd: VoidJournalEntryCommand) : Result<JournalEntry, string list> =
+        match validateVoidCommand cmd with
+        | Error errs -> Error errs
+        | Ok () ->
+            match JournalEntryRepository.voidEntry txn cmd.journalEntryId cmd.voidReason with
+            | Some entry -> Ok entry
+            | None -> Error [ sprintf "Journal entry with id %d does not exist" cmd.journalEntryId ]
+
+    /// Void a journal entry: validate, update, return result.
+    /// Opens its own connection and transaction.
+    let voidEntry (basePath: string) (cmd: VoidJournalEntryCommand) : Result<JournalEntry, string list> =
+        match validateVoidCommand cmd with
+        | Error errs -> Error errs
+        | Ok () ->
+            let connStr = ConnectionString.resolve basePath
+            use conn = new NpgsqlConnection(connStr)
+            conn.Open()
+            use txn = conn.BeginTransaction()
+
+            try
+                match JournalEntryRepository.voidEntry txn cmd.journalEntryId cmd.voidReason with
+                | Some entry ->
+                    txn.Commit()
+                    Ok entry
+                | None ->
+                    txn.Rollback()
+                    Error [ sprintf "Journal entry with id %d does not exist" cmd.journalEntryId ]
+            with ex ->
+                try txn.Rollback() with _ -> ()
+                Error [ sprintf "Persistence error: %s" ex.Message ]
