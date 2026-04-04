@@ -1,4 +1,4 @@
-module LeoBloom.Domain.Tests.DomainTests
+module LeoBloom.Tests.DomainTests
 
 open System
 open Xunit

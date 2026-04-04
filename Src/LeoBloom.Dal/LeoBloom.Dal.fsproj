@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="ConnectionString.fs" />
+    <Compile Include="DataSource.fs" />
     <Compile Include="JournalEntryRepository.fs" />
     <Compile Include="JournalEntryService.fs" />
     <Compile Include="AccountBalanceRepository.fs" />

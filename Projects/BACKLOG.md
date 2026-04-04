@@ -1272,6 +1272,23 @@ land after 031 (logging) so the logging conventions are baked in too.
 
 ---
 
+### 033 — Seal DataSource internals (Migrations connection string leak)
+
+Project 030 added `DataSource.connectionString` as a public escape hatch so
+Migrations could pass a raw connection string to Migrondi. This violates the
+"nothing else is public" design — the connection string should be private.
+
+**Fix:** Migrations should build its own connection string from config (it
+already has its own `appsettings.{env}.json` with `search_path=migrondi`),
+or Migrondi should accept an `NpgsqlDataSource`/`NpgsqlConnection` instead
+of a raw string. Investigate which approach is cleaner, remove the public
+`connectionString` binding, and verify Migrations still works.
+
+**Depends on:** 030 (done). **Priority:** Near-term — this is a design
+violation we introduced and should clean up before more consumers appear.
+
+---
+
 ## Beyond the Horizon
 
 Not scoped, not sized. Noted so we don't forget they exist.

@@ -4,6 +4,7 @@ Feature: Void Journal Entry
 
     # --- Happy Path ---
 
+    @FT-VJE-001
     Scenario: Void an active entry successfully
         Given the ledger schema exists for voiding
         And a void-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -18,6 +19,7 @@ Feature: Void Journal Entry
 
     # --- State Verification ---
 
+    @FT-VJE-002
     Scenario: Voided entry remains in the database
         Given the ledger schema exists for voiding
         And a void-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -30,6 +32,7 @@ Feature: Void Journal Entry
         When I void the entry with reason "Error correction"
         Then the void succeeds and the entry still exists in the database with description "To be voided"
 
+    @FT-VJE-003
     Scenario: Lines and references are intact after void
         Given the ledger schema exists for voiding
         And a void-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -47,6 +50,7 @@ Feature: Void Journal Entry
 
     # --- Idempotency ---
 
+    @FT-VJE-004
     Scenario: Void an already-voided entry is idempotent
         Given the ledger schema exists for voiding
         And a void-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -62,6 +66,7 @@ Feature: Void Journal Entry
 
     # --- Validation ---
 
+    @FT-VJE-005
     Scenario: Empty void reason is rejected
         Given the ledger schema exists for voiding
         And a void-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -74,6 +79,7 @@ Feature: Void Journal Entry
         When I void the entry with reason ""
         Then the void fails with error containing "reason"
 
+    @FT-VJE-006
     Scenario: Whitespace-only void reason is rejected
         Given the ledger schema exists for voiding
         And a void-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -86,6 +92,7 @@ Feature: Void Journal Entry
         When I void the entry with reason "   "
         Then the void fails with error containing "reason"
 
+    @FT-VJE-007
     Scenario: Nonexistent entry ID is rejected
         Given the ledger schema exists for voiding
         When I void entry ID 999999 with reason "Does not exist"
@@ -93,6 +100,7 @@ Feature: Void Journal Entry
 
     # --- Edge Cases ---
 
+    @FT-VJE-008
     Scenario: Void succeeds in a closed fiscal period
         Given the ledger schema exists for voiding
         And a void-test open fiscal period from 2025-12-01 to 2025-12-31
