@@ -22,6 +22,7 @@
     <Compile Include="BalanceSheetService.fs" />
     <Compile Include="SubtreePLRepository.fs" />
     <Compile Include="SubtreePLService.fs" />
+    <Compile Include="OpeningBalanceService.fs" />
   </ItemGroup>
 
   <ItemGroup>
