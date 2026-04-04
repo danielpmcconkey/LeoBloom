@@ -8,17 +8,18 @@ open Npgsql
 // =====================================================================
 
 module TestData =
-    /// Generate a unique 6-char prefix for this test (e.g., "t7f3a2")
-    let uniquePrefix () = Guid.NewGuid().ToString("N").[..5]
+    /// Generate a unique 4-char prefix for this test (e.g., "t7f3")
+    /// Kept short to fit varchar constraints (code=10, period_key=7)
+    let uniquePrefix () = Guid.NewGuid().ToString("N").[..3]
 
-    /// Generate a unique account code
-    let accountCode prefix = sprintf "%s_ACCT" prefix
+    /// Generate a unique account code (max 10 chars)
+    let accountCode prefix = sprintf "%sAC" prefix
 
-    /// Generate a unique account type name
+    /// Generate a unique account type name (max 20 chars)
     let accountTypeName prefix = sprintf "%s_type" prefix
 
-    /// Generate a unique fiscal period key
-    let periodKey prefix = sprintf "%s_FP" prefix
+    /// Generate a unique fiscal period key (max 7 chars)
+    let periodKey prefix = sprintf "%sFP" prefix
 
 // =====================================================================
 // TestCleanup — tracks inserted rows and deletes in FK-safe order

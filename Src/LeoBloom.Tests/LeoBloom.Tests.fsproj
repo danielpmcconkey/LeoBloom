@@ -8,6 +8,9 @@
   <ItemGroup>
     <Compile Include="TestHelpers.fs" />
     <Compile Include="DomainTests.fs" />
+    <Compile Include="LedgerConstraintTests.fs" />
+    <Compile Include="OpsConstraintTests.fs" />
+    <Compile Include="DeleteRestrictionTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
