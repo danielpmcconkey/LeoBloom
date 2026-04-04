@@ -39,6 +39,7 @@ Stories reference it by section. CE should read it before writing any BRD.
 | 003 | BDD infrastructure — FT tags, feature file reorg, DeleteTarget refactor, docs | Done |
 | 004 | Domain types — F# types in Domain, business logic BDD in Domain.Tests | Done |
 | 029 | Lookup table elimination — replace integer FK lookups with DU-backed strings | Done |
+| 030 | Unfuck our test harness | In progress |
 
 Project 004 delivers F# record/DU types mirroring every schema table, plus pure
 validation functions for the fundamental invariants (balance rule, amount
@@ -1194,6 +1195,10 @@ All read-only. No auth concerns beyond preventing accidental writes.
 
 Returns a time series with daily/periodic data points and flagged uncertainties
 (variable-amount obligations with unknown amounts).
+
+### 030 — Unfuck our test harness
+
+Our test harness is fucked. Nuke it from orbit. BDD is good. But we have a tooling problem, a DB connection problem, and some dipshit wrote test-only code in our main library projects.
 
 ---
 

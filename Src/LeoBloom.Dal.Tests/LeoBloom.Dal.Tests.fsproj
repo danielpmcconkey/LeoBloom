@@ -12,6 +12,7 @@
     <Compile Include="DeleteRestrictionStepDefinitions.fs" />
     <Compile Include="PostJournalEntryStepDefinitions.fs" />
     <Compile Include="VoidJournalEntryStepDefinitions.fs" />
+    <Compile Include="AccountBalanceStepDefinitions.fs" />
     <Compile Include="FeatureFixture.fs" />
   </ItemGroup>
 
@@ -41,6 +42,8 @@
                       Link="PostJournalEntry.feature" />
     <EmbeddedResource Include="..\..\Specs\Behavioral\VoidJournalEntry.feature"
                       Link="VoidJournalEntry.feature" />
+    <EmbeddedResource Include="..\..\Specs\Behavioral\AccountBalance.feature"
+                      Link="AccountBalance.feature" />
   </ItemGroup>
 
   <ItemGroup>

@@ -9,6 +9,8 @@
     <Compile Include="ConnectionString.fs" />
     <Compile Include="JournalEntryRepository.fs" />
     <Compile Include="JournalEntryService.fs" />
+    <Compile Include="AccountBalanceRepository.fs" />
+    <Compile Include="AccountBalanceService.fs" />
   </ItemGroup>
 
   <ItemGroup>

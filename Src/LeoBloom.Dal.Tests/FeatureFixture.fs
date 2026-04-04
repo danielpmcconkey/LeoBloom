@@ -32,3 +32,8 @@ let ``Post journal entry`` (scenario: XunitSerializableScenario) =
 [<Trait("Category", "Behavioral")>]
 let ``Void journal entry`` (scenario: XunitSerializableScenario) =
     source.RunScenario(scenario)
+
+[<Theory; MemberData("scenarios", "LeoBloom.Dal.Tests.AccountBalance.feature")>]
+[<Trait("Category", "Behavioral")>]
+let ``Account balance`` (scenario: XunitSerializableScenario) =
+    source.RunScenario(scenario)

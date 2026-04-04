@@ -119,6 +119,14 @@ module Ledger =
         { journalEntryId: int
           voidReason: string }
 
+    type AccountBalance =
+        { accountId: int
+          accountCode: string
+          accountName: string
+          normalBalance: NormalBalance
+          balance: decimal
+          asOfDate: DateOnly }
+
     // --- Additional pure validators for the write path ---
 
     module EntryType =
