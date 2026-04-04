@@ -1,7 +1,7 @@
 ---
 title: "refactor: Unfuck the test harness"
 type: refactor
-status: active
+status: completed
 date: 2026-04-04
 origin: Projects/Project030-UnFuckOurTestHarness/Project030-brainstorm.md
 deepened: 2026-04-04
