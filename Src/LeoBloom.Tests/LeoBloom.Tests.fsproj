@@ -15,6 +15,7 @@
     <Compile Include="VoidJournalEntryTests.fs" />
     <Compile Include="AccountBalanceTests.fs" />
     <Compile Include="TrialBalanceTests.fs" />
+    <Compile Include="FiscalPeriodTests.fs" />
     <Compile Include="DataSourceEncapsulationTests.fs" />
     <Compile Include="DalToUtilitiesRenameTests.fs" />
     <Compile Include="LogModuleStructureTests.fs" />

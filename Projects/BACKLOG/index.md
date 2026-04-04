@@ -10,7 +10,7 @@
 | 006 | Void journal entry | Done |
 | 007 | Account balance | Done |
 | 008 | Trial balance | Done |
-| 009 | Close / reopen fiscal period | Not started |
+| 009 | Close / reopen fiscal period | Done |
 | 010 | Opening balances | Not started |
 | 011 | Income statement | Not started |
 | 012 | Balance sheet | Not started |
