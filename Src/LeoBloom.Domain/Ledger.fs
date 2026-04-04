@@ -119,6 +119,18 @@ module Ledger =
         { journalEntryId: int
           voidReason: string }
 
+    type CloseFiscalPeriodCommand =
+        { fiscalPeriodId: int }
+
+    type ReopenFiscalPeriodCommand =
+        { fiscalPeriodId: int
+          reason: string }
+
+    let validateReopenReason (reason: string) : Result<unit, string list> =
+        if String.IsNullOrWhiteSpace reason then
+            Error [ "Reopen reason is required and cannot be empty" ]
+        else Ok ()
+
     type AccountBalance =
         { accountId: int
           accountCode: string
