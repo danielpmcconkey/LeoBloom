@@ -39,9 +39,10 @@ Stories reference it by section. CE should read it before writing any BRD.
 | 003 | BDD infrastructure — FT tags, feature file reorg, DeleteTarget refactor, docs | Done |
 | 004 | Domain types — F# types in Domain, business logic BDD in Domain.Tests | Done |
 | 029 | Lookup table elimination — replace integer FK lookups with DU-backed strings | Done |
-| 030 | Unfuck our test harness | In progress |
+| 030 | Unfuck our test harness | Done |
 | 031 | Foundational logging infrastructure | Not started |
-| 032 | Test Author Agent Blueprint — institutional knowledge for test-writing agents | Not started |
+| 032 | Test Author Agent Blueprint — DSWF infrastructure, QE addendum, workflow overhaul | Done |
+| 033 | Seal DataSource internals (Migrations connection string leak) | Not started |
 
 Project 004 delivers F# record/DU types mirroring every schema table, plus pure
 validation functions for the fundamental invariants (balance rule, amount
