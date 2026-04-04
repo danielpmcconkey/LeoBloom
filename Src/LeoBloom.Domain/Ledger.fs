@@ -119,6 +119,19 @@ module Ledger =
         { journalEntryId: int
           voidReason: string }
 
+    // --- Opening Balances types ---
+
+    type OpeningBalanceEntry =
+        { accountId: int
+          balance: decimal }
+
+    type PostOpeningBalancesCommand =
+        { entryDate: DateOnly
+          fiscalPeriodId: int
+          balancingAccountId: int
+          entries: OpeningBalanceEntry list
+          description: string option }
+
     type CloseFiscalPeriodCommand =
         { fiscalPeriodId: int }
 

@@ -11,7 +11,7 @@
 | 007 | Account balance | Done |
 | 008 | Trial balance | Done |
 | 009 | Close / reopen fiscal period | Done |
-| 010 | Opening balances | Not started |
+| 010 | Opening balances | Done |
 | 011 | Income statement | Done |
 | 012 | Balance sheet | Done |
 | 013 | P&L by account subtree | Done |
