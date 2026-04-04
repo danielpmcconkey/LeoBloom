@@ -133,6 +133,19 @@ module InsertHelpers =
         TestCleanup.trackAccount id tracker
         id
 
+    let insertAccountWithParent (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (code: string) (name: string) (accountTypeId: int) (parentCode: string) (isActive: bool) : int =
+        use cmd = new NpgsqlCommand(
+            "INSERT INTO ledger.account (code, name, account_type_id, parent_code, is_active) VALUES (@c, @n, @at, @pc, @active) RETURNING id",
+            conn)
+        cmd.Parameters.AddWithValue("@c", code) |> ignore
+        cmd.Parameters.AddWithValue("@n", name) |> ignore
+        cmd.Parameters.AddWithValue("@at", accountTypeId) |> ignore
+        cmd.Parameters.AddWithValue("@pc", parentCode) |> ignore
+        cmd.Parameters.AddWithValue("@active", isActive) |> ignore
+        let id = cmd.ExecuteScalar() :?> int
+        TestCleanup.trackAccount id tracker
+        id
+
     let insertFiscalPeriod (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (periodKey: string) (startDate: DateOnly) (endDate: DateOnly) (isOpen: bool) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ledger.fiscal_period (period_key, start_date, end_date, is_open) VALUES (@k, @s, @e, @o) RETURNING id",

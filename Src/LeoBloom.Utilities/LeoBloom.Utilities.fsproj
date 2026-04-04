@@ -20,6 +20,8 @@
     <Compile Include="IncomeStatementService.fs" />
     <Compile Include="BalanceSheetRepository.fs" />
     <Compile Include="BalanceSheetService.fs" />
+    <Compile Include="SubtreePLRepository.fs" />
+    <Compile Include="SubtreePLService.fs" />
   </ItemGroup>
 
   <ItemGroup>
