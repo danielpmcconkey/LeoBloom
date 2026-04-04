@@ -4,6 +4,7 @@ Feature: Post Journal Entry
 
     # --- Happy Path ---
 
+    @FT-PJE-001
     Scenario: Simple 2-line entry posts successfully
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -15,6 +16,7 @@ Feature: Post Journal Entry
             | 4010    | 1000.00 | credit     |
         Then the post succeeds with 2 lines and valid id and timestamps
 
+    @FT-PJE-002
     Scenario: Compound 3-line entry posts successfully
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -28,6 +30,7 @@ Feature: Post Journal Entry
             | 1010    | 1500.00 | credit     |
         Then the post succeeds with 3 lines
 
+    @FT-PJE-003
     Scenario: Entry with references posts successfully
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -43,6 +46,7 @@ Feature: Post Journal Entry
             | 4010    | 1000.00 | credit     |
         Then the post succeeds with 2 references
 
+    @FT-PJE-004
     Scenario: Entry with null source posts successfully
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -54,6 +58,7 @@ Feature: Post Journal Entry
             | 4010    | 1000.00 | credit     |
         Then the post succeeds with null source
 
+    @FT-PJE-005
     Scenario: Entry with memo on lines posts successfully
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -67,6 +72,7 @@ Feature: Post Journal Entry
 
     # --- Pure Validation ---
 
+    @FT-PJE-006
     Scenario: Unbalanced entry is rejected
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -78,6 +84,7 @@ Feature: Post Journal Entry
             | 4010    | 500.00  | credit     |
         Then the post fails with error containing "do not equal"
 
+    @FT-PJE-007
     Scenario: Zero amount is rejected
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -89,6 +96,7 @@ Feature: Post Journal Entry
             | 4010    | 0.00   | credit     |
         Then the post fails with error containing "non-positive amount"
 
+    @FT-PJE-008
     Scenario: Negative amount is rejected
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -100,6 +108,7 @@ Feature: Post Journal Entry
             | 4010    | -100.00 | credit     |
         Then the post fails with error containing "non-positive amount"
 
+    @FT-PJE-009
     Scenario: Single-line entry is rejected
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -109,6 +118,7 @@ Feature: Post Journal Entry
             | 1010    | 100.00 | debit      |
         Then the post fails with error containing "at least 2 lines"
 
+    @FT-PJE-010
     Scenario: Empty description is rejected
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -120,11 +130,13 @@ Feature: Post Journal Entry
             | 4010    | 100.00 | credit     |
         Then the post fails with error containing "Description"
 
+    @FT-PJE-011
     Scenario: Invalid entry_type is rejected
         Given the ledger schema exists for posting
         When I attempt to parse entry_type "foo"
         Then the entry_type parse result is Error
 
+    @FT-PJE-012
     Scenario: Empty source string is rejected
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -138,6 +150,7 @@ Feature: Post Journal Entry
 
     # --- DB-Dependent Validation ---
 
+    @FT-PJE-013
     Scenario: Closed fiscal period is rejected
         Given the ledger schema exists for posting
         And a closed fiscal period from 2025-12-01 to 2025-12-31
@@ -149,6 +162,7 @@ Feature: Post Journal Entry
             | 4010    | 100.00 | credit     |
         Then the post fails with error containing "not open"
 
+    @FT-PJE-014
     Scenario: Entry date outside period range is rejected
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -160,6 +174,7 @@ Feature: Post Journal Entry
             | 4010    | 100.00 | credit     |
         Then the post fails with error containing "outside"
 
+    @FT-PJE-015
     Scenario: Inactive account is rejected
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -171,6 +186,7 @@ Feature: Post Journal Entry
             | 4010    | 100.00 | credit     |
         Then the post fails with error containing "inactive"
 
+    @FT-PJE-016
     Scenario: Nonexistent fiscal period is rejected
         Given the ledger schema exists for posting
         And an active account 1010 of type asset
@@ -183,6 +199,7 @@ Feature: Post Journal Entry
 
     # --- Reference Validation ---
 
+    @FT-PJE-017
     Scenario: Empty reference type is rejected
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -197,6 +214,7 @@ Feature: Post Journal Entry
             | 4010    | 100.00 | credit     |
         Then the post fails with error containing "reference_type"
 
+    @FT-PJE-018
     Scenario: Empty reference value is rejected
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -213,6 +231,7 @@ Feature: Post Journal Entry
 
     # --- Atomicity ---
 
+    @FT-PJE-019
     Scenario: Validation failure leaves no persisted rows
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -226,6 +245,7 @@ Feature: Post Journal Entry
 
     # --- Edge Cases ---
 
+    @FT-PJE-020
     Scenario: Duplicate references across entries are allowed
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-03-01 to 2026-03-31
@@ -241,6 +261,7 @@ Feature: Post Journal Entry
             | 4010    | 500.00 | credit     |
         Then the post succeeds
 
+    @FT-PJE-021
     Scenario: Future entry_date with valid open period succeeds
         Given the ledger schema exists for posting
         And a valid open fiscal period from 2026-06-01 to 2026-06-30

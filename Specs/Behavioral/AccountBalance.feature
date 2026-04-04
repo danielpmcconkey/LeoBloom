@@ -6,6 +6,7 @@ Feature: Account Balance
 
     # --- Happy Path ---
 
+    @FT-AB-001
     Scenario: Normal-debit account balance after single entry
         Given the ledger schema exists for balance queries
         And a balance-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -18,6 +19,7 @@ Feature: Account Balance
         When I query the balance of account 1010 as of 2026-03-31
         Then the balance is 1000.00 for a normal-debit account with code "1010"
 
+    @FT-AB-002
     Scenario: Normal-credit account balance after single entry
         Given the ledger schema exists for balance queries
         And a balance-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -32,6 +34,7 @@ Feature: Account Balance
 
     # --- Accumulation ---
 
+    @FT-AB-003
     Scenario: Balance accumulates across multiple entries
         Given the ledger schema exists for balance queries
         And a balance-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -48,6 +51,7 @@ Feature: Account Balance
         When I query the balance of account 1010 as of 2026-03-31
         Then the balance result is exactly 800.00
 
+    @FT-AB-004
     Scenario: Mixed debits and credits net correctly
         Given the ledger schema exists for balance queries
         And a balance-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -66,6 +70,7 @@ Feature: Account Balance
 
     # --- Filtering ---
 
+    @FT-AB-005
     Scenario: Voided entry excluded from balance
         Given the ledger schema exists for balance queries
         And a balance-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -83,6 +88,7 @@ Feature: Account Balance
         When I query the balance of account 1010 as of 2026-03-31
         Then the balance result is exactly 500.00
 
+    @FT-AB-006
     Scenario: Entry after as_of_date excluded from balance
         Given the ledger schema exists for balance queries
         And a balance-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -101,12 +107,14 @@ Feature: Account Balance
 
     # --- Edge Cases ---
 
+    @FT-AB-007
     Scenario: Account with no entries has zero balance
         Given the ledger schema exists for balance queries
         And a balance-test active account 1010 of type asset
         When I query the balance of account 1010 as of 2026-03-31
         Then the balance result is exactly 0.00
 
+    @FT-AB-008
     Scenario: Inactive account balance is calculated
         Given the ledger schema exists for balance queries
         And a balance-test open fiscal period from 2026-03-01 to 2026-03-31
@@ -122,11 +130,13 @@ Feature: Account Balance
 
     # --- Validation ---
 
+    @FT-AB-009
     Scenario: Nonexistent account ID returns error
         Given the ledger schema exists for balance queries
         When I query the balance of account ID 999999 as of 2026-03-31
         Then the balance result is Error containing "does not exist"
 
+    @FT-AB-010
     Scenario: Nonexistent account code returns error
         Given the ledger schema exists for balance queries
         When I query the balance of account code "ZZZZ" as of 2026-03-31
@@ -134,6 +144,7 @@ Feature: Account Balance
 
     # --- Code Lookup ---
 
+    @FT-AB-011
     Scenario: Lookup by account code matches lookup by ID
         Given the ledger schema exists for balance queries
         And a balance-test open fiscal period from 2026-03-01 to 2026-03-31
