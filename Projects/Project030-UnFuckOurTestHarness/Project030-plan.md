@@ -4,9 +4,34 @@ type: refactor
 status: active
 date: 2026-04-04
 origin: Projects/Project030-UnFuckOurTestHarness/Project030-brainstorm.md
+deepened: 2026-04-04
 ---
 
 # Unfuck the Test Harness
+
+## Enhancement Summary
+
+**Deepened on:** 2026-04-04
+**Agents used:** architecture-strategist, code-simplicity-reviewer,
+pattern-recognition-specialist, performance-oracle, data-integrity-guardian,
+best-practices-researcher, framework-docs-researcher
+
+### Key Improvements from Deepening
+1. DataSource uses eager init (not lazy) — fails loud at module load, no
+   cached exception problem
+2. TestCleanup implemented as an F# module (not OOP class) to match
+   codebase conventions
+3. Cleanup failures are logged to test output, not silently swallowed
+4. DataSource builder configured with `IncludeErrorDetail=true` and
+   `ApplicationName="LeoBloom"` for debuggability
+5. Phase ordering fix: consolidate test projects (Phase 3) before
+   refactoring production signatures (Phase 2) — prevents a broken-build
+   gap where old tests can't compile but new tests don't exist yet
+6. Prod safety guard (`SELECT current_database()`) integrated into
+   DataSource eager init — comes for free since we're already opening
+   a connection at module load
+
+---
 
 ## Overview
 
@@ -39,6 +64,12 @@ Six compounding problems documented in the brainstorm:
 Ten-phase migration that replaces the foundation first, consolidates test
 projects, rewrites tests, then cleans up.
 
+**Phase ordering note:** Phase 3 (consolidate test projects) should execute
+before Phase 2 (refactor production services). Deleting `ConnectionString.fs`
+in Phase 2 breaks the old `Dal.Tests` project. If Phase 3 runs first,
+Domain tests are already in the new project and stay green throughout.
+Phases are numbered by logical grouping, not strict execution order.
+
 ## Technical Approach
 
 ### Phase 1: DataSource Singleton
@@ -46,34 +77,67 @@ projects, rewrites tests, then cleans up.
 Create `Src/LeoBloom.Dal/DataSource.fs`.
 
 **What it does:**
-- Private function resolves connection string from LEOBLOOM_ENV + appsettings
-  (same logic as current `ConnectionString.resolve`, using
-  `AppContext.BaseDirectory` to find the right config file)
-- Private `lazy` NpgsqlDataSource — built once on first access, cached forever
-- One public function: `DataSource.openConnection()` — returns a pooled
-  `NpgsqlConnection`
+- Private function resolves connection string from LEOBLOOM_ENV + appsettings.
+  **This is a behavioral change from `ConnectionString.resolve`:** the current
+  code takes an explicit `basePath` parameter, while the DataSource module
+  uses `AppContext.BaseDirectory` implicitly. This is intentional — no caller
+  should need to know or pass the base path.
+- **Eager init** — the NpgsqlDataSource is built at module load time, not
+  lazily on first access. If the config is missing, the env var is wrong,
+  or the database is unreachable, the module fails to load immediately with
+  a clear error message. This avoids the `Lazy<T>` problem where a failed
+  init caches the exception and every subsequent call re-throws the same
+  cryptic `TargetInvocationException`.
+- One public function: `DataSource.openConnection()` — returns a pooled,
+  already-open `NpgsqlConnection` (uses `dataSource.OpenConnection()`, not
+  `CreateConnection()`).
 - Nothing else is public. Connection string, data source instance, and
   resolution logic are all private to this module.
 
-**fsproj placement:** `DataSource.fs` goes in the same position as
-`ConnectionString.fs` (or immediately after it during the transition).
+**DataSource builder configuration:**
+- `IncludeErrorDetail = true` — includes column names and values in Postgres
+  error messages. Essential for debugging constraint violations. This is a
+  dev database — never enable this in prod.
+- `ApplicationName = "LeoBloom"` — identifies connections in
+  `pg_stat_activity`. Trivial to add, invaluable for debugging.
+- `Timeout = 5` — connection acquisition timeout. If a test waits 5 seconds
+  for a pool connection, something is catastrophically wrong. Fast-fail
+  instead of the default 15-second stall. (Dan: change this back if it
+  causes spurious failures. It's a dev convenience, not a design decision.)
+- `CommandTimeout = 5` — same reasoning as above for query execution.
+
+**Prod safety guard (integrated into eager init):**
+Since the module eagerly opens a connection at load time, run
+`SELECT current_database()` right there. If it returns anything other than
+`leobloom_dev`, throw with a clear message. This comes for free — we're
+already validating the connection works.
+
+**fsproj placement:** `DataSource.fs` replaces `ConnectionString.fs` in the
+same position in the compile order.
 
 **Migrations note:** `Src/LeoBloom.Migrations/Program.fs` also calls
 `ConnectionString.resolve`. Migrations runs as a separate executable, so
 `AppContext.BaseDirectory` will resolve to its own output directory with its
 own `appsettings.{env}.json` (which has `search_path=migrondi`). The
-DataSource singleton handles this correctly — it reads from wherever the
-current executable lives. Migrations switches to `DataSource.openConnection()`
-like everything else.
+DataSource module handles this correctly — each process gets its own eager
+init reading from its own config. Migrations switches to
+`DataSource.openConnection()` like everything else.
+
+**Note for future API work:** The API project should also use
+`DataSource.openConnection()` from this module — not register its own
+`NpgsqlDataSource` via DI. One connection strategy for the whole solution.
 
 **Success criteria:**
 - DataSource module compiles in LeoBloom.Dal
 - `DataSource.openConnection()` returns a working connection
+- Module fails loud with a clear message if config is missing or DB is wrong
 - Existing code still works (ConnectionString.fs still exists temporarily)
 
 ---
 
 ### Phase 2: Refactor Production Services
+
+**Execute after Phase 3** (see phase ordering note above).
 
 Update `JournalEntryService.fs` and `AccountBalanceService.fs`.
 
@@ -117,6 +181,8 @@ DataSource).
 
 ### Phase 3: Consolidate Test Projects
 
+**Execute before Phase 2** (see phase ordering note above).
+
 Merge `LeoBloom.Domain.Tests` and `LeoBloom.Dal.Tests` into a single
 `LeoBloom.Tests` project.
 
@@ -130,11 +196,17 @@ just different files in the same project.
   `LeoBloom.Domain` and `LeoBloom.Dal`
 - Move `Src/LeoBloom.Domain.Tests/Tests.fs` into `LeoBloom.Tests/` (rename
   to `DomainTests.fs` for clarity)
+- **Update the module declaration** in `DomainTests.fs` from
+  `module LeoBloom.Domain.Tests.DomainTests` to
+  `module LeoBloom.Tests.DomainTests` — compile error if you forget
 - Do NOT move the old TickSpec step definition files — those are being
   rewritten, not migrated
 - Remove `LeoBloom.Domain.Tests` and `LeoBloom.Dal.Tests` projects from
   the solution
 - Update the sln file
+- **Do NOT touch** the other `Src/` directories (`LeoBloom.Ledger`,
+  `LeoBloom.Ops`, `LeoBloom.Data`, etc.) — those are future projects,
+  not vestigial
 
 **fsproj compile order (initial):**
 1. `TestHelpers.fs` (created in Phase 4)
@@ -185,45 +257,50 @@ The FK dependency chain for LeoBloom's schema requires deletes in this order:
 9. `ledger.account_type`
 10. `ledger.fiscal_period`
 
-Getting this wrong means silent cleanup failures (FK violations swallowed in
-finally blocks) → orphaned test data → cross-test interference. This is the
-same class of bug we're fixing, so the cleanup must be correct.
+**Implementation as an F# module** (not a class — matches the codebase's
+functional-module convention):
 
 ```fsharp
-/// Tracks all IDs created during a test for ordered cleanup.
-type TestCleanup(conn: NpgsqlConnection) =
-    let mutable journalEntryIds: int list = []
-    let mutable accountIds: int list = []
-    let mutable accountTypeIds: int list = []
-    let mutable fiscalPeriodIds: int list = []
-    let mutable obligationAgreementIds: int list = []
-    // ... etc for each table
+module TestCleanup =
+    type Tracker =
+        { mutable JournalEntryIds: int list
+          mutable AccountIds: int list
+          mutable AccountTypeIds: int list
+          mutable FiscalPeriodIds: int list
+          // ... etc for each table
+          Connection: NpgsqlConnection }
 
-    member this.TrackJournalEntry(id) = journalEntryIds <- id :: journalEntryIds
-    member this.TrackAccount(id) = accountIds <- id :: accountIds
+    let create (conn: NpgsqlConnection) =
+        { JournalEntryIds = []; AccountIds = []; AccountTypeIds = []
+          FiscalPeriodIds = []; Connection = conn }
+
+    let trackJournalEntry id tracker =
+        tracker.JournalEntryIds <- id :: tracker.JournalEntryIds
+
+    let trackAccount id tracker =
+        tracker.AccountIds <- id :: tracker.AccountIds
+
     // ... etc
 
     /// Delete all tracked rows in FK-safe order.
-    /// Swallows exceptions per-table so one failure doesn't block the rest.
-    member this.DeleteAll() =
+    /// Catches exceptions per-table so one failure doesn't block the rest.
+    /// **Logs failures to stderr** — silent swallowing is the exact class
+    /// of bug this project exists to fix.
+    let deleteAll tracker =
+        let tryDelete table ids =
+            try
+                // DELETE FROM {table} WHERE id = ANY(@ids)
+                ...
+            with ex ->
+                eprintfn "[TestCleanup] FAILED to clean %s: %s" table ex.Message
         // Order matters — children before parents
-        // 1. journal_entry_reference
-        // 2. journal_entry_line
-        // 3. ops tables
-        // 4. journal_entry
-        // 5. account
-        // 6. account_type
-        // 7. fiscal_period
-        ...
+        tryDelete "ledger.journal_entry_reference" tracker.JournalEntryIds
+        tryDelete "ledger.journal_entry_line" tracker.JournalEntryIds
+        // ... etc in FK order
 ```
 
-**Prod safety guard (low priority — implement only if easy):**
-
-The prod database password isn't in this container, and test projects only
-have `appsettings.Development.json`. The risk is near-zero. But if it's
-trivial to add a one-time `SELECT current_database()` check at assembly
-load, do it. If it requires xUnit fixture plumbing or complicates the
-architecture, skip it.
+**Prod safety guard:** Integrated into DataSource eager init (Phase 1).
+No separate test-level guard needed.
 
 **Shared insert helpers:**
 
@@ -231,9 +308,17 @@ Consolidate the duplicated `insertAccountType`, `insertAccount`,
 `insertFiscalPeriod` helpers into `TestHelpers.fs`. Each helper returns
 the inserted ID and registers it with the `TestCleanup` tracker.
 
+**Parallel test isolation constraint:** All production queries and test
+helpers must query by specific IDs (e.g., `WHERE id = @id`), never by
+unscoped predicates (e.g., `WHERE is_open = true`). Unscoped queries
+will see data from other parallel tests and produce flaky failures.
+This constraint will be formally documented in Project 032 (Test Author
+Agent Blueprint).
+
 **Success criteria:**
 - TestHelpers.fs compiles in LeoBloom.Tests
 - TestCleanup deletes in correct FK order
+- Cleanup failures are logged to test output, not silently swallowed
 - No duplicated helper code across test files
 
 ---
@@ -274,7 +359,7 @@ Cleanup, all in one scope.
 [<Trait("GherkinId", "FT-LSC-001")>]
 let ``account_type name is NOT NULL`` () =
     use conn = DataSource.openConnection()
-    let cleanup = TestCleanup(conn)
+    let tracker = TestCleanup.create conn
     try
         use cmd = new NpgsqlCommand(
             "INSERT INTO ledger.account_type (name, normal_balance) VALUES (NULL, 'debit')",
@@ -285,7 +370,7 @@ let ``account_type name is NOT NULL`` () =
         with :? PostgresException as ex ->
             Assert.Equal("23502", ex.SqlState)
     finally
-        cleanup.DeleteAll()
+        TestCleanup.deleteAll tracker
 ```
 
 For structural tests that only test failure modes (NOT NULL, FK, UNIQUE
@@ -322,13 +407,13 @@ code (`post`, `voidEntry`, `getBalanceById`, etc.) and need full cleanup.
 [<Trait("GherkinId", "FT-PJE-001")>]
 let ``simple two-line entry posts successfully`` () =
     use conn = DataSource.openConnection()
-    let cleanup = TestCleanup(conn)
+    let tracker = TestCleanup.create conn
     try
         // Arrange — insert prerequisite data
-        let atId = TestHelpers.insertAccountType conn cleanup "asset"
-        let acct1 = TestHelpers.insertAccount conn cleanup "1000" atId true
-        let acct2 = TestHelpers.insertAccount conn cleanup "2000" atId true
-        let fpId = TestHelpers.insertFiscalPeriod conn cleanup
+        let atId = TestHelpers.insertAccountType conn tracker "asset"
+        let acct1 = TestHelpers.insertAccount conn tracker "1000" atId true
+        let acct2 = TestHelpers.insertAccount conn tracker "2000" atId true
+        let fpId = TestHelpers.insertFiscalPeriod conn tracker
                        (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
 
         // Act — call real production code
@@ -346,12 +431,12 @@ let ``simple two-line entry posts successfully`` () =
         // Assert
         match result with
         | Ok posted ->
-            cleanup.TrackJournalEntry(posted.entry.id)
+            TestCleanup.trackJournalEntry posted.entry.id tracker
             Assert.True(posted.entry.id > 0)
             Assert.Equal(2, List.length posted.lines)
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     finally
-        cleanup.DeleteAll()
+        TestCleanup.deleteAll tracker
 ```
 
 **Two connections per behavioral test:** The test opens a connection for
@@ -394,6 +479,10 @@ Remove everything related to TickSpec execution.
 **From LeoBloom repo git hooks:**
 - `.git/hooks/pre-commit` (the ambiguity checker)
 
+**Do NOT touch** the directories in `Src/` that aren't in the solution
+(`LeoBloom.Ledger`, `LeoBloom.Ops`, `LeoBloom.Data`, etc.) — those are
+future projects.
+
 **Verify LeoBloom.Tests fsproj** has no TickSpec references and compile
 order is clean:
 1. `TestHelpers.fs`
@@ -422,8 +511,8 @@ test, and every test references a valid Gherkin scenario ID.
 **The script:**
 1. Parse all `.feature` files in `Specs/` for `@FT-*` tags → set of
    scenario IDs
-2. Parse test assemblies (or source files) for `Trait("GherkinId", "*")`
-   → set of referenced IDs
+2. Parse test source files for `Trait("GherkinId", "*")` → set of
+   referenced IDs
 3. Diff: scenarios without tests = FAIL. Tests referencing nonexistent
    scenarios = WARN (stale mapping).
 
@@ -458,8 +547,8 @@ test data per test and connection pooling, tests can safely run in parallel.
 **Final verification:**
 - Run full `dotnet test` — all tests pass
 - Run full `dotnet test` 3x in a row — no flaky failures from leaked state
-- Compare runtime against current 10+ minute baseline
-- Verify no orphaned test data in `leobloom_dev` after test runs
+- Verify no orphaned test data in `leobloom_dev` after test runs (query
+  for rows with test-prefixed unique data that shouldn't exist)
 
 **Success criteria:**
 - All ~148 tests pass (36 Domain + ~112 Dal)
@@ -485,19 +574,20 @@ test data per test and connection pooling, tests can safely run in parallel.
 - [ ] Full test suite completes in under 30 seconds
 - [ ] Tests can run in parallel without interference
 - [ ] No connection leaks (repeated runs don't degrade)
-- [ ] Prod safety guard prevents test execution against wrong database (low priority — skip if not trivial)
+- [ ] DataSource module fails loud on init if config or DB is wrong
 
 ### Quality Gates
 - [ ] `dotnet test` passes 3 consecutive runs
 - [ ] Gherkin coverage check passes
 - [ ] No orphaned test data after runs
+- [ ] Cleanup failures are logged, not silently swallowed
 
 ## Dependencies & Risks
 
 **Risk: Cleanup ordering bugs.** If the TestCleanup delete order is wrong,
-tests silently leave orphaned data. Mitigation: verify FK chain against
-the actual schema constraints. Run a "check for orphans" query after the
-test suite.
+tests leave orphaned data. Mitigation: cleanup failures are logged to stderr
+(not silently swallowed). Run a "check for orphans" query after the test
+suite. Worst case: `TRUNCATE` the dev tables and move on.
 
 **Risk: Production signature change breaks future API work.** The `post`,
 `voidEntry`, etc. functions lose their `basePath` parameter. If someone
@@ -515,6 +605,14 @@ its tests and modifies its service. Phase 2 must account for the
 AccountBalance service changes. Phase 6 must port the AccountBalance
 scenarios.
 
+**Related projects:**
+- Project 031 (Foundational Logging) — once logging infrastructure exists,
+  TestCleanup should use it instead of `eprintfn`
+- Project 032 (Test Author Agent Blueprint) — will codify the test
+  conventions established here (unique data, query by ID, FK cleanup order,
+  parallel isolation) so future test-building agents carry institutional
+  knowledge
+
 ## Sources & References
 
 ### Origin
@@ -529,3 +627,10 @@ scenarios.
 - Current connection resolver: `Src/LeoBloom.Dal/ConnectionString.fs`
 - Current services: `Src/LeoBloom.Dal/JournalEntryService.fs`, `Src/LeoBloom.Dal/AccountBalanceService.fs`
 - Wakeup context: `BdsNotes/wakeup-2026-04-04a.md`
+
+### External References (from deepening research)
+- [Npgsql DataSource API](https://www.npgsql.org/doc/basic-usage.html)
+- [Npgsql Connection Pooling](https://www.npgsql.org/doc/api/Npgsql.NpgsqlConnectionStringBuilder.html)
+- [xUnit Shared Context / Fixtures](https://xunit.net/docs/shared-context)
+- [xUnit Parallel Test Execution](https://github.com/xunit/xunit.net/blob/main/site/docs/running-tests-in-parallel.md)
+- [F# Lazy Initialization / Lazy<T>](https://learn.microsoft.com/en-us/dotnet/framework/performance/lazy-initialization)

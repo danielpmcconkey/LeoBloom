@@ -40,6 +40,8 @@ Stories reference it by section. CE should read it before writing any BRD.
 | 004 | Domain types — F# types in Domain, business logic BDD in Domain.Tests | Done |
 | 029 | Lookup table elimination — replace integer FK lookups with DU-backed strings | Done |
 | 030 | Unfuck our test harness | In progress |
+| 031 | Foundational logging infrastructure | Not started |
+| 032 | Test Author Agent Blueprint — institutional knowledge for test-writing agents | Not started |
 
 Project 004 delivers F# record/DU types mirroring every schema table, plus pure
 validation functions for the fundamental invariants (balance rule, amount
@@ -1199,6 +1201,74 @@ Returns a time series with daily/periodic data points and flagged uncertainties
 ### 030 — Unfuck our test harness
 
 Our test harness is fucked. Nuke it from orbit. BDD is good. But we have a tooling problem, a DB connection problem, and some dipshit wrote test-only code in our main library projects.
+
+---
+
+### 031 — Foundational Logging Infrastructure
+
+We have zero logging. Nowhere. Not in the service layer, not in migrations, not
+in tests. When something fails silently — like test cleanup — we have no fucking
+idea until it bites us later. This is a ticking time bomb.
+
+**What this covers:**
+
+- Pick a logging approach that works across the solution: production services,
+  test infrastructure, migration runners. One story, one pattern, used everywhere.
+- Structured logging (not `printfn` cowboy shit). Serilog or Microsoft.Extensions.Logging
+  with an F#-friendly wrapper — whatever plays nicest with the .NET ecosystem we're in.
+- **Immediate pain point:** Test cleanup failures are silently swallowed right now.
+  After this project, any cleanup failure is visible and loud.
+- Configuration: log levels per environment (test vs. dev vs. eventual prod),
+  console sink for dev/test, file or structured sink for anything longer-lived.
+- Integration with the test harness (Project 030) so BDD step failures and
+  infrastructure errors are traceable.
+
+**What this does NOT cover:**
+
+- Application-level metrics or telemetry (that's a separate concern).
+- Centralized log aggregation or dashboards (premature — we don't have a prod environment yet).
+- Logging every domain event or business operation — that's per-epic work that
+  builds on this foundation.
+
+**Why now:** Every project from here on out will need logging. If we bolt it on
+later, we're retrofitting every service, every test helper, every migration
+script. Do it once, do it early, use it everywhere.
+
+---
+
+### 032 — Test Author Agent Blueprint
+
+Every time a test-writing agent spins up, it re-discovers the same gotchas from
+scratch: use `DataSource.openConnection()` not raw connection strings, clean up
+FK-ordered, query by specific IDs not state flags for parallel isolation, unique
+test data per test, log cleanup failures instead of swallowing them. We keep
+paying this tax because agent sessions don't carry institutional knowledge.
+
+**What this delivers:** A blueprint document (agent definition / context file)
+that any test-building agent session loads before writing a single line of test
+code. It encodes the conventions and hard-won lessons from Project 030's test
+harness overhaul.
+
+**What it covers:**
+
+- DB connection patterns (what to use, what not to use, why).
+- Test data isolation strategy — unique IDs, no reliance on mutable state flags,
+  no collisions under parallel execution.
+- Cleanup patterns — FK-ordered deletes, error handling (log failures, don't
+  swallow them), teardown discipline.
+- TickSpec/BDD conventions — step naming to avoid regex ambiguity, feature file
+  structure, tag usage.
+- Common anti-patterns with explicit "don't do this" examples.
+
+**What this does NOT cover:**
+
+- Domain-specific test logic (what to test for journal entries vs. obligations).
+  That's per-epic knowledge. This is the mechanical how-to-write-tests stuff.
+- Test harness infrastructure itself — that's Project 030. This captures the
+  lessons, not the implementation.
+
+**Depends on:** 030 (the lessons have to exist before we codify them). Should
+land after 031 (logging) so the logging conventions are baked in too.
 
 ---
 
