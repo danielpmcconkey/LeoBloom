@@ -40,7 +40,7 @@ Stories reference it by section. CE should read it before writing any BRD.
 | 004 | Domain types — F# types in Domain, business logic BDD in Domain.Tests | Done |
 | 029 | Lookup table elimination — replace integer FK lookups with DU-backed strings | Done |
 | 030 | Unfuck our test harness | Done |
-| 031 | Foundational logging infrastructure | Not started |
+| 031 | Foundational logging infrastructure | Done |
 | 032 | Test Author Agent Blueprint — DSWF infrastructure, QE addendum, workflow overhaul | Done |
 | 033 | Seal DataSource internals (Migrations connection string leak) | Done |
 
