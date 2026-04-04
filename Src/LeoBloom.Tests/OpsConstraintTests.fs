@@ -79,16 +79,8 @@ let ``obligation_agreement amount is nullable`` () =
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
-        let prefix = TestData.uniquePrefix()
-        let ex = tryExec conn
-                    "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence, amount) VALUES (@n, 'receivable', 'monthly', NULL) RETURNING id"
-                    (fun cmd -> cmd.Parameters.AddWithValue("@n", $"{prefix}_oa") |> ignore)
-        assertSuccess ex
-        // Track for cleanup
-        use idCmd = new NpgsqlCommand("SELECT id FROM ops.obligation_agreement WHERE name = @n", conn)
-        idCmd.Parameters.AddWithValue("@n", $"{prefix}_oa") |> ignore
-        let id = idCmd.ExecuteScalar() :?> int
-        TestCleanup.trackObligationAgreement id tracker
+        let oaId = InsertHelpers.insertObligationAgreement conn tracker "osc017_agreement"
+        Assert.True(oaId > 0)
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
@@ -165,10 +157,10 @@ let ``obligation_instance journal_entry_id is nullable`` () =
     let tracker = TestCleanup.create conn
     try
         let oaId = InsertHelpers.insertObligationAgreement conn tracker "osc025_agreement"
-        let ex = tryExec conn
-                    "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date, journal_entry_id) VALUES (@oa, 'Test', 'expected', '2026-04-01', NULL)"
-                    (fun cmd -> cmd.Parameters.AddWithValue("@oa", oaId) |> ignore)
-        assertSuccess ex
+        use cmd = new NpgsqlCommand(
+            "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date, journal_entry_id) VALUES (@oa, 'Test', 'expected', '2026-04-01', NULL)", conn)
+        cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
@@ -306,12 +298,11 @@ let ``transfer journal_entry_id is nullable`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (fromId, toId) = insertTwoAccounts conn tracker prefix
-        let ex = tryExec conn
-                    "INSERT INTO ops.transfer (from_account_id, to_account_id, amount, status, initiated_date, journal_entry_id) VALUES (@from_, @to_, 100.00, 'initiated', '2026-04-01', NULL)"
-                    (fun cmd ->
-                        cmd.Parameters.AddWithValue("@from_", fromId) |> ignore
-                        cmd.Parameters.AddWithValue("@to_", toId) |> ignore)
-        assertSuccess ex
+        use cmd = new NpgsqlCommand(
+            "INSERT INTO ops.transfer (from_account_id, to_account_id, amount, status, initiated_date, journal_entry_id) VALUES (@from_, @to_, 100.00, 'initiated', '2026-04-01', NULL)", conn)
+        cmd.Parameters.AddWithValue("@from_", fromId) |> ignore
+        cmd.Parameters.AddWithValue("@to_", toId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================

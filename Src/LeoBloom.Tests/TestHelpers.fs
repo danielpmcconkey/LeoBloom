@@ -72,14 +72,34 @@ module TestCleanup =
                 with ex ->
                     eprintfn "[TestCleanup] FAILED to clean %s: %s" table ex.Message
 
+        let tryDeleteMultiColumn (table: string) (columns: (string * int list) list) =
+            for (col, ids) in columns do
+                if not ids.IsEmpty then
+                    try
+                        use cmd = new NpgsqlCommand(
+                            sprintf "DELETE FROM %s WHERE %s = ANY(@ids)" table col,
+                            tracker.Connection)
+                        cmd.Parameters.AddWithValue("@ids", ids |> List.toArray) |> ignore
+                        cmd.ExecuteNonQuery() |> ignore
+                    with ex ->
+                        eprintfn "[TestCleanup] FAILED to clean %s.%s: %s" table col ex.Message
+
         // FK-safe order: children before parents
         tryDelete "ledger.journal_entry_reference" "journal_entry_id" tracker.JournalEntryIds
         tryDelete "ledger.journal_entry_line" "journal_entry_id" tracker.JournalEntryIds
-        tryDelete "ops.obligation_instance" "journal_entry_id" tracker.JournalEntryIds
-        tryDelete "ops.transfer" "journal_entry_id" tracker.JournalEntryIds
+        tryDeleteMultiColumn "ops.obligation_instance"
+            [ "journal_entry_id", tracker.JournalEntryIds
+              "obligation_agreement_id", tracker.ObligationAgreementIds ]
+        tryDeleteMultiColumn "ops.transfer"
+            [ "journal_entry_id", tracker.JournalEntryIds
+              "from_account_id", tracker.AccountIds
+              "to_account_id", tracker.AccountIds ]
         tryDelete "ops.invoice" "fiscal_period_id" tracker.FiscalPeriodIds
         tryDelete "ledger.journal_entry" "id" tracker.JournalEntryIds
-        tryDelete "ops.obligation_agreement" "id" tracker.ObligationAgreementIds
+        tryDeleteMultiColumn "ops.obligation_agreement"
+            [ "id", tracker.ObligationAgreementIds
+              "source_account_id", tracker.AccountIds
+              "dest_account_id", tracker.AccountIds ]
         tryDelete "ledger.account" "id" tracker.AccountIds
         tryDelete "ledger.account_type" "id" tracker.AccountTypeIds
         tryDelete "ledger.fiscal_period" "id" tracker.FiscalPeriodIds

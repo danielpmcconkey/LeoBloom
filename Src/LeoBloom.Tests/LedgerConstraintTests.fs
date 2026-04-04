@@ -157,22 +157,9 @@ let ``account parent_code is nullable`` () =
     try
         let prefix = TestData.uniquePrefix()
         let atId = InsertHelpers.insertAccountType conn tracker (TestData.accountTypeName prefix) "debit"
-        let code = TestData.accountCode prefix
-        let ex = tryExec conn
-                    "INSERT INTO ledger.account (code, name, account_type_id, parent_code) VALUES (@c, 'Test', @at, NULL) RETURNING id"
-                    (fun cmd ->
-                        cmd.Parameters.AddWithValue("@c", code) |> ignore
-                        cmd.Parameters.AddWithValue("@at", atId) |> ignore)
-        // For success tests, we need to track the inserted row
-        // tryExec returns None on success, and the row was inserted
-        match ex with
-        | None ->
-            // Manually track the account for cleanup
-            use idCmd = new NpgsqlCommand("SELECT id FROM ledger.account WHERE code = @c", conn)
-            idCmd.Parameters.AddWithValue("@c", code) |> ignore
-            let id = idCmd.ExecuteScalar() :?> int
-            TestCleanup.trackAccount id tracker
-        | Some pgEx -> Assert.Fail($"Expected insert to succeed but got: {pgEx.Message}")
+        // InsertHelpers.insertAccount tracks the ID automatically
+        let acctId = InsertHelpers.insertAccount conn tracker (TestData.accountCode prefix) "Test" atId true
+        Assert.True(acctId > 0)
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
