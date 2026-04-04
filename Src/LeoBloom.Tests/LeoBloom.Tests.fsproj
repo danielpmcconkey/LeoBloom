@@ -11,6 +11,9 @@
     <Compile Include="LedgerConstraintTests.fs" />
     <Compile Include="OpsConstraintTests.fs" />
     <Compile Include="DeleteRestrictionTests.fs" />
+    <Compile Include="PostJournalEntryTests.fs" />
+    <Compile Include="VoidJournalEntryTests.fs" />
+    <Compile Include="AccountBalanceTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -15,10 +15,11 @@ module AccountBalanceRepository =
                         AS raw_balance
              FROM ledger.account a
              JOIN ledger.account_type at ON a.account_type_id = at.id
-             LEFT JOIN ledger.journal_entry_line jel ON jel.account_id = a.id
-             LEFT JOIN ledger.journal_entry je ON jel.journal_entry_id = je.id
-                 AND je.voided_at IS NULL
-                 AND je.entry_date <= @as_of_date
+             LEFT JOIN (ledger.journal_entry_line jel
+                 JOIN ledger.journal_entry je ON jel.journal_entry_id = je.id
+                     AND je.voided_at IS NULL
+                     AND je.entry_date <= @as_of_date)
+                 ON jel.account_id = a.id
              WHERE a.id = @account_id
              GROUP BY a.id, a.code, a.name, at.normal_balance",
             txn.Connection, txn)
