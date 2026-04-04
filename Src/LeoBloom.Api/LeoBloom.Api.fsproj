@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LeoBloom.Domain\LeoBloom.Domain.fsproj" />
-    <ProjectReference Include="..\LeoBloom.Dal\LeoBloom.Dal.fsproj" />
+    <ProjectReference Include="..\LeoBloom.Utilities\LeoBloom.Utilities.fsproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-namespace LeoBloom.Dal
+namespace LeoBloom.Utilities
 
 open System
 open Microsoft.Extensions.Configuration
@@ -25,6 +25,7 @@ module DataSource =
         let template = config["ConnectionStrings:LeoBloom"]
 
         if String.IsNullOrWhiteSpace template then
+            Log.fatal "ConnectionStrings:LeoBloom not found in appsettings.{Environment}.json" [| env :> obj |]
             failwith $"ConnectionStrings:LeoBloom not found in appsettings.{env}.json"
 
         let password =
@@ -52,6 +53,8 @@ module DataSource =
         if dbName <> "leobloom_dev" then
             failwith $"SAFETY GUARD: Expected database 'leobloom_dev' but connected to '{dbName}'. Aborting."
 #endif
+
+        Log.info "DataSource initialized, connected to {Database}" [| "leobloom_dev" :> obj |]
 
         ds
 

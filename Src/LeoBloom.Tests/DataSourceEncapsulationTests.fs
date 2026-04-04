@@ -5,7 +5,7 @@ open System.IO
 open System.Reflection
 open System.Xml.Linq
 open Xunit
-open LeoBloom.Dal
+open LeoBloom.Utilities
 
 // =====================================================================
 // Helpers
@@ -37,11 +37,11 @@ let ``DataSource exposes only openConnection as a public binding`` () =
     use _conn = DataSource.openConnection()
     let dalAsm =
         AppDomain.CurrentDomain.GetAssemblies()
-        |> Array.find (fun a -> a.GetName().Name = "LeoBloom.Dal")
+        |> Array.find (fun a -> a.GetName().Name = "LeoBloom.Utilities")
 
     let dsType =
         dalAsm.GetTypes()
-        |> Array.tryFind (fun t -> t.FullName = "LeoBloom.Dal.DataSource")
+        |> Array.tryFind (fun t -> t.FullName = "LeoBloom.Utilities.DataSource")
         |> Option.defaultWith (fun () -> failwith "Could not find DataSource type in assembly")
 
     // F# module bindings compile to static methods.
@@ -91,12 +91,12 @@ let ``No code outside Migrations references DataSource.connectionString`` () =
     Assert.True(violations.Length = 0, msg)
 
 // =====================================================================
-// @FT-DSI-003 — Migrations has no project reference to LeoBloom.Dal
+// @FT-DSI-003 — Migrations has no project reference to LeoBloom.Utilities
 // =====================================================================
 
 [<Fact>]
 [<Trait("GherkinId", "FT-DSI-003")>]
-let ``Migrations has no project reference to LeoBloom.Dal`` () =
+let ``Migrations has no project reference to LeoBloom.Utilities`` () =
     let csprojPath = Path.Combine(srcDir, "LeoBloom.Migrations", "LeoBloom.Migrations.fsproj")
     Assert.True(File.Exists(csprojPath), $"Expected file to exist: {csprojPath}")
 
@@ -110,9 +110,9 @@ let ``Migrations has no project reference to LeoBloom.Dal`` () =
 
     let dalRefs =
         projectRefs
-        |> List.filter (fun r -> r.Contains("LeoBloom.Dal", StringComparison.OrdinalIgnoreCase))
+        |> List.filter (fun r -> r.Contains("LeoBloom.Utilities", StringComparison.OrdinalIgnoreCase))
 
-    let msg = sprintf "Migrations should not reference LeoBloom.Dal, but found: %s" (String.Join(", ", dalRefs))
+    let msg = sprintf "Migrations should not reference LeoBloom.Utilities, but found: %s" (String.Join(", ", dalRefs))
     Assert.True(dalRefs.IsEmpty, msg)
 
 // =====================================================================

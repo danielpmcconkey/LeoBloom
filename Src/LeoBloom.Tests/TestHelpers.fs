@@ -2,6 +2,7 @@ module LeoBloom.Tests.TestHelpers
 
 open System
 open Npgsql
+open LeoBloom.Utilities
 
 // =====================================================================
 // TestData — unique data generation for parallel-safe tests
@@ -35,6 +36,7 @@ module TestCleanup =
           Connection: NpgsqlConnection }
 
     let create (conn: NpgsqlConnection) =
+        Log.initialize()
         { JournalEntryIds = []
           AccountIds = []
           AccountTypeIds = []
@@ -70,7 +72,7 @@ module TestCleanup =
                     cmd.Parameters.AddWithValue("@ids", ids |> List.toArray) |> ignore
                     cmd.ExecuteNonQuery() |> ignore
                 with ex ->
-                    eprintfn "[TestCleanup] FAILED to clean %s: %s" table ex.Message
+                    Log.errorExn ex "TestCleanup failed to clean {Table}" [| table :> obj |]
 
         let tryDeleteMultiColumn (table: string) (columns: (string * int list) list) =
             for (col, ids) in columns do
@@ -82,7 +84,7 @@ module TestCleanup =
                         cmd.Parameters.AddWithValue("@ids", ids |> List.toArray) |> ignore
                         cmd.ExecuteNonQuery() |> ignore
                     with ex ->
-                        eprintfn "[TestCleanup] FAILED to clean %s.%s: %s" table col ex.Message
+                        Log.errorExn ex "TestCleanup failed to clean {Table}.{Column}" [| table :> obj; col :> obj |]
 
         // FK-safe order: children before parents
         tryDelete "ledger.journal_entry_reference" "journal_entry_id" tracker.JournalEntryIds

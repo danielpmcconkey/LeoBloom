@@ -3,7 +3,7 @@ module LeoBloom.Tests.PostJournalEntryTests
 open System
 open Xunit
 open LeoBloom.Domain.Ledger
-open LeoBloom.Dal
+open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
 
 [<Fact>]
