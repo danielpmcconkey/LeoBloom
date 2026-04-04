@@ -1,7 +1,36 @@
 open System
 open System.IO
+open Microsoft.Extensions.Configuration
 open Migrondi.Core
-open LeoBloom.Dal
+open Npgsql
+
+/// Migrations builds its own connection string from its own config.
+/// This is intentionally not shared with DataSource -- Migrations' DB
+/// access is a private implementation detail.
+let private connectionString =
+    let env =
+        Environment.GetEnvironmentVariable "LEOBLOOM_ENV"
+        |> Option.ofObj
+        |> Option.defaultValue "Development"
+
+    let config =
+        ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile($"appsettings.{env}.json", optional = false)
+            .AddEnvironmentVariables()
+            .Build()
+
+    let template = config["ConnectionStrings:LeoBloom"]
+
+    if String.IsNullOrWhiteSpace template then
+        failwith $"ConnectionStrings:LeoBloom not found in appsettings.{env}.json"
+
+    let password =
+        Environment.GetEnvironmentVariable "LEOBLOOM_DB_PASSWORD"
+        |> Option.ofObj
+        |> Option.defaultValue ""
+
+    template.Replace("{LEOBLOOM_DB_PASSWORD}", password)
 
 [<EntryPoint>]
 let main _args =
@@ -20,7 +49,8 @@ let main _args =
 
     // Ensure the migrondi schema exists for the journal table.
     // The claude role cannot write to public schema.
-    use bootstrapConn = DataSource.openConnection()
+    use bootstrapConn = new NpgsqlConnection(connectionString)
+    bootstrapConn.Open()
     use cmd = bootstrapConn.CreateCommand()
     cmd.CommandText <- "CREATE SCHEMA IF NOT EXISTS migrondi"
     cmd.ExecuteNonQuery() |> ignore
@@ -28,7 +58,7 @@ let main _args =
 
     let migrondiConfig = {
         MigrondiConfig.Default with
-            connection = DataSource.connectionString
+            connection = connectionString
             driver = MigrondiDriver.Postgresql
             migrations = migrationsDir
             tableName = "__migrondi_migrations"

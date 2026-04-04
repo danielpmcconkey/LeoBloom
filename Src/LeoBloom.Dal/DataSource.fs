@@ -55,10 +55,6 @@ module DataSource =
 
         ds
 
-    /// The resolved connection string. Exposed for consumers that need the raw
-    /// string (e.g., Migrondi config). Prefer openConnection() for all other use.
-    let connectionString = connStr
-
     /// Returns a pooled, already-open NpgsqlConnection.
     let openConnection () : NpgsqlConnection =
         dataSource.OpenConnection()

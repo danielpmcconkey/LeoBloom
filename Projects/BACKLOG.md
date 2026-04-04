@@ -42,7 +42,7 @@ Stories reference it by section. CE should read it before writing any BRD.
 | 030 | Unfuck our test harness | Done |
 | 031 | Foundational logging infrastructure | Not started |
 | 032 | Test Author Agent Blueprint — DSWF infrastructure, QE addendum, workflow overhaul | Done |
-| 033 | Seal DataSource internals (Migrations connection string leak) | Not started |
+| 033 | Seal DataSource internals (Migrations connection string leak) | Done |
 
 Project 004 delivers F# record/DU types mirroring every schema table, plus pure
 validation functions for the fundamental invariants (balance rule, amount

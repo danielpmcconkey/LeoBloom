@@ -14,6 +14,7 @@
     <Compile Include="PostJournalEntryTests.fs" />
     <Compile Include="VoidJournalEntryTests.fs" />
     <Compile Include="AccountBalanceTests.fs" />
+    <Compile Include="DataSourceEncapsulationTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
