@@ -163,6 +163,48 @@ module Ledger =
           grandTotalCredits: decimal
           isBalanced: bool }
 
+    // --- Income Statement types ---
+
+    type IncomeStatementLine =
+        { accountId: int
+          accountCode: string
+          accountName: string
+          balance: decimal }
+
+    type IncomeStatementSection =
+        { sectionName: string
+          lines: IncomeStatementLine list
+          sectionTotal: decimal }
+
+    type IncomeStatementReport =
+        { fiscalPeriodId: int
+          periodKey: string
+          revenue: IncomeStatementSection
+          expenses: IncomeStatementSection
+          netIncome: decimal }
+
+    // --- Balance Sheet types ---
+
+    type BalanceSheetLine =
+        { accountId: int
+          accountCode: string
+          accountName: string
+          balance: decimal }
+
+    type BalanceSheetSection =
+        { sectionName: string
+          lines: BalanceSheetLine list
+          sectionTotal: decimal }
+
+    type BalanceSheetReport =
+        { asOfDate: DateOnly
+          assets: BalanceSheetSection
+          liabilities: BalanceSheetSection
+          equity: BalanceSheetSection
+          retainedEarnings: decimal
+          totalEquity: decimal
+          isBalanced: bool }
+
     // --- Additional pure validators for the write path ---
 
     module EntryType =

@@ -12,8 +12,8 @@
 | 008 | Trial balance | Done |
 | 009 | Close / reopen fiscal period | Done |
 | 010 | Opening balances | Not started |
-| 011 | Income statement | Not started |
-| 012 | Balance sheet | Not started |
+| 011 | Income statement | Done |
+| 012 | Balance sheet | Done |
 | 013 | P&L by account subtree | Not started |
 | 014 | Obligation agreements | Not started |
 | 015 | Spawn obligation instances | Not started |
