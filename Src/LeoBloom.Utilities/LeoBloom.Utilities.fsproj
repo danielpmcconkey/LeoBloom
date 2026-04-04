@@ -16,6 +16,10 @@
     <Compile Include="AccountBalanceService.fs" />
     <Compile Include="TrialBalanceRepository.fs" />
     <Compile Include="TrialBalanceService.fs" />
+    <Compile Include="IncomeStatementRepository.fs" />
+    <Compile Include="IncomeStatementService.fs" />
+    <Compile Include="BalanceSheetRepository.fs" />
+    <Compile Include="BalanceSheetService.fs" />
   </ItemGroup>
 
   <ItemGroup>
