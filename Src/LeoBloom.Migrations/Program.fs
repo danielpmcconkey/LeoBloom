@@ -1,12 +1,10 @@
 open System
 open System.IO
 open Migrondi.Core
-open Npgsql
+open LeoBloom.Dal
 
 [<EntryPoint>]
 let main _args =
-    let connString = LeoBloom.Dal.ConnectionString.resolve AppContext.BaseDirectory
-
     let env =
         Environment.GetEnvironmentVariable "LEOBLOOM_ENV"
         |> Option.ofObj
@@ -22,8 +20,7 @@ let main _args =
 
     // Ensure the migrondi schema exists for the journal table.
     // The claude role cannot write to public schema.
-    use bootstrapConn = new NpgsqlConnection(connString)
-    bootstrapConn.Open()
+    use bootstrapConn = DataSource.openConnection()
     use cmd = bootstrapConn.CreateCommand()
     cmd.CommandText <- "CREATE SCHEMA IF NOT EXISTS migrondi"
     cmd.ExecuteNonQuery() |> ignore
@@ -31,7 +28,7 @@ let main _args =
 
     let migrondiConfig = {
         MigrondiConfig.Default with
-            connection = connString
+            connection = DataSource.connectionString
             driver = MigrondiDriver.Postgresql
             migrations = migrationsDir
             tableName = "__migrondi_migrations"

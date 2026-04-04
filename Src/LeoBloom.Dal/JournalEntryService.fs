@@ -80,15 +80,13 @@ module JournalEntryService =
 
     /// Post a journal entry: validate, persist, return result.
     /// Opens its own connection and transaction.
-    let post (basePath: string) (cmd: PostJournalEntryCommand) : Result<PostedJournalEntry, string list> =
+    let post (cmd: PostJournalEntryCommand) : Result<PostedJournalEntry, string list> =
         // Phase 1: Pure validation (no DB)
         match validateCommand cmd with
         | Error errs -> Error errs
         | Ok () ->
             // Phase 2: DB validation + persistence in a single transaction
-            let connStr = ConnectionString.resolve basePath
-            use conn = new NpgsqlConnection(connStr)
-            conn.Open()
+            use conn = DataSource.openConnection()
             use txn = conn.BeginTransaction()
 
             try
@@ -106,19 +104,6 @@ module JournalEntryService =
                 try txn.Rollback() with _ -> ()
                 Error [ sprintf "Persistence error: %s" ex.Message ]
 
-    /// Post within an existing transaction (for testing).
-    let postInTransaction (txn: NpgsqlTransaction) (cmd: PostJournalEntryCommand) : Result<PostedJournalEntry, string list> =
-        match validateCommand cmd with
-        | Error errs -> Error errs
-        | Ok () ->
-            match validateDbDependencies txn cmd with
-            | Error errs -> Error errs
-            | Ok () ->
-                let entry = JournalEntryRepository.insertEntry txn cmd
-                let lines = JournalEntryRepository.insertLines txn entry.id cmd.lines
-                let refs = JournalEntryRepository.insertReferences txn entry.id cmd.references
-                Ok { entry = entry; lines = lines; references = refs }
-
     // --- Void operations ---
 
     let private validateVoidCommand (cmd: VoidJournalEntryCommand) : Result<unit, string list> =
@@ -126,24 +111,13 @@ module JournalEntryService =
             Error [ "Void reason is required and cannot be empty" ]
         else Ok ()
 
-    /// Void a journal entry within an existing transaction (for testing).
-    let voidInTransaction (txn: NpgsqlTransaction) (cmd: VoidJournalEntryCommand) : Result<JournalEntry, string list> =
-        match validateVoidCommand cmd with
-        | Error errs -> Error errs
-        | Ok () ->
-            match JournalEntryRepository.voidEntry txn cmd.journalEntryId cmd.voidReason with
-            | Some entry -> Ok entry
-            | None -> Error [ sprintf "Journal entry with id %d does not exist" cmd.journalEntryId ]
-
     /// Void a journal entry: validate, update, return result.
     /// Opens its own connection and transaction.
-    let voidEntry (basePath: string) (cmd: VoidJournalEntryCommand) : Result<JournalEntry, string list> =
+    let voidEntry (cmd: VoidJournalEntryCommand) : Result<JournalEntry, string list> =
         match validateVoidCommand cmd with
         | Error errs -> Error errs
         | Ok () ->
-            let connStr = ConnectionString.resolve basePath
-            use conn = new NpgsqlConnection(connStr)
-            conn.Open()
+            use conn = DataSource.openConnection()
             use txn = conn.BeginTransaction()
 
             try
