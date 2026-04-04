@@ -127,6 +127,30 @@ module Ledger =
           balance: decimal
           asOfDate: DateOnly }
 
+    type TrialBalanceAccountLine =
+        { accountId: int
+          accountCode: string
+          accountName: string
+          accountTypeName: string
+          normalBalance: NormalBalance
+          debitTotal: decimal
+          creditTotal: decimal
+          netBalance: decimal }
+
+    type TrialBalanceGroup =
+        { accountTypeName: string
+          lines: TrialBalanceAccountLine list
+          groupDebitTotal: decimal
+          groupCreditTotal: decimal }
+
+    type TrialBalanceReport =
+        { fiscalPeriodId: int
+          periodKey: string
+          groups: TrialBalanceGroup list
+          grandTotalDebits: decimal
+          grandTotalCredits: decimal
+          isBalanced: bool }
+
     // --- Additional pure validators for the write path ---
 
     module EntryType =

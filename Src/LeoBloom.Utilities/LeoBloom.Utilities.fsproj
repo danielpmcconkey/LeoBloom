@@ -12,6 +12,8 @@
     <Compile Include="JournalEntryService.fs" />
     <Compile Include="AccountBalanceRepository.fs" />
     <Compile Include="AccountBalanceService.fs" />
+    <Compile Include="TrialBalanceRepository.fs" />
+    <Compile Include="TrialBalanceService.fs" />
   </ItemGroup>
 
   <ItemGroup>
