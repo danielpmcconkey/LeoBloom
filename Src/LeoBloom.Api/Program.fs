@@ -13,12 +13,15 @@ open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open LeoBloom.Utilities
 
 module Program =
     let exitCode = 0
 
     [<EntryPoint>]
     let main args =
+
+        Log.initialize()
 
         let builder = WebApplication.CreateBuilder(args)
 
@@ -32,5 +35,7 @@ module Program =
         app.MapControllers()
 
         app.Run()
+
+        Log.closeAndFlush()
 
         exitCode

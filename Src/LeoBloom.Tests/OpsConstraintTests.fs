@@ -2,7 +2,7 @@ module LeoBloom.Tests.OpsConstraintTests
 
 open Npgsql
 open Xunit
-open LeoBloom.Dal
+open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
 
 let private tryExec (conn: NpgsqlConnection) (sql: string) (paramSetup: NpgsqlCommand -> unit) =

@@ -2,7 +2,7 @@ module LeoBloom.Tests.LedgerConstraintTests
 
 open Npgsql
 open Xunit
-open LeoBloom.Dal
+open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
 
 /// Helper: attempt SQL, return PostgresException or None

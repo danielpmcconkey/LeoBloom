@@ -3,7 +3,7 @@ Feature: DataSource module encapsulation
   DataSource exposes exactly one public binding: openConnection.
   The connectionString escape hatch has been removed. Migrations
   builds its own connection string from its own appsettings and
-  has no project reference to LeoBloom.Dal.
+  has no project reference to LeoBloom.Utilities.
 
   # Scope: Module API surface, project references, and build integrity.
   # These are code-level structural constraints, not database constraints.
@@ -12,7 +12,7 @@ Feature: DataSource module encapsulation
 
   @FT-DSI-001
   Scenario: DataSource does not expose a connectionString binding
-    Given the file Src/LeoBloom.Dal/DataSource.fs exists
+    Given the file Src/LeoBloom.Utilities/DataSource.fs exists
     When I inspect the module for public bindings
     Then the only public binding is openConnection
 
@@ -25,10 +25,10 @@ Feature: DataSource module encapsulation
   # --- Project decoupling ---
 
   @FT-DSI-003
-  Scenario: Migrations has no project reference to LeoBloom.Dal
+  Scenario: Migrations has no project reference to LeoBloom.Utilities
     Given the file Src/LeoBloom.Migrations/LeoBloom.Migrations.fsproj exists
     When I inspect the project file for ProjectReference elements
-    Then no ProjectReference points to LeoBloom.Dal
+    Then no ProjectReference points to LeoBloom.Utilities
 
   # --- Migrations self-sufficiency ---
 
