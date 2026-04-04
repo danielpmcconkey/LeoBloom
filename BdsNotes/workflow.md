@@ -26,6 +26,26 @@ PO → Brainstorm → Plan/Deepen → Gherkin Writer → Builder → QE → Revi
 13. **PO** signs off, marks backlog item complete
 14. **RTE** commits, pushes, creates PR, merges to main
 
+## GAAP Compliance
+
+LeoBloom targets AccPac/QuickBooks-level accounting correctness. Every
+design decision — data model, report logic, edge case handling — should
+be evaluated against GAAP first, convenience second. If BD isn't sure
+what GAAP says, raise it with Dan before making assumptions.
+
+Examples of where this matters:
+- Zero-balance accounts with activity must display (they represent real
+  assets/liabilities)
+- Retained earnings is cumulative net income, not a GL account balance
+- Revenue/expense sign conventions follow normal balance rules
+- The accounting equation must always hold as a system invariant
+- Closing entries vs. computed retained earnings (we chose computed, but
+  GAAP informed the decision)
+
+This isn't an academic exercise. Hobson is the comptroller entering real
+financial data upstairs. If we get the accounting wrong, the prod data
+is wrong.
+
 ## Migrations
 
 If migrations are needed:

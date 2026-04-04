@@ -205,6 +205,17 @@ module Ledger =
           totalEquity: decimal
           isBalanced: bool }
 
+    // --- Subtree P&L types ---
+
+    type SubtreePLReport =
+        { rootAccountCode: string
+          rootAccountName: string
+          fiscalPeriodId: int
+          periodKey: string
+          revenue: IncomeStatementSection
+          expenses: IncomeStatementSection
+          netIncome: decimal }
+
     // --- Additional pure validators for the write path ---
 
     module EntryType =

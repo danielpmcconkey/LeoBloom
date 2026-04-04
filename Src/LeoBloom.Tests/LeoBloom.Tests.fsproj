@@ -17,6 +17,7 @@
     <Compile Include="TrialBalanceTests.fs" />
     <Compile Include="IncomeStatementTests.fs" />
     <Compile Include="BalanceSheetTests.fs" />
+    <Compile Include="SubtreePLTests.fs" />
     <Compile Include="FiscalPeriodTests.fs" />
     <Compile Include="DataSourceEncapsulationTests.fs" />
     <Compile Include="DalToUtilitiesRenameTests.fs" />

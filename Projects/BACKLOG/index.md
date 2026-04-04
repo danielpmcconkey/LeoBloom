@@ -14,7 +14,7 @@
 | 010 | Opening balances | Not started |
 | 011 | Income statement | Done |
 | 012 | Balance sheet | Done |
-| 013 | P&L by account subtree | Not started |
+| 013 | P&L by account subtree | Done |
 | 014 | Obligation agreements | Not started |
 | 015 | Spawn obligation instances | Not started |
 | 016 | Status transitions | Not started |
@@ -24,11 +24,11 @@
 | 020 | Invoice readiness | Not started |
 | 021 | Generate invoice | Not started |
 | 022 | Balance projection | Not started |
-| 023 | Journal entry endpoints | Not started |
-| 024 | Reporting endpoints | Not started |
-| 025 | Obligation endpoints | Not started |
-| 026 | Transfer & invoice endpoints | Not started |
-| 027 | Projection endpoint | Not started |
+| 023 | Journal entry endpoints | Cancelled |
+| 024 | Reporting endpoints | Cancelled |
+| 025 | Obligation endpoints | Cancelled |
+| 026 | Transfer & invoice endpoints | Cancelled |
+| 027 | Projection endpoint | Cancelled |
 | 028 | Write-level ledger validation | Done (covered by 005/006) |
 | 029 | Lookup table elimination | Done |
 | 030 | Unfuck our test harness | Done |
@@ -51,9 +51,8 @@
   tracks meet.
 - **Late dependencies:** Transfers (019), invoices (020–021), and projection
   (022) are relatively independent once their prerequisites are met.
-- **API is last.** The domain layer gets proven via BDD tests before we expose
-  it over HTTP. The API is a thin pass-through — building it early just means
-  rewriting it when invariants change.
+- **API projects (023–027) cancelled.** Consumption layer TBD — may not be
+  a traditional REST API.
 
 ---
 
