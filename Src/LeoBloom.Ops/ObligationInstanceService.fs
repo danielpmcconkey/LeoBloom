@@ -1,8 +1,9 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ops
 
 open System
 open Npgsql
 open LeoBloom.Domain.Ops
+open LeoBloom.Utilities
 
 /// Orchestrates spawning obligation instances from an agreement and date range.
 /// Opens its own connection + transaction for atomicity.

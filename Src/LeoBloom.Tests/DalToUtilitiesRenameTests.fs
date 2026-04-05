@@ -98,17 +98,16 @@ let ``Solution file does not reference LeoBloom.Dal`` () =
         sprintf "Solution file should not contain '%s'" searchTarget)
 
 // =====================================================================
-// @FT-DUR-005 -- LeoBloom.Utilities directory exists with all original Dal files
+// @FT-DUR-005 -- LeoBloom.Utilities directory exists with infrastructure files
 // =====================================================================
 
 [<Fact>]
 [<Trait("GherkinId", "FT-DUR-005")>]
-let ``LeoBloom.Utilities directory exists with all original Dal files`` () =
+let ``LeoBloom.Utilities directory exists with infrastructure files`` () =
     let utilDir = Path.Combine(srcDir, "LeoBloom.Utilities")
     Assert.True(Directory.Exists(utilDir), $"Expected directory at {utilDir}")
 
-    let expectedFiles = [ "DataSource.fs"; "JournalEntryRepository.fs"; "JournalEntryService.fs";
-                          "AccountBalanceRepository.fs"; "AccountBalanceService.fs" ]
+    let expectedFiles = [ "DataSource.fs"; "Log.fs" ]
 
     for fileName in expectedFiles do
         let filePath = Path.Combine(utilDir, fileName)

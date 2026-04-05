@@ -4,6 +4,7 @@ open System
 open Xunit
 open LeoBloom.Domain.Ops
 open LeoBloom.Utilities
+open LeoBloom.Ops
 open LeoBloom.Tests.TestHelpers
 
 /// Helper: create a minimal agreement and instance in a given status, return (agreementId, instanceId)

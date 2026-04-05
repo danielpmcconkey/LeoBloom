@@ -1,6 +1,7 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ledger
 
 open LeoBloom.Domain.Ledger
+open LeoBloom.Utilities
 
 /// Orchestrates validation and persistence for fiscal period close/reopen.
 /// Opens its own connection + transaction for atomicity.

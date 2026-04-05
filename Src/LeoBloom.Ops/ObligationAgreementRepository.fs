@@ -1,4 +1,4 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ops
 
 open System
 open Npgsql

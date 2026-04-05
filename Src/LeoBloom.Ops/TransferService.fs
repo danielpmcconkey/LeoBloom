@@ -1,8 +1,10 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ops
 
 open Npgsql
 open LeoBloom.Domain.Ops
 open LeoBloom.Domain.Ledger
+open LeoBloom.Utilities
+open LeoBloom.Ledger
 
 /// Orchestrates initiation and confirmation of transfers between asset accounts.
 /// Each public function opens its own connection(s) + transaction(s).

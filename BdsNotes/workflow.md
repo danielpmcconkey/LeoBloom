@@ -3,7 +3,7 @@
 ## Pipeline
 
 ```
-PO → Brainstorm → Plan/Deepen → Gherkin Writer → Builder → QE → Reviewer → Governor → PO signoff → RTE
+PO → Brainstorm → Plan/Deepen → Gherkin Writer → Builder → QE → Reviewer → Governor → PO signoff → RTE → Stop (await Dan)
 ```
 
 ## Step-by-Step
@@ -25,6 +25,8 @@ PO → Brainstorm → Plan/Deepen → Gherkin Writer → Builder → QE → Revi
 12. **Governor** writes test results: `Projects/ProjectNNN-Name/ProjectNNN-test-results.md`
 13. **PO** signs off, marks backlog item complete
 14. **RTE** commits, pushes, creates PR, merges to main
+15. **Stop.** Report results to Dan and wait for his instruction before
+    starting the next project. Dan evaluates context health between projects.
 
 ## GAAP Compliance
 

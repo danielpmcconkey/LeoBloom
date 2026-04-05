@@ -1,6 +1,7 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ledger
 
 open LeoBloom.Domain.Ledger
+open LeoBloom.Utilities
 
 /// Orchestrates income statement queries.
 module IncomeStatementService =

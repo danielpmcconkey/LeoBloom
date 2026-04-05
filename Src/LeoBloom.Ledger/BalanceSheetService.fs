@@ -1,7 +1,8 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ledger
 
 open System
 open LeoBloom.Domain.Ledger
+open LeoBloom.Utilities
 
 /// Orchestrates balance sheet queries.
 module BalanceSheetService =

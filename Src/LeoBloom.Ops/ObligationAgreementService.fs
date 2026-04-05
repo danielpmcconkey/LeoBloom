@@ -1,7 +1,8 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ops
 
 open Npgsql
 open LeoBloom.Domain.Ops
+open LeoBloom.Utilities
 
 /// Orchestrates validation and persistence for obligation agreement CRUD.
 /// Opens its own connection + transaction for atomicity.

@@ -1,7 +1,9 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ops
 
 open LeoBloom.Domain.Ops
 open LeoBloom.Domain.Ledger
+open LeoBloom.Utilities
+open LeoBloom.Ledger
 
 /// Orchestrates posting a confirmed obligation instance to the ledger.
 /// Creates a journal entry and transitions the instance to posted.

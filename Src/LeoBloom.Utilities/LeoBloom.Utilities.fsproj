@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -8,28 +8,6 @@
   <ItemGroup>
     <Compile Include="Log.fs" />
     <Compile Include="DataSource.fs" />
-    <Compile Include="JournalEntryRepository.fs" />
-    <Compile Include="FiscalPeriodRepository.fs" />
-    <Compile Include="FiscalPeriodService.fs" />
-    <Compile Include="JournalEntryService.fs" />
-    <Compile Include="AccountBalanceRepository.fs" />
-    <Compile Include="AccountBalanceService.fs" />
-    <Compile Include="TrialBalanceRepository.fs" />
-    <Compile Include="TrialBalanceService.fs" />
-    <Compile Include="IncomeStatementRepository.fs" />
-    <Compile Include="IncomeStatementService.fs" />
-    <Compile Include="BalanceSheetRepository.fs" />
-    <Compile Include="BalanceSheetService.fs" />
-    <Compile Include="SubtreePLRepository.fs" />
-    <Compile Include="SubtreePLService.fs" />
-    <Compile Include="ObligationAgreementRepository.fs" />
-    <Compile Include="ObligationAgreementService.fs" />
-    <Compile Include="ObligationInstanceRepository.fs" />
-    <Compile Include="ObligationInstanceService.fs" />
-    <Compile Include="ObligationPostingService.fs" />
-    <Compile Include="TransferRepository.fs" />
-    <Compile Include="TransferService.fs" />
-    <Compile Include="OpeningBalanceService.fs" />
   </ItemGroup>
 
   <ItemGroup>

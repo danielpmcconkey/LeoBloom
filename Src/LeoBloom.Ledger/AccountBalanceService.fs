@@ -1,8 +1,9 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ledger
 
 open System
 open Npgsql
 open LeoBloom.Domain.Ledger
+open LeoBloom.Utilities
 
 /// Orchestrates account balance queries.
 module AccountBalanceService =

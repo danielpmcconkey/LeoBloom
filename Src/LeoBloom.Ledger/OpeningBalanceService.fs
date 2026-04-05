@@ -1,7 +1,8 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ledger
 
 open Npgsql
 open LeoBloom.Domain.Ledger
+open LeoBloom.Utilities
 
 /// Convenience service for posting opening account balances.
 /// Builds a balanced journal entry from account/balance pairs and delegates
