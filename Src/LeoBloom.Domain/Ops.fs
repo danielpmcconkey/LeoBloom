@@ -340,3 +340,8 @@ module Ops =
                   if cmd.targetStatus = InstanceStatus.Confirmed && cmd.confirmedDate.IsNone then
                       "confirmed_date is required for confirmed transition" ]
             if errors.IsEmpty then Ok () else Error errors
+
+    type OverdueDetectionResult =
+        { transitioned: int
+          errors: (int * string) list
+          queryFailed: bool }

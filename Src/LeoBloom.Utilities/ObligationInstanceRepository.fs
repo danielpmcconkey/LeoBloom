@@ -128,6 +128,23 @@ module ObligationInstanceRepository =
         reader.Close()
         result
 
+    let findOverdueCandidates
+        (txn: NpgsqlTransaction)
+        (referenceDate: DateOnly)
+        : ObligationInstance list =
+        use sql = new NpgsqlCommand(
+            $"SELECT {selectColumns} FROM ops.obligation_instance \
+             WHERE status = 'expected' AND is_active = true AND expected_date < @ref_date \
+             ORDER BY expected_date",
+            txn.Connection, txn)
+        sql.Parameters.AddWithValue("@ref_date", referenceDate) |> ignore
+        use reader = sql.ExecuteReader()
+        let mutable results = []
+        while reader.Read() do
+            results <- (mapReader reader) :: results
+        reader.Close()
+        results |> List.rev
+
     let findExistingDates
         (txn: NpgsqlTransaction)
         (agreementId: int)

@@ -26,6 +26,7 @@
     <Compile Include="ObligationAgreementTests.fs" />
     <Compile Include="SpawnObligationInstanceTests.fs" />
     <Compile Include="StatusTransitionTests.fs" />
+    <Compile Include="OverdueDetectionTests.fs" />
     <Compile Include="LoggingInfrastructureTests.fs" />
   </ItemGroup>
 

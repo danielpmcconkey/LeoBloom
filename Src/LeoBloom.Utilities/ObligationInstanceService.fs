@@ -1,5 +1,6 @@
 namespace LeoBloom.Utilities
 
+open System
 open Npgsql
 open LeoBloom.Domain.Ops
 
@@ -112,6 +113,55 @@ module ObligationInstanceService =
                 Log.errorExn ex "Failed to transition instance {InstanceId}" [| cmd.instanceId :> obj |]
                 try txn.Rollback() with _ -> ()
                 Error [ sprintf "Persistence error: %s" ex.Message ]
+
+    let detectOverdue (referenceDate: DateOnly) : OverdueDetectionResult =
+        Log.info "Running overdue detection with reference date {ReferenceDate}" [| referenceDate :> obj |]
+
+        // Find candidates in a read-only transaction
+        let candidatesResult =
+            use conn = DataSource.openConnection()
+            use txn = conn.BeginTransaction()
+            try
+                let result = ObligationInstanceRepository.findOverdueCandidates txn referenceDate
+                txn.Commit()
+                Ok result
+            with ex ->
+                Log.errorExn ex "Failed to query overdue candidates" [||]
+                try txn.Rollback() with _ -> ()
+                Error ex.Message
+
+        match candidatesResult with
+        | Error _ ->
+            { transitioned = 0; errors = []; queryFailed = true }
+        | Ok candidates when candidates.IsEmpty ->
+            Log.info "No overdue candidates found" [||]
+            { transitioned = 0; errors = []; queryFailed = false }
+        | Ok candidates ->
+            Log.info "Found {Count} overdue candidates" [| candidates.Length :> obj |]
+
+            let mutable transitioned = 0
+            let mutable errors = []
+
+            for candidate in candidates do
+                let cmd =
+                    { instanceId = candidate.id
+                      targetStatus = Overdue
+                      amount = None; confirmedDate = None
+                      journalEntryId = None; notes = None }
+                match transition cmd with
+                | Ok _ -> transitioned <- transitioned + 1
+                | Error errs ->
+                    let msg = System.String.Join("; ", errs)
+                    Log.warn "Failed to transition instance {Id} to overdue: {Error}"
+                        [| candidate.id :> obj; msg :> obj |]
+                    errors <- (candidate.id, msg) :: errors
+
+            let result = { transitioned = transitioned; errors = errors |> List.rev; queryFailed = false }
+
+            Log.info "Overdue detection complete: {Transitioned} transitioned, {Errors} errors"
+                [| result.transitioned :> obj; result.errors.Length :> obj |]
+
+            result
 
     let spawn (cmd: SpawnObligationInstancesCommand) : Result<SpawnResult, string list> =
         Log.info "Spawning obligation instances for agreement {AgreementId} from {Start} to {End}"
