@@ -1,31 +1,14 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ledger
 
 open Npgsql
 open LeoBloom.Domain.Ledger
 
-/// Read-only queries for subtree P&L calculation.
-module SubtreePLRepository =
+/// Read-only queries for income statement calculation.
+module IncomeStatementRepository =
 
-    let resolveAccount (txn: NpgsqlTransaction) (accountCode: string) : (int * string * string) option =
-        use cmd = new NpgsqlCommand(
-            "SELECT id, code, name FROM ledger.account WHERE code = @code",
-            txn.Connection, txn)
-        cmd.Parameters.AddWithValue("@code", accountCode) |> ignore
-        use reader = cmd.ExecuteReader()
-        if reader.Read() then
-            Some (reader.GetInt32(0), reader.GetString(1), reader.GetString(2))
-        else
-            None
-
-    let getSubtreeActivityByPeriod (txn: NpgsqlTransaction) (rootAccountCode: string) (fiscalPeriodId: int) : (string * IncomeStatementLine) list =
-        use cmd = new NpgsqlCommand(
-            "WITH RECURSIVE subtree AS (
-                SELECT code FROM ledger.account WHERE code = @root_code
-                UNION ALL
-                SELECT a.code FROM ledger.account a
-                JOIN subtree s ON a.parent_code = s.code
-            )
-            SELECT
+    let getActivityByPeriod (txn: NpgsqlTransaction) (fiscalPeriodId: int) : (string * IncomeStatementLine) list =
+        use sql = new NpgsqlCommand(
+            "SELECT
                 a.id,
                 a.code,
                 a.name,
@@ -40,13 +23,11 @@ module SubtreePLRepository =
             WHERE je.fiscal_period_id = @fiscal_period_id
               AND je.voided_at IS NULL
               AND at.name IN ('revenue', 'expense')
-              AND a.code IN (SELECT code FROM subtree)
             GROUP BY a.id, a.code, a.name, at.name, at.normal_balance
             ORDER BY at.name, a.code",
             txn.Connection, txn)
-        cmd.Parameters.AddWithValue("@root_code", rootAccountCode) |> ignore
-        cmd.Parameters.AddWithValue("@fiscal_period_id", fiscalPeriodId) |> ignore
-        use reader = cmd.ExecuteReader()
+        sql.Parameters.AddWithValue("@fiscal_period_id", fiscalPeriodId) |> ignore
+        use reader = sql.ExecuteReader()
         let mutable results = []
         while reader.Read() do
             let accountTypeName = reader.GetString(3)

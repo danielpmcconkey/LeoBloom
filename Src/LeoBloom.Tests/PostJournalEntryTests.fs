@@ -4,6 +4,7 @@ open System
 open Xunit
 open LeoBloom.Domain.Ledger
 open LeoBloom.Utilities
+open LeoBloom.Ledger
 open LeoBloom.Tests.TestHelpers
 
 [<Fact>]

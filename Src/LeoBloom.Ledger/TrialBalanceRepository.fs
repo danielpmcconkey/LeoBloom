@@ -1,4 +1,4 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ledger
 
 open Npgsql
 open LeoBloom.Domain.Ledger

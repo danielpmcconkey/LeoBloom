@@ -6,6 +6,7 @@ open Xunit
 open Npgsql
 open LeoBloom.Domain.Ledger
 open LeoBloom.Utilities
+open LeoBloom.Ledger
 open LeoBloom.Tests.TestHelpers
 
 // =====================================================================

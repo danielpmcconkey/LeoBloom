@@ -2,7 +2,7 @@
 
 **Epic:** K — Code Audit Remediation
 **Depends On:** None (but should precede 036)
-**Status:** Not started
+**Status:** Done
 
 ---
 

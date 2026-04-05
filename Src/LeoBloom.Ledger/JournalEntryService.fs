@@ -1,8 +1,9 @@
-namespace LeoBloom.Utilities
+namespace LeoBloom.Ledger
 
 open System
 open Npgsql
 open LeoBloom.Domain.Ledger
+open LeoBloom.Utilities
 
 /// Orchestrates validation and persistence for posting journal entries.
 /// Opens its own connection + transaction for atomicity.

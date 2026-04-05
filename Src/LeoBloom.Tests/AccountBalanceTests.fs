@@ -5,6 +5,7 @@ open Xunit
 open Npgsql
 open LeoBloom.Domain.Ledger
 open LeoBloom.Utilities
+open LeoBloom.Ledger
 open LeoBloom.Tests.TestHelpers
 
 let private postEntry conn tracker acct1 acct2 fpId (entryDate: DateOnly) (desc: string) (amount: decimal) =

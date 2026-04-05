@@ -6,6 +6,8 @@ open Npgsql
 open LeoBloom.Domain.Ops
 open LeoBloom.Domain.Ledger
 open LeoBloom.Utilities
+open LeoBloom.Ledger
+open LeoBloom.Ops
 open LeoBloom.Tests.TestHelpers
 
 // =====================================================================
