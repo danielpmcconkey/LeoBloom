@@ -19,7 +19,7 @@
 | 015 | Spawn obligation instances | Done |
 | 016 | Status transitions | Done |
 | 017 | Overdue detection | Done |
-| 018 | Post obligation to ledger | Not started |
+| 018 | Post obligation to ledger | Done |
 | 019 | Transfers | Not started |
 | 020 | Invoice readiness | Not started |
 | 021 | Generate invoice | Not started |
