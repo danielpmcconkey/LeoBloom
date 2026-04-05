@@ -5,20 +5,6 @@ open Xunit
 open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
 
-/// Helper: attempt SQL, return PostgresException or None
-let private tryExec (conn: NpgsqlConnection) (sql: string) (paramSetup: NpgsqlCommand -> unit) =
-    try
-        use cmd = new NpgsqlCommand(sql, conn)
-        paramSetup cmd
-        cmd.ExecuteNonQuery() |> ignore
-        None
-    with :? PostgresException as e -> Some e
-
-let private assertFk (ex: PostgresException option) =
-    match ex with
-    | Some pgEx -> Assert.Equal("23503", pgEx.SqlState)
-    | None -> Assert.Fail("Expected FK violation on delete but delete succeeded")
-
 // =====================================================================
 // account_type → account
 // =====================================================================
@@ -32,10 +18,10 @@ let ``cannot delete account_type with dependent account`` () =
         let prefix = TestData.uniquePrefix()
         let atId = InsertHelpers.insertAccountType conn tracker $"{prefix}_type" "debit"
         InsertHelpers.insertAccount conn tracker $"{prefix}_ACCT" "Test" atId true |> ignore
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.account_type WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", atId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
@@ -60,10 +46,10 @@ let ``cannot delete account with dependent child account via parent_code`` () =
         cmd.Parameters.AddWithValue("@pc", parentCode) |> ignore
         let childId = cmd.ExecuteScalar() :?> int
         TestCleanup.trackAccount childId tracker
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.account WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", parentId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
@@ -86,10 +72,10 @@ let ``cannot delete account with dependent journal_entry_line`` () =
         cmd.Parameters.AddWithValue("@je", jeId) |> ignore
         cmd.Parameters.AddWithValue("@acct", acctId) |> ignore
         cmd.ExecuteNonQuery() |> ignore
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.account WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", acctId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
@@ -111,10 +97,10 @@ let ``cannot delete account with dependent obligation_agreement source`` () =
         cmd.Parameters.AddWithValue("@acct", acctId) |> ignore
         let oaId = cmd.ExecuteScalar() :?> int
         TestCleanup.trackObligationAgreement oaId tracker
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.account WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", acctId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -132,10 +118,10 @@ let ``cannot delete account with dependent obligation_agreement dest`` () =
         cmd.Parameters.AddWithValue("@acct", acctId) |> ignore
         let oaId = cmd.ExecuteScalar() :?> int
         TestCleanup.trackObligationAgreement oaId tracker
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.account WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", acctId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
@@ -157,10 +143,10 @@ let ``cannot delete account with dependent transfer from`` () =
         cmd.Parameters.AddWithValue("@from_", fromId) |> ignore
         cmd.Parameters.AddWithValue("@to_", toId) |> ignore
         cmd.ExecuteNonQuery() |> ignore
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.account WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", fromId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -178,10 +164,10 @@ let ``cannot delete account with dependent transfer to`` () =
         cmd.Parameters.AddWithValue("@from_", fromId) |> ignore
         cmd.Parameters.AddWithValue("@to_", toId) |> ignore
         cmd.ExecuteNonQuery() |> ignore
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.account WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", toId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
@@ -197,10 +183,10 @@ let ``cannot delete fiscal_period with dependent journal_entry`` () =
         let prefix = TestData.uniquePrefix()
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}_fp" (System.DateOnly(2099, 1, 1)) (System.DateOnly(2099, 1, 31)) true
         InsertHelpers.insertJournalEntry conn tracker (System.DateOnly(2026, 1, 1)) "Test" fpId |> ignore
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.fiscal_period WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", fpId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -215,10 +201,10 @@ let ``cannot delete fiscal_period with dependent invoice`` () =
             "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Test', @fp, 1000.00, 200.00, 1200.00)", conn)
         cmd.Parameters.AddWithValue("@fp", fpId) |> ignore
         cmd.ExecuteNonQuery() |> ignore
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.fiscal_period WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", fpId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
@@ -238,10 +224,10 @@ let ``cannot delete journal_entry with dependent reference`` () =
             "INSERT INTO ledger.journal_entry_reference (journal_entry_id, reference_type, reference_value) VALUES (@je, 'invoice', 'INV-001')", conn)
         cmd.Parameters.AddWithValue("@je", jeId) |> ignore
         cmd.ExecuteNonQuery() |> ignore
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.journal_entry WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", jeId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -260,10 +246,10 @@ let ``cannot delete journal_entry with dependent line`` () =
         cmd.Parameters.AddWithValue("@je", jeId) |> ignore
         cmd.Parameters.AddWithValue("@acct", acctId) |> ignore
         cmd.ExecuteNonQuery() |> ignore
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.journal_entry WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", jeId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -281,10 +267,10 @@ let ``cannot delete journal_entry with dependent obligation_instance`` () =
         cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
         cmd.Parameters.AddWithValue("@je", jeId) |> ignore
         cmd.ExecuteNonQuery() |> ignore
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.journal_entry WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", jeId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -305,10 +291,10 @@ let ``cannot delete journal_entry with dependent transfer`` () =
         cmd.Parameters.AddWithValue("@to_", toId) |> ignore
         cmd.Parameters.AddWithValue("@je", jeId) |> ignore
         cmd.ExecuteNonQuery() |> ignore
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ledger.journal_entry WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", jeId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
@@ -327,8 +313,8 @@ let ``cannot delete obligation_agreement with dependent instance`` () =
             "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (@oa, 'Test', 'expected', '2026-04-01')", conn)
         cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
         cmd.ExecuteNonQuery() |> ignore
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "DELETE FROM ops.obligation_agreement WHERE id = @id"
                     (fun cmd -> cmd.Parameters.AddWithValue("@id", oaId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker

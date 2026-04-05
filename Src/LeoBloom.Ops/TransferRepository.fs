@@ -3,15 +3,11 @@ namespace LeoBloom.Ops
 open System
 open Npgsql
 open LeoBloom.Domain.Ops
+open LeoBloom.Utilities
 
 /// Raw SQL persistence for transfer operations. All operations run within
 /// a caller-provided NpgsqlTransaction for atomicity.
 module TransferRepository =
-
-    let private optParam (name: string) (value: obj option) (cmd: NpgsqlCommand) =
-        match value with
-        | Some v -> cmd.Parameters.AddWithValue(name, v) |> ignore
-        | None -> cmd.Parameters.AddWithValue(name, DBNull.Value) |> ignore
 
     let private mapReader (reader: System.Data.Common.DbDataReader) : Transfer =
         let status =
@@ -50,8 +46,8 @@ module TransferRepository =
         sql.Parameters.AddWithValue("@to_account_id", cmd.toAccountId) |> ignore
         sql.Parameters.AddWithValue("@amount", cmd.amount) |> ignore
         sql.Parameters.AddWithValue("@initiated_date", cmd.initiatedDate) |> ignore
-        optParam "@expected_settlement" (cmd.expectedSettlement |> Option.map (fun v -> v :> obj)) sql
-        optParam "@description" (cmd.description |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@expected_settlement" (cmd.expectedSettlement |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@description" (cmd.description |> Option.map (fun v -> v :> obj)) sql
 
         use reader = sql.ExecuteReader()
         reader.Read() |> ignore

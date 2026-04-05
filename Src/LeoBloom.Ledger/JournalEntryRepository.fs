@@ -3,15 +3,11 @@ namespace LeoBloom.Ledger
 open System
 open Npgsql
 open LeoBloom.Domain.Ledger
+open LeoBloom.Utilities
 
 /// Raw SQL persistence for journal entries. All operations run within
 /// a caller-provided NpgsqlTransaction for atomicity.
 module JournalEntryRepository =
-
-    let private optParam (name: string) (value: string option) (cmd: NpgsqlCommand) =
-        match value with
-        | Some v -> cmd.Parameters.AddWithValue(name, v :> obj) |> ignore
-        | None -> cmd.Parameters.AddWithValue(name, DBNull.Value) |> ignore
 
     let insertEntry (txn: NpgsqlTransaction) (cmd: PostJournalEntryCommand) : JournalEntry =
         use sql = new NpgsqlCommand(
@@ -22,7 +18,7 @@ module JournalEntryRepository =
             txn.Connection, txn)
         sql.Parameters.AddWithValue("@entry_date", cmd.entryDate) |> ignore
         sql.Parameters.AddWithValue("@description", cmd.description) |> ignore
-        optParam "@source" cmd.source sql
+        DataHelpers.optParam "@source" (cmd.source |> Option.map box) sql
         sql.Parameters.AddWithValue("@fp_id", cmd.fiscalPeriodId) |> ignore
 
         use reader = sql.ExecuteReader()
@@ -53,7 +49,7 @@ module JournalEntryRepository =
             sql.Parameters.AddWithValue("@amt", l.amount) |> ignore
             let etStr = EntryType.toDbString l.entryType
             sql.Parameters.AddWithValue("@et", etStr) |> ignore
-            optParam "@memo" l.memo sql
+            DataHelpers.optParam "@memo" (l.memo |> Option.map box) sql
 
             use reader = sql.ExecuteReader()
             reader.Read() |> ignore
