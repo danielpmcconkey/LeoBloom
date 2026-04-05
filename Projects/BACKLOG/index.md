@@ -37,7 +37,7 @@
 | 033 | Seal DataSource internals | Done |
 | 034 | GAAP remediation | Done |
 | 035 | Orphaned posting detection | Not started |
-| 036 | CLI framework + ledger commands | Not started |
+| 036 | CLI framework + ledger commands | Done |
 | 037 | CLI reporting commands (accounting) | Not started |
 | 038 | CLI obligation commands | Not started |
 | 039 | CLI transfer commands | Not started |

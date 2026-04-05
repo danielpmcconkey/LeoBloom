@@ -111,6 +111,26 @@ module JournalEntryService =
                 try txn.Rollback() with _ -> ()
                 Error [ sprintf "Persistence error: %s" ex.Message ]
 
+    /// Retrieve a journal entry with its lines and references by ID.
+    /// Opens its own connection and transaction.
+    let getEntry (entryId: int) : Result<PostedJournalEntry, string list> =
+        Log.info "Retrieving journal entry {EntryId}" [| entryId :> obj |]
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+
+        try
+            match JournalEntryRepository.getEntryById txn entryId with
+            | Some posted ->
+                txn.Commit()
+                Ok posted
+            | None ->
+                txn.Rollback()
+                Error [ sprintf "Journal entry with id %d does not exist" entryId ]
+        with ex ->
+            Log.errorExn ex "Failed to retrieve journal entry {EntryId}" [| entryId :> obj |]
+            try txn.Rollback() with _ -> ()
+            Error [ sprintf "Persistence error: %s" ex.Message ]
+
     // --- Void operations ---
 
     let private validateVoidCommand (cmd: VoidJournalEntryCommand) : Result<unit, string list> =

@@ -30,6 +30,9 @@
     <Compile Include="TransferTests.fs" />
     <Compile Include="LoggingInfrastructureTests.fs" />
     <Compile Include="ConsolidatedHelpersTests.fs" />
+    <Compile Include="CliFrameworkTests.fs" />
+    <Compile Include="LedgerCommandsTests.fs" />
+    <Compile Include="AcctAmountParsingTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

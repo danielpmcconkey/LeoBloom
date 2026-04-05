@@ -2,7 +2,8 @@
 
 **Epic:** J — CLI Consumption Layer
 **Depends On:** 005, 006
-**Status:** Not started
+**Architecture:** [ADR-003 — CLI Architecture](../../Documentation/ADR/ADR-003-cli-architecture.md)
+**Status:** Done
 
 ---
 

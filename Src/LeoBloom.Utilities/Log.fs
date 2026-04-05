@@ -41,7 +41,7 @@ module Log =
         Serilog.Log.Logger <-
             LoggerConfiguration()
                 .ReadFrom.Configuration(config)
-                .WriteTo.Console()
+                .WriteTo.Console(standardErrorFromLevel = Serilog.Events.LogEventLevel.Verbose)
                 .WriteTo.File(logPath)
                 .CreateLogger()
 
