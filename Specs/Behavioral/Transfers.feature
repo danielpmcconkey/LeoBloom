@@ -126,3 +126,28 @@ Feature: Create and Confirm Transfers
         And an initiated transfer of 500.00 from "checking" to "savings"
         When I confirm the transfer on 2026-07-15
         Then the confirm fails with error containing "fiscal period"
+
+    # --- Idempotency Guard (P043) ---
+
+    @FT-TRF-015
+    Scenario: Retry after partial failure skips duplicate journal entry
+        Given two active asset accounts "checking" and "savings"
+        And an open fiscal period covering 2026-04-15
+        And an initiated transfer of 1000.00 from "checking" to "savings"
+        And a journal entry already exists with reference type "transfer" and value matching the transfer ID
+        When I confirm the transfer on 2026-04-15
+        Then the confirm succeeds
+        And no new journal entry was created
+        And the transfer status is "confirmed"
+        And the transfer journal_entry_id matches the pre-existing journal entry ID
+
+    @FT-TRF-016
+    Scenario: Voided prior journal entry does not trigger the idempotency guard
+        Given two active asset accounts "checking" and "savings"
+        And an open fiscal period covering 2026-04-15
+        And an initiated transfer of 1000.00 from "checking" to "savings"
+        And a voided journal entry exists with reference type "transfer" and value matching the transfer ID
+        When I confirm the transfer on 2026-04-15
+        Then the confirm succeeds
+        And a new journal entry was created (not the voided one)
+        And the transfer status is "confirmed"

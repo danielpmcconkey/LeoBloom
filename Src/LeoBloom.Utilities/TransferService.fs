@@ -140,26 +140,63 @@ module TransferService =
                     [ { referenceType = "transfer"
                         referenceValue = string transfer.id } ] }
 
-            match JournalEntryService.post jeCmd with
-            | Error errs ->
-                Log.warn "Journal entry posting failed for transfer {TransferId}: {Errors}"
-                    [| transfer.id :> obj; errs :> obj |]
-                Error errs
-            | Ok posted ->
-                Log.info "Created journal entry {JournalEntryId} for transfer {TransferId}"
-                    [| posted.entry.id :> obj; transfer.id :> obj |]
+            // Idempotency guard: check for existing non-voided journal entry
+            let existingJeId =
+                use guardConn = DataSource.openConnection()
+                use guardTxn = guardConn.BeginTransaction()
+                try
+                    let result =
+                        JournalEntryRepository.findNonVoidedByReference
+                            guardTxn "transfer" (string transfer.id)
+                    guardTxn.Commit()
+                    result
+                with ex ->
+                    try guardTxn.Rollback() with _ -> ()
+                    raise ex
 
-                // Phase 3: Update transfer record
+            match existingJeId with
+            | Some jeId ->
+                Log.info
+                    "Idempotency guard: found existing journal entry {JournalEntryId} for transfer {TransferId}, skipping post"
+                    [| jeId :> obj; transfer.id :> obj |]
+
+                // Phase 3: Update transfer record (using existing JE)
                 try
                     use conn = DataSource.openConnection()
                     use txn = conn.BeginTransaction()
-                    let updated = TransferRepository.updateConfirm txn transfer.id cmd.confirmedDate posted.entry.id
+                    let updated = TransferRepository.updateConfirm txn transfer.id cmd.confirmedDate jeId
                     txn.Commit()
-                    Log.info "Transfer {TransferId} confirmed successfully" [| updated.id :> obj |]
+                    Log.info "Transfer {TransferId} confirmed successfully (idempotent)"
+                        [| updated.id :> obj |]
                     Ok updated
                 with ex ->
-                    Log.errorExn ex "Failed to update transfer {TransferId} after journal entry {JournalEntryId} was created"
-                        [| transfer.id :> obj; posted.entry.id :> obj |]
-                    Log.warn "Transfer {TransferId} remains initiated but journal entry {JournalEntryId} exists — retry is safe"
-                        [| transfer.id :> obj; posted.entry.id :> obj |]
+                    Log.errorExn ex
+                        "Failed to update transfer {TransferId} after finding existing journal entry {JournalEntryId}"
+                        [| transfer.id :> obj; jeId :> obj |]
                     Error [ sprintf "Failed to update transfer after journal entry was posted: %s" ex.Message ]
+
+            | None ->
+                // No existing entry -- proceed with normal phase 2 + phase 3
+                match JournalEntryService.post jeCmd with
+                | Error errs ->
+                    Log.warn "Journal entry posting failed for transfer {TransferId}: {Errors}"
+                        [| transfer.id :> obj; errs :> obj |]
+                    Error errs
+                | Ok posted ->
+                    Log.info "Created journal entry {JournalEntryId} for transfer {TransferId}"
+                        [| posted.entry.id :> obj; transfer.id :> obj |]
+
+                    // Phase 3: Update transfer record
+                    try
+                        use conn = DataSource.openConnection()
+                        use txn = conn.BeginTransaction()
+                        let updated = TransferRepository.updateConfirm txn transfer.id cmd.confirmedDate posted.entry.id
+                        txn.Commit()
+                        Log.info "Transfer {TransferId} confirmed successfully" [| updated.id :> obj |]
+                        Ok updated
+                    with ex ->
+                        Log.errorExn ex "Failed to update transfer {TransferId} after journal entry {JournalEntryId} was created"
+                            [| transfer.id :> obj; posted.entry.id :> obj |]
+                        Log.warn "Transfer {TransferId} remains initiated but journal entry {JournalEntryId} exists — retry is safe"
+                            [| transfer.id :> obj; posted.entry.id :> obj |]
+                        Error [ sprintf "Failed to update transfer after journal entry was posted: %s" ex.Message ]

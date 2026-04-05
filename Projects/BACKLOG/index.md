@@ -44,7 +44,7 @@
 | 040 | CLI tax reports | Not started |
 | 041 | CLI account + period commands | Not started |
 | 042 | CLI invoice commands | Not started |
-| 043 | Idempotency guards | Not started |
+| 043 | Idempotency guards | Done |
 | 044 | Database indexes migration | Not started |
 | 045 | Domain-based project reorg | Not started |
 | 046 | Delete LeoBloom.Api | Not started |
