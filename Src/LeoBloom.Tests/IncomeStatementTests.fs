@@ -367,6 +367,36 @@ let ``closed period income statement still works`` () =
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
+// Period Scoping — @FT-IS-017 (REM-010)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-IS-017")>]
+let ``income statement for one period excludes another period's activity`` () =
+    use conn = DataSource.openConnection()
+    let tracker = TestCleanup.create conn
+    try
+        let prefix = TestData.uniquePrefix()
+        let assetAcct = InsertHelpers.insertAccount conn tracker (prefix + "AS") "Asset" assetTypeId true
+        let revAcct = InsertHelpers.insertAccount conn tracker (prefix + "RV") "Revenue" revenueTypeId true
+        let expAcct = InsertHelpers.insertAccount conn tracker (prefix + "EX") "Expense" expenseTypeId true
+        let fpMar = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "M3") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
+        let fpApr = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "A4") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        // March: revenue entry
+        postEntry conn tracker assetAcct revAcct fpMar (DateOnly(2026, 3, 15)) "March revenue" 800m |> ignore
+        // April: expense entry
+        postEntry conn tracker expAcct assetAcct fpApr (DateOnly(2026, 4, 10)) "April expense" 300m |> ignore
+        // Query March only
+        let result = IncomeStatementService.getByPeriodId fpMar
+        match result with
+        | Ok report ->
+            Assert.Equal(800m, report.revenue.sectionTotal)
+            Assert.Equal(0m, report.expenses.sectionTotal)
+            Assert.Equal(800m, report.netIncome)
+        | Error err -> Assert.Fail(sprintf "Expected Ok: %s" err)
+    finally TestCleanup.deleteAll tracker
+
+// =====================================================================
 // Structural tests -- acceptance criteria owned by QE
 // =====================================================================
 

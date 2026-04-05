@@ -374,6 +374,61 @@ let ``closePeriod and reopenPeriod are symmetric on the same period`` () =
         Assert.True(isOpenAfterReopen, "DB should show is_open = true after reopen")
     finally TestCleanup.deleteAll tracker
 
+// =====================================================================
+// Side Effects — @FT-CFP-012 (REM-011)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-CFP-012")>]
+let ``closing a period does not modify account balances`` () =
+    use conn = DataSource.openConnection()
+    let tracker = TestCleanup.create conn
+    try
+        let prefix = TestData.uniquePrefix()
+        let assetTypeId = InsertHelpers.insertAccountType conn tracker (prefix + "_at") "debit"
+        let revenueTypeId = InsertHelpers.insertAccountType conn tracker (prefix + "_rt") "credit"
+        let assetAcct = InsertHelpers.insertAccount conn tracker (prefix + "AS") "Asset" assetTypeId true
+        let revAcct = InsertHelpers.insertAccount conn tracker (prefix + "RV") "Revenue" revenueTypeId true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+
+        // Post an entry
+        let jeCmd : PostJournalEntryCommand =
+            { entryDate = DateOnly(2026, 4, 15)
+              description = "Test entry"
+              source = Some "manual"
+              fiscalPeriodId = fpId
+              lines =
+                [ { accountId = assetAcct; amount = 500m; entryType = EntryType.Debit; memo = None }
+                  { accountId = revAcct; amount = 500m; entryType = EntryType.Credit; memo = None } ]
+              references = [] }
+        match JournalEntryService.post jeCmd with
+        | Ok posted -> TestCleanup.trackJournalEntry posted.entry.id tracker
+        | Error errs -> failwithf "Setup post failed: %A" errs
+
+        // Record trial balance before close
+        let beforeResult = TrialBalanceService.getByPeriodId fpId
+        let beforeReport =
+            match beforeResult with
+            | Ok r -> r
+            | Error e -> failwithf "Trial balance before close failed: %s" e
+
+        // Close the period
+        match FiscalPeriodService.closePeriod { fiscalPeriodId = fpId } with
+        | Ok _ -> ()
+        | Error errs -> failwithf "Close failed: %A" errs
+
+        // Record trial balance after close
+        let afterResult = TrialBalanceService.getByPeriodId fpId
+        let afterReport =
+            match afterResult with
+            | Ok r -> r
+            | Error e -> failwithf "Trial balance after close failed: %s" e
+
+        // Totals must be identical
+        Assert.Equal(beforeReport.grandTotalDebits, afterReport.grandTotalDebits)
+        Assert.Equal(beforeReport.grandTotalCredits, afterReport.grandTotalCredits)
+    finally TestCleanup.deleteAll tracker
+
 [<Fact>]
 let ``reopenPeriod validates reason before hitting the database`` () =
     // Empty reason should fail fast without touching the DB.

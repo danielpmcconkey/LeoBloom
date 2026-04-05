@@ -229,6 +229,29 @@ Feature: Income Statement
         When I request the income statement for period "2026-03"
         Then the expenses section contains account 5010 with balance 350.00
 
+    # --- Period Scoping (REM-010) ---
+
+    @FT-IS-017
+    Scenario: Income statement for one period excludes another period's activity
+        Given the ledger schema exists for income statement queries
+        And an income-statement-test open fiscal period "2026-03" from 2026-03-01 to 2026-03-31
+        And an income-statement-test open fiscal period "2026-04" from 2026-04-01 to 2026-04-30
+        And an income-statement-test active account 1010 of type asset
+        And an income-statement-test active account 4010 of type revenue
+        And an income-statement-test active account 5010 of type expense
+        And an income-statement-test entry dated 2026-03-15 in period "2026-03" described as "March revenue" with lines:
+            | account | amount | entry_type |
+            | 1010    | 800.00 | debit      |
+            | 4010    | 800.00 | credit     |
+        And an income-statement-test entry dated 2026-04-10 in period "2026-04" described as "April expense" with lines:
+            | account | amount | entry_type |
+            | 5010    | 300.00 | debit      |
+            | 1010    | 300.00 | credit     |
+        When I request the income statement for period "2026-03"
+        Then the revenue section total is 800.00
+        And the expenses section total is 0.00
+        And the net income is 800.00
+
     # --- Lookup Equivalence ---
 
     @FT-IS-013

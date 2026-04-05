@@ -302,6 +302,54 @@ let ``create with nonexistent dest account is rejected`` () =
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
+// REM-008: source = dest rejection
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-OA-029")>]
+let ``create with source_account_id equal to dest_account_id is rejected`` () =
+    use conn = DataSource.openConnection()
+    let tracker = TestCleanup.create conn
+    try
+        let prefix = TestData.uniquePrefix()
+        let atId = InsertHelpers.insertAccountType conn tracker (prefix + "_at") "debit"
+        let acctId = InsertHelpers.insertAccount conn tracker (prefix + "AC") "Shared" atId true
+        let cmd = { defaultCreateCmd prefix with sourceAccountId = Some acctId; destAccountId = Some acctId }
+        let result = ObligationAgreementService.create cmd
+        match result with
+        | Ok a ->
+            TestCleanup.trackObligationAgreement a.id tracker
+            Assert.Fail("Expected Error for source = dest account")
+        | Error errs ->
+            Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("same")),
+                        sprintf "Expected error containing 'same': %A" errs)
+    finally TestCleanup.deleteAll tracker
+
+// =====================================================================
+// REM-009: inactive dest account rejection
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-OA-030")>]
+let ``create with inactive dest account is rejected`` () =
+    use conn = DataSource.openConnection()
+    let tracker = TestCleanup.create conn
+    try
+        let prefix = TestData.uniquePrefix()
+        let atId = InsertHelpers.insertAccountType conn tracker (prefix + "_at") "debit"
+        let inactiveDest = InsertHelpers.insertAccount conn tracker (prefix + "ID") "Inactive Dest" atId false
+        let cmd = { defaultCreateCmd prefix with destAccountId = Some inactiveDest }
+        let result = ObligationAgreementService.create cmd
+        match result with
+        | Ok a ->
+            TestCleanup.trackObligationAgreement a.id tracker
+            Assert.Fail("Expected Error for inactive dest account")
+        | Error errs ->
+            Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("inactive")),
+                        sprintf "Expected error containing 'inactive': %A" errs)
+    finally TestCleanup.deleteAll tracker
+
+// =====================================================================
 // Get by ID
 // =====================================================================
 

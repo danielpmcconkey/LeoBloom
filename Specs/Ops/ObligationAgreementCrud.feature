@@ -106,6 +106,20 @@ Feature: Obligation Agreement CRUD
         When I create an obligation agreement with destAccountId referencing nonexistent account 99999
         Then the create fails with error containing "dest"
 
+    @FT-OA-029
+    Scenario: Create with source_account_id = dest_account_id is rejected
+        Given the ops schema exists for agreement management
+        And an active account 1010 of type asset
+        When I create an obligation agreement with sourceAccountId 1010 and destAccountId 1010
+        Then the create fails with error containing "same"
+
+    @FT-OA-030
+    Scenario: Create with inactive dest account is rejected
+        Given the ops schema exists for agreement management
+        And an inactive account 8888 of type expense
+        When I create an obligation agreement with destAccountId 8888
+        Then the create fails with error containing "inactive"
+
     # --- Get by ID ---
 
     @FT-OA-012

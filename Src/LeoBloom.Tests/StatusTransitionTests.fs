@@ -191,6 +191,7 @@ let ``transition from expected to skipped with notes`` () =
             Assert.Equal(Skipped, updated.status)
             Assert.True(updated.notes.IsSome)
             Assert.Contains("Tenant on vacation", updated.notes.Value)
+            Assert.False(updated.isActive, "Expected isActive = false after skipped transition")
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     finally TestCleanup.deleteAll tracker
 
@@ -308,6 +309,59 @@ let ``transition from overdue to in_flight is rejected`` () =
               amount = None; confirmedDate = None; journalEntryId = None; notes = None }
         match ObligationInstanceService.transition cmd with
         | Ok _ -> Assert.Fail("Expected Error for invalid transition")
+        | Error errs ->
+            Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("invalid transition")),
+                        sprintf "Expected error containing 'invalid transition': %A" errs)
+    finally TestCleanup.deleteAll tracker
+
+// =====================================================================
+// Complete Invalid Transition Coverage (FT-ST-023, REM-002)
+// =====================================================================
+
+[<Theory>]
+[<Trait("GherkinId", "FT-ST-023")>]
+[<InlineData("expected", "posted")>]
+[<InlineData("in_flight", "expected")>]
+[<InlineData("in_flight", "posted")>]
+[<InlineData("in_flight", "skipped")>]
+[<InlineData("overdue", "expected")>]
+[<InlineData("overdue", "posted")>]
+[<InlineData("overdue", "skipped")>]
+[<InlineData("confirmed", "in_flight")>]
+[<InlineData("confirmed", "overdue")>]
+[<InlineData("confirmed", "skipped")>]
+[<InlineData("posted", "expected")>]
+[<InlineData("posted", "in_flight")>]
+[<InlineData("posted", "overdue")>]
+[<InlineData("posted", "skipped")>]
+[<InlineData("skipped", "expected")>]
+[<InlineData("skipped", "in_flight")>]
+[<InlineData("skipped", "overdue")>]
+[<InlineData("skipped", "posted")>]
+let ``invalid transition from status to status is rejected`` (fromStatus: string) (toStatus: string) =
+    use conn = DataSource.openConnection()
+    let tracker = TestCleanup.create conn
+    try
+        let prefix = TestData.uniquePrefix()
+        // posted/skipped/confirmed require specific setup data
+        let notes = if fromStatus = "skipped" then Some "skipped reason" else None
+        let amount = if fromStatus = "confirmed" || fromStatus = "posted" then Some 500m else None
+        let (_, instanceId) = setupInstance conn tracker prefix fromStatus amount notes true
+        let targetStatus =
+            match InstanceStatus.fromString toStatus with
+            | Ok s -> s
+            | Error e -> failwith e
+        // Supply required guard fields so command validation passes and we hit
+        // the transition validity check (the thing we're actually testing)
+        let journalEntryId = if toStatus = "posted" then Some 999999 else None
+        let confirmedDate = if toStatus = "confirmed" then Some (DateOnly(2026, 1, 1)) else None
+        let notes = if toStatus = "skipped" then Some "test notes" else None
+        let cmd =
+            { instanceId = instanceId; targetStatus = targetStatus
+              amount = None; confirmedDate = confirmedDate
+              journalEntryId = journalEntryId; notes = notes }
+        match ObligationInstanceService.transition cmd with
+        | Ok _ -> Assert.Fail(sprintf "Expected Error for invalid transition %s -> %s" fromStatus toStatus)
         | Error errs ->
             Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("invalid transition")),
                         sprintf "Expected error containing 'invalid transition': %A" errs)
@@ -441,5 +495,7 @@ let ``transition to skipped succeeds when instance already has notes`` () =
         match ObligationInstanceService.transition cmd with
         | Ok updated ->
             Assert.Equal(Skipped, updated.status)
+            Assert.True(updated.notes.IsSome, "Expected notes to be preserved")
+            Assert.Contains("existing note", updated.notes.Value)
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     finally TestCleanup.deleteAll tracker

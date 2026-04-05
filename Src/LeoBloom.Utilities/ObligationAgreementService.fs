@@ -27,6 +27,12 @@ module ObligationAgreementService =
         (destAccountId: int option) : Result<unit, string list> =
         let mutable errors = []
 
+        // source = dest is meaningless (backlog item 014)
+        match sourceAccountId, destAccountId with
+        | Some src, Some dest when src = dest ->
+            errors <- errors @ [ "source and dest account cannot be the same" ]
+        | _ -> ()
+
         match sourceAccountId with
         | Some srcId ->
             match lookupAccount txn srcId with

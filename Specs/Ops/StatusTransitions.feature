@@ -74,6 +74,7 @@ Feature: Obligation Instance Status Transitions
         Then the transition succeeds
         And the instance status is "skipped"
         And the instance notes contain "Tenant on vacation"
+        And the instance isActive is false
 
     # --- Amount Handling ---
 
@@ -161,3 +162,33 @@ Feature: Obligation Instance Status Transitions
         When I transition it to "skipped" without providing new notes
         Then the transition succeeds
         And the instance status is "skipped"
+        And the instance notes contain "existing note"
+
+    # --- Complete Invalid Transition Coverage (REM-002) ---
+
+    @FT-ST-023
+    Scenario Outline: Invalid transition from <from> to <to> is rejected
+        Given an obligation instance in status "<from>"
+        When I transition it to "<to>"
+        Then the transition fails with error containing "invalid transition"
+
+        Examples:
+            | from      | to        |
+            | expected  | posted    |
+            | in_flight | expected  |
+            | in_flight | posted    |
+            | in_flight | skipped   |
+            | overdue   | expected  |
+            | overdue   | posted    |
+            | overdue   | skipped   |
+            | confirmed | in_flight |
+            | confirmed | overdue   |
+            | confirmed | skipped   |
+            | posted    | expected  |
+            | posted    | in_flight |
+            | posted    | overdue   |
+            | posted    | skipped   |
+            | skipped   | expected  |
+            | skipped   | in_flight |
+            | skipped   | overdue   |
+            | skipped   | posted    |

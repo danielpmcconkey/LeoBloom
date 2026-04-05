@@ -135,6 +135,46 @@ Feature: Post Obligation to Ledger
 
     # --- FiscalPeriodRepository.findByDate ---
 
+    # --- Double-posting prevention (REM-001) ---
+
+    @FT-POL-016
+    Scenario: Posting an already-posted instance is rejected with no duplicate journal entry
+        Given a receivable obligation agreement with source and destination accounts
+        And an open fiscal period covering 2026-04-15
+        And a confirmed instance with amount 1000.00 and confirmedDate 2026-04-15
+        When I post the instance to the ledger
+        Then the post succeeds
+        When I post the same instance to the ledger again
+        Then the post fails with error containing "confirmed"
+        And no second journal entry was created
+        And the instance journal_entry_id is unchanged
+
+    # --- Atomicity of failed posting (REM-007) ---
+
+    @FT-POL-017
+    Scenario: Failed post to closed period leaves instance in confirmed status with no journal entry
+        Given a receivable obligation agreement with source and destination accounts
+        And a closed fiscal period covering 2026-04-15
+        And a confirmed instance with amount 1000.00 and confirmedDate 2026-04-15
+        When I post the instance to the ledger
+        Then the post fails with error containing "not open"
+        And the instance status is still "confirmed"
+        And the instance journal_entry_id is null
+        And no journal entry was created for this instance
+
+    # --- Design intent: posted/voided reconciliation (REM-015, S8 resolution) ---
+    #
+    # A voided journal entry does NOT change the obligation instance's posted status.
+    # "Posted" is a historical fact: "we posted this." If the backing journal entry is
+    # later voided, that's a ledger correction — it doesn't rewrite ops history.
+    # The instance retains its journal_entry_id as a historical reference.
+    #
+    # "Posted instance with voided JE" is a distinct condition requiring attention,
+    # not a settled obligation. Detection is handled by a separate diagnostic query
+    # (Project 035 — Orphaned Posting Detection).
+
+    # --- FiscalPeriodRepository.findByDate ---
+
     @FT-POL-014
     Scenario: FiscalPeriodRepository.findByDate returns correct period for a date within range
         Given a fiscal period from 2026-05-01 to 2026-05-31
