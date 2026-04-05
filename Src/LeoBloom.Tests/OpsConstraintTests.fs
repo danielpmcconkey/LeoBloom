@@ -5,36 +5,6 @@ open Xunit
 open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
 
-let private tryExec (conn: NpgsqlConnection) (sql: string) (paramSetup: NpgsqlCommand -> unit) =
-    try
-        use cmd = new NpgsqlCommand(sql, conn)
-        paramSetup cmd
-        cmd.ExecuteNonQuery() |> ignore
-        None
-    with :? PostgresException as e -> Some e
-
-let private tryInsert conn sql = tryExec conn sql ignore
-
-let private assertNotNull (ex: PostgresException option) =
-    match ex with
-    | Some pgEx -> Assert.Equal("23502", pgEx.SqlState)
-    | None -> Assert.Fail("Expected NOT NULL violation")
-
-let private assertFk (ex: PostgresException option) =
-    match ex with
-    | Some pgEx -> Assert.Equal("23503", pgEx.SqlState)
-    | None -> Assert.Fail("Expected FK violation")
-
-let private assertUnique (ex: PostgresException option) =
-    match ex with
-    | Some pgEx -> Assert.Equal("23505", pgEx.SqlState)
-    | None -> Assert.Fail("Expected UNIQUE violation")
-
-let private assertSuccess (ex: PostgresException option) =
-    match ex with
-    | None -> ()
-    | Some pgEx -> Assert.Fail($"Expected success but got: {pgEx.Message}")
-
 // =====================================================================
 // obligation_agreement
 // =====================================================================
@@ -45,8 +15,8 @@ let ``obligation_agreement requires a name`` () =
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
-        let ex = tryInsert conn "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence) VALUES (NULL, 'receivable', 'monthly')"
-        assertNotNull ex
+        let ex = ConstraintAssert.tryInsert conn "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence) VALUES (NULL, 'receivable', 'monthly')"
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -55,10 +25,10 @@ let ``obligation_agreement source_account_id must reference a valid ledger accou
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence, source_account_id) VALUES ('Test', 'receivable', 'monthly', @sa)"
                     (fun cmd -> cmd.Parameters.AddWithValue("@sa", 9999) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -67,10 +37,10 @@ let ``obligation_agreement dest_account_id must reference a valid ledger account
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence, dest_account_id) VALUES ('Test', 'receivable', 'monthly', @da)"
                     (fun cmd -> cmd.Parameters.AddWithValue("@da", 9999) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -93,8 +63,8 @@ let ``obligation_instance requires an obligation_agreement_id`` () =
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
-        let ex = tryInsert conn "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (NULL, 'Test', 'expected', '2026-04-01')"
-        assertNotNull ex
+        let ex = ConstraintAssert.tryInsert conn "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (NULL, 'Test', 'expected', '2026-04-01')"
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -103,10 +73,10 @@ let ``obligation_instance obligation_agreement_id must reference a valid agreeme
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (@oa, 'Test', 'expected', '2026-04-01')"
                     (fun cmd -> cmd.Parameters.AddWithValue("@oa", 9999) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -116,10 +86,10 @@ let ``obligation_instance requires a name`` () =
     let tracker = TestCleanup.create conn
     try
         let oaId = InsertHelpers.insertObligationAgreement conn tracker "osc020_agreement"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (@oa, NULL, 'expected', '2026-04-01')"
                     (fun cmd -> cmd.Parameters.AddWithValue("@oa", oaId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -129,10 +99,10 @@ let ``obligation_instance requires an expected_date`` () =
     let tracker = TestCleanup.create conn
     try
         let oaId = InsertHelpers.insertObligationAgreement conn tracker "osc023_agreement"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (@oa, 'Test', 'expected', NULL)"
                     (fun cmd -> cmd.Parameters.AddWithValue("@oa", oaId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -142,12 +112,12 @@ let ``obligation_instance journal_entry_id must reference a valid journal_entry`
     let tracker = TestCleanup.create conn
     try
         let oaId = InsertHelpers.insertObligationAgreement conn tracker "osc024_agreement"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date, journal_entry_id) VALUES (@oa, 'Test', 'expected', '2026-04-01', @je)"
                     (fun cmd ->
                         cmd.Parameters.AddWithValue("@oa", oaId) |> ignore
                         cmd.Parameters.AddWithValue("@je", 9999) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -180,10 +150,10 @@ let ``transfer requires a from_account_id`` () =
     let tracker = TestCleanup.create conn
     try
         let (_, toId) = insertTwoAccounts conn tracker "osc026"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.transfer (from_account_id, to_account_id, amount, status, initiated_date) VALUES (NULL, @to_, 100.00, 'initiated', '2026-04-01')"
                     (fun cmd -> cmd.Parameters.AddWithValue("@to_", toId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -193,12 +163,12 @@ let ``transfer from_account_id must reference a valid ledger account`` () =
     let tracker = TestCleanup.create conn
     try
         let (_, toId) = insertTwoAccounts conn tracker "osc027"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.transfer (from_account_id, to_account_id, amount, status, initiated_date) VALUES (@from_, @to_, 100.00, 'initiated', '2026-04-01')"
                     (fun cmd ->
                         cmd.Parameters.AddWithValue("@from_", 9999) |> ignore
                         cmd.Parameters.AddWithValue("@to_", toId) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -208,10 +178,10 @@ let ``transfer requires a to_account_id`` () =
     let tracker = TestCleanup.create conn
     try
         let (fromId, _) = insertTwoAccounts conn tracker "osc028"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.transfer (from_account_id, to_account_id, amount, status, initiated_date) VALUES (@from_, NULL, 100.00, 'initiated', '2026-04-01')"
                     (fun cmd -> cmd.Parameters.AddWithValue("@from_", fromId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -221,12 +191,12 @@ let ``transfer to_account_id must reference a valid ledger account`` () =
     let tracker = TestCleanup.create conn
     try
         let (fromId, _) = insertTwoAccounts conn tracker "osc029"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.transfer (from_account_id, to_account_id, amount, status, initiated_date) VALUES (@from_, @to_, 100.00, 'initiated', '2026-04-01')"
                     (fun cmd ->
                         cmd.Parameters.AddWithValue("@from_", fromId) |> ignore
                         cmd.Parameters.AddWithValue("@to_", 9999) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -236,12 +206,12 @@ let ``transfer requires an amount`` () =
     let tracker = TestCleanup.create conn
     try
         let (fromId, toId) = insertTwoAccounts conn tracker "osc030"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.transfer (from_account_id, to_account_id, amount, status, initiated_date) VALUES (@from_, @to_, NULL, 'initiated', '2026-04-01')"
                     (fun cmd ->
                         cmd.Parameters.AddWithValue("@from_", fromId) |> ignore
                         cmd.Parameters.AddWithValue("@to_", toId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -251,12 +221,12 @@ let ``transfer requires a status`` () =
     let tracker = TestCleanup.create conn
     try
         let (fromId, toId) = insertTwoAccounts conn tracker "osc031"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.transfer (from_account_id, to_account_id, amount, status, initiated_date) VALUES (@from_, @to_, 100.00, NULL, '2026-04-01')"
                     (fun cmd ->
                         cmd.Parameters.AddWithValue("@from_", fromId) |> ignore
                         cmd.Parameters.AddWithValue("@to_", toId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -266,12 +236,12 @@ let ``transfer requires an initiated_date`` () =
     let tracker = TestCleanup.create conn
     try
         let (fromId, toId) = insertTwoAccounts conn tracker "osc032"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.transfer (from_account_id, to_account_id, amount, status, initiated_date) VALUES (@from_, @to_, 100.00, 'initiated', NULL)"
                     (fun cmd ->
                         cmd.Parameters.AddWithValue("@from_", fromId) |> ignore
                         cmd.Parameters.AddWithValue("@to_", toId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -281,13 +251,13 @@ let ``transfer journal_entry_id must reference a valid journal_entry`` () =
     let tracker = TestCleanup.create conn
     try
         let (fromId, toId) = insertTwoAccounts conn tracker "osc033"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.transfer (from_account_id, to_account_id, amount, status, initiated_date, journal_entry_id) VALUES (@from_, @to_, 100.00, 'initiated', '2026-04-01', @je)"
                     (fun cmd ->
                         cmd.Parameters.AddWithValue("@from_", fromId) |> ignore
                         cmd.Parameters.AddWithValue("@to_", toId) |> ignore
                         cmd.Parameters.AddWithValue("@je", 9999) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -316,10 +286,10 @@ let ``invoice requires a tenant`` () =
     let tracker = TestCleanup.create conn
     try
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker "o035fp" (System.DateOnly(2099, 1, 1)) (System.DateOnly(2099, 1, 31)) true
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES (NULL, @fp, 1000.00, 200.00, 1200.00)"
                     (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -328,8 +298,8 @@ let ``invoice requires a fiscal_period_id`` () =
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
-        let ex = tryInsert conn "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Test', NULL, 1000.00, 200.00, 1200.00)"
-        assertNotNull ex
+        let ex = ConstraintAssert.tryInsert conn "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Test', NULL, 1000.00, 200.00, 1200.00)"
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -338,10 +308,10 @@ let ``invoice fiscal_period_id must reference a valid fiscal_period`` () =
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Test', @fp, 1000.00, 200.00, 1200.00)"
                     (fun cmd -> cmd.Parameters.AddWithValue("@fp", 9999) |> ignore)
-        assertFk ex
+        ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -351,10 +321,10 @@ let ``invoice requires rent_amount`` () =
     let tracker = TestCleanup.create conn
     try
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker "o038fp" (System.DateOnly(2099, 1, 1)) (System.DateOnly(2099, 1, 31)) true
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Test', @fp, NULL, 200.00, 1200.00)"
                     (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -364,10 +334,10 @@ let ``invoice requires utility_share`` () =
     let tracker = TestCleanup.create conn
     try
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker "o039fp" (System.DateOnly(2099, 1, 1)) (System.DateOnly(2099, 1, 31)) true
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Test', @fp, 1000.00, NULL, 1200.00)"
                     (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -377,10 +347,10 @@ let ``invoice requires total_amount`` () =
     let tracker = TestCleanup.create conn
     try
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker "o040fp" (System.DateOnly(2099, 1, 1)) (System.DateOnly(2099, 1, 31)) true
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES ('Test', @fp, 1000.00, 200.00, NULL)"
                     (fun cmd -> cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -400,12 +370,12 @@ let ``invoice tenant and fiscal_period_id must be unique together`` () =
         cmd1.Parameters.AddWithValue("@fp", fpId) |> ignore
         cmd1.ExecuteNonQuery() |> ignore
         // Second insert — should fail UNIQUE
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount) VALUES (@t, @fp, 500.00, 100.00, 600.00)"
                     (fun cmd ->
                         cmd.Parameters.AddWithValue("@t", tenant) |> ignore
                         cmd.Parameters.AddWithValue("@fp", fpId) |> ignore)
-        assertUnique ex
+        ConstraintAssert.assertUnique ex "Expected UNIQUE violation"
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
@@ -418,8 +388,8 @@ let ``obligation_agreement requires an obligation_type`` () =
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
-        let ex = tryInsert conn "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence) VALUES ('Test', NULL, 'monthly')"
-        assertNotNull ex
+        let ex = ConstraintAssert.tryInsert conn "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence) VALUES ('Test', NULL, 'monthly')"
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -428,8 +398,8 @@ let ``obligation_agreement requires a cadence`` () =
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
-        let ex = tryInsert conn "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence) VALUES ('Test', 'receivable', NULL)"
-        assertNotNull ex
+        let ex = ConstraintAssert.tryInsert conn "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence) VALUES ('Test', 'receivable', NULL)"
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
@@ -439,8 +409,8 @@ let ``obligation_instance requires a status`` () =
     let tracker = TestCleanup.create conn
     try
         let oaId = InsertHelpers.insertObligationAgreement conn tracker "osc044_agreement"
-        let ex = tryExec conn
+        let ex = ConstraintAssert.tryExec conn
                     "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date) VALUES (@oa, 'Test', NULL, '2026-04-01')"
                     (fun cmd -> cmd.Parameters.AddWithValue("@oa", oaId) |> ignore)
-        assertNotNull ex
+        ConstraintAssert.assertNotNull ex "Expected NOT NULL violation"
     finally TestCleanup.deleteAll tracker

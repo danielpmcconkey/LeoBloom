@@ -29,6 +29,7 @@
     <Compile Include="OverdueDetectionTests.fs" />
     <Compile Include="TransferTests.fs" />
     <Compile Include="LoggingInfrastructureTests.fs" />
+    <Compile Include="ConsolidatedHelpersTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

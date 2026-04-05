@@ -10,24 +10,6 @@ open LeoBloom.Utilities
 open LeoBloom.Ledger
 open LeoBloom.Tests.TestHelpers
 
-// =====================================================================
-// Helpers
-// =====================================================================
-
-let private repoRoot =
-    let baseDir = AppContext.BaseDirectory
-    let rec walkUp (dir: string) =
-        if File.Exists(Path.Combine(dir, "LeoBloom.sln"))
-           || Directory.Exists(Path.Combine(dir, "Src")) && Directory.Exists(Path.Combine(dir, "Specs")) then
-            dir
-        else
-            let parent = Directory.GetParent(dir)
-            if parent = null then failwith "Could not find repo root"
-            walkUp parent.FullName
-    walkUp baseDir
-
-let private srcDir = Path.Combine(repoRoot, "Src")
-
 let private logDir = "/workspace/application_logs/leobloom"
 
 /// Read all log file content from the log directory.
@@ -223,7 +205,7 @@ let ``DataSource initialization emits Info-level log entry`` () =
     // Log.initialize() is called. This means the runtime log message may go
     // to Serilog's default no-op logger. We verify the call is present in
     // the source code (structural verification).
-    let dataSourceFs = Path.Combine(srcDir, "LeoBloom.Utilities", "DataSource.fs")
+    let dataSourceFs = Path.Combine(RepoPath.srcDir, "LeoBloom.Utilities", "DataSource.fs")
     let content = File.ReadAllText(dataSourceFs)
     Assert.True(content.Contains("Log.info") && content.Contains("DataSource initialized"),
         "DataSource.fs should contain a Log.info call for initialization")

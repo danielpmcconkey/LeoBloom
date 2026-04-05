@@ -4,15 +4,11 @@ open System
 open Npgsql
 open NpgsqlTypes
 open LeoBloom.Domain.Ops
+open LeoBloom.Utilities
 
 /// Raw SQL persistence for obligation instances. All operations run within
 /// a caller-provided NpgsqlTransaction for atomicity.
 module ObligationInstanceRepository =
-
-    let private optParam (name: string) (value: obj option) (cmd: NpgsqlCommand) =
-        match value with
-        | Some v -> cmd.Parameters.AddWithValue(name, v) |> ignore
-        | None -> cmd.Parameters.AddWithValue(name, DBNull.Value) |> ignore
 
     let private selectColumns =
         "id, obligation_agreement_id, name, status, amount, expected_date, \
@@ -56,7 +52,7 @@ module ObligationInstanceRepository =
         sql.Parameters.AddWithValue("@obligation_agreement_id", obligationAgreementId) |> ignore
         sql.Parameters.AddWithValue("@name", name) |> ignore
         sql.Parameters.AddWithValue("@status", InstanceStatus.toString status) |> ignore
-        optParam "@amount" (amount |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@amount" (amount |> Option.map (fun v -> v :> obj)) sql
         sql.Parameters.AddWithValue("@expected_date", expectedDate) |> ignore
 
         use reader = sql.ExecuteReader()

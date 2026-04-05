@@ -1,7 +1,9 @@
 module LeoBloom.Tests.TestHelpers
 
 open System
+open System.IO
 open Npgsql
+open Xunit
 open LeoBloom.Utilities
 
 // =====================================================================
@@ -265,3 +267,55 @@ module InsertHelpers =
         cmd.Parameters.AddWithValue("@a", isActive) |> ignore
         let id = cmd.ExecuteScalar() :?> int
         id
+
+// =====================================================================
+// ConstraintAssert — shared SQL constraint test helpers
+// =====================================================================
+
+module ConstraintAssert =
+    /// Attempt SQL execution, return PostgresException or None.
+    let tryExec (conn: NpgsqlConnection) (sql: string) (paramSetup: NpgsqlCommand -> unit) =
+        try
+            use cmd = new NpgsqlCommand(sql, conn)
+            paramSetup cmd
+            cmd.ExecuteNonQuery() |> ignore
+            None
+        with :? PostgresException as e -> Some e
+
+    /// Convenience: tryExec with no parameters.
+    let tryInsert conn sql = tryExec conn sql ignore
+
+    /// Assert that the exception has the expected SqlState code.
+    let assertSqlState (expected: string) (ex: PostgresException option) (failMsg: string) =
+        match ex with
+        | Some pgEx -> Assert.Equal(expected, pgEx.SqlState)
+        | None -> Assert.Fail(failMsg)
+
+    let assertNotNull = assertSqlState "23502"
+    let assertUnique = assertSqlState "23505"
+    let assertFk = assertSqlState "23503"
+
+    /// Assert that the operation succeeded (no exception).
+    let assertSuccess (ex: PostgresException option) =
+        match ex with
+        | None -> ()
+        | Some pgEx -> Assert.Fail($"Expected success but got: {pgEx.Message}")
+
+// =====================================================================
+// RepoPath — derive repo root from caller source file path
+// =====================================================================
+
+module RepoPath =
+    /// Derive repo root from this source file's compile-time directory,
+    /// walking up until a directory containing LeoBloom.sln is found.
+    let repoRoot =
+        let rec walkUp (dir: string) =
+            if File.Exists(Path.Combine(dir, "LeoBloom.sln")) then dir
+            else
+                let parent = Directory.GetParent(dir)
+                if parent = null then failwith "Could not find repo root from source directory"
+                walkUp parent.FullName
+        walkUp __SOURCE_DIRECTORY__
+
+    /// Convenience: the Src directory under repo root.
+    let srcDir = Path.Combine(repoRoot, "Src")

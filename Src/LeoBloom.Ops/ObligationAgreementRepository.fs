@@ -3,6 +3,7 @@ namespace LeoBloom.Ops
 open System
 open Npgsql
 open LeoBloom.Domain.Ops
+open LeoBloom.Utilities
 
 type ListAgreementsFilter =
     { isActive: bool option
@@ -12,11 +13,6 @@ type ListAgreementsFilter =
 /// Raw SQL persistence for obligation agreements. All operations run within
 /// a caller-provided NpgsqlTransaction for atomicity.
 module ObligationAgreementRepository =
-
-    let private optParam (name: string) (value: obj option) (cmd: NpgsqlCommand) =
-        match value with
-        | Some v -> cmd.Parameters.AddWithValue(name, v) |> ignore
-        | None -> cmd.Parameters.AddWithValue(name, DBNull.Value) |> ignore
 
     let private mapReader (reader: System.Data.Common.DbDataReader) : ObligationAgreement =
         let obligationType =
@@ -64,14 +60,14 @@ module ObligationAgreementRepository =
             txn.Connection, txn)
         sql.Parameters.AddWithValue("@name", cmd.name) |> ignore
         sql.Parameters.AddWithValue("@obligation_type", ObligationDirection.toString cmd.obligationType) |> ignore
-        optParam "@counterparty" (cmd.counterparty |> Option.map (fun v -> v :> obj)) sql
-        optParam "@amount" (cmd.amount |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@counterparty" (cmd.counterparty |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@amount" (cmd.amount |> Option.map (fun v -> v :> obj)) sql
         sql.Parameters.AddWithValue("@cadence", RecurrenceCadence.toString cmd.cadence) |> ignore
-        optParam "@expected_day" (cmd.expectedDay |> Option.map (fun v -> v :> obj)) sql
-        optParam "@payment_method" (cmd.paymentMethod |> Option.map (fun v -> PaymentMethodType.toString v :> obj)) sql
-        optParam "@source_account_id" (cmd.sourceAccountId |> Option.map (fun v -> v :> obj)) sql
-        optParam "@dest_account_id" (cmd.destAccountId |> Option.map (fun v -> v :> obj)) sql
-        optParam "@notes" (cmd.notes |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@expected_day" (cmd.expectedDay |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@payment_method" (cmd.paymentMethod |> Option.map (fun v -> PaymentMethodType.toString v :> obj)) sql
+        DataHelpers.optParam "@source_account_id" (cmd.sourceAccountId |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@dest_account_id" (cmd.destAccountId |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@notes" (cmd.notes |> Option.map (fun v -> v :> obj)) sql
 
         use reader = sql.ExecuteReader()
         reader.Read() |> ignore
@@ -154,15 +150,15 @@ module ObligationAgreementRepository =
         sql.Parameters.AddWithValue("@id", cmd.id) |> ignore
         sql.Parameters.AddWithValue("@name", cmd.name) |> ignore
         sql.Parameters.AddWithValue("@obligation_type", ObligationDirection.toString cmd.obligationType) |> ignore
-        optParam "@counterparty" (cmd.counterparty |> Option.map (fun v -> v :> obj)) sql
-        optParam "@amount" (cmd.amount |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@counterparty" (cmd.counterparty |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@amount" (cmd.amount |> Option.map (fun v -> v :> obj)) sql
         sql.Parameters.AddWithValue("@cadence", RecurrenceCadence.toString cmd.cadence) |> ignore
-        optParam "@expected_day" (cmd.expectedDay |> Option.map (fun v -> v :> obj)) sql
-        optParam "@payment_method" (cmd.paymentMethod |> Option.map (fun v -> PaymentMethodType.toString v :> obj)) sql
-        optParam "@source_account_id" (cmd.sourceAccountId |> Option.map (fun v -> v :> obj)) sql
-        optParam "@dest_account_id" (cmd.destAccountId |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@expected_day" (cmd.expectedDay |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@payment_method" (cmd.paymentMethod |> Option.map (fun v -> PaymentMethodType.toString v :> obj)) sql
+        DataHelpers.optParam "@source_account_id" (cmd.sourceAccountId |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@dest_account_id" (cmd.destAccountId |> Option.map (fun v -> v :> obj)) sql
         sql.Parameters.AddWithValue("@is_active", cmd.isActive) |> ignore
-        optParam "@notes" (cmd.notes |> Option.map (fun v -> v :> obj)) sql
+        DataHelpers.optParam "@notes" (cmd.notes |> Option.map (fun v -> v :> obj)) sql
 
         use reader = sql.ExecuteReader()
         if reader.Read() then

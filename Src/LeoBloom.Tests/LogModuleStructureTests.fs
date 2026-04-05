@@ -3,24 +3,7 @@ module LeoBloom.Tests.LogModuleStructureTests
 open System
 open System.IO
 open Xunit
-
-// =====================================================================
-// Helpers
-// =====================================================================
-
-let private repoRoot =
-    let baseDir = AppContext.BaseDirectory
-    let rec walkUp (dir: string) =
-        if File.Exists(Path.Combine(dir, "LeoBloom.sln"))
-           || Directory.Exists(Path.Combine(dir, "Src")) && Directory.Exists(Path.Combine(dir, "Specs")) then
-            dir
-        else
-            let parent = Directory.GetParent(dir)
-            if parent = null then failwith "Could not find repo root"
-            walkUp parent.FullName
-    walkUp baseDir
-
-let private srcDir = Path.Combine(repoRoot, "Src")
+open LeoBloom.Tests.TestHelpers
 
 // =====================================================================
 // @FT-LMS-008 -- TestHelpers uses Log.errorExn instead of eprintfn
@@ -29,7 +12,7 @@ let private srcDir = Path.Combine(repoRoot, "Src")
 [<Fact>]
 [<Trait("GherkinId", "FT-LMS-008")>]
 let ``TestHelpers uses Log.errorExn instead of eprintfn`` () =
-    let testHelpers = Path.Combine(srcDir, "LeoBloom.Tests", "TestHelpers.fs")
+    let testHelpers = Path.Combine(RepoPath.srcDir, "LeoBloom.Tests", "TestHelpers.fs")
     Assert.True(File.Exists(testHelpers), $"Expected file: {testHelpers}")
 
     let content = File.ReadAllText(testHelpers)
@@ -48,7 +31,7 @@ let ``No printfn or eprintfn in any Src project except Migrations`` () =
     let target2 = "eprint" + "fn"
 
     let fsFiles =
-        Directory.GetFiles(srcDir, "*.fs", SearchOption.AllDirectories)
+        Directory.GetFiles(RepoPath.srcDir, "*.fs", SearchOption.AllDirectories)
         |> Array.filter (fun f ->
             not (f.Contains("LeoBloom.Migrations", StringComparison.OrdinalIgnoreCase))
             // Exclude test files -- they reference printfn/eprintfn in assertions
@@ -59,7 +42,7 @@ let ``No printfn or eprintfn in any Src project except Migrations`` () =
         |> Array.filter (fun f ->
             let content = File.ReadAllText(f)
             content.Contains(target1) || content.Contains(target2))
-        |> Array.map (fun f -> f.Replace(repoRoot, ""))
+        |> Array.map (fun f -> f.Replace(RepoPath.repoRoot, ""))
 
     let msg = sprintf "Found printfn/eprintfn in: %s" (String.Join(", ", violations))
     Assert.True(violations.Length = 0, msg)
