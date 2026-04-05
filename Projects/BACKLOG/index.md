@@ -54,6 +54,7 @@
 | 050 | Use EntryType.toDbString | Done |
 | 051 | Move IncludeErrorDetail to appsettings | Done |
 | 052 | Account sub-type classification | Done |
+| 053 | Fix pre-existing test failures | Not started |
 
 ---
 
@@ -95,6 +96,16 @@ Source: 2026-04-05 code audit (SYNTHESIS.md). ADRs in BdsNotes/decisions/.
 
 Items 046-048 and 050-051 can run in parallel. Item 049 should follow 045
 if the domain reorg moves files that contain the duplicated helpers.
+
+### Test Integrity (053)
+
+**HIGH PRIORITY — before any new feature work.**
+
+**053 (fix pre-existing test failures)** — 5 tests in
+`PostObligationToLedgerTests` fail due to seed data collision on
+`ledger.fiscal_period`. Tests assume they're the only fiscal periods in the
+database; seed data proves them wrong. See
+`Projects/Project053-FixPreExistingTestFailures/Project053-brief.md`.
 
 ### CLI Sequencing (036-042)
 
