@@ -571,3 +571,175 @@ let ``Confirming when no fiscal period covers confirmed_date returns error`` () 
             Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("fiscal period")),
                         sprintf "Expected error containing 'fiscal period': %A" errs)
     finally TestCleanup.deleteAll tracker
+
+// =====================================================================
+// Idempotency Guard: Retry skips duplicate — @FT-TRF-015 (P043)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "@FT-TRF-015")>]
+let ``Retry after partial failure skips duplicate journal entry`` () =
+    use conn = DataSource.openConnection()
+    let tracker = TestCleanup.create conn
+    try
+        let prefix = TestData.uniquePrefix()
+        let (fromId, toId) = setupTwoAssetAccounts conn tracker prefix
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 10, 1)) (DateOnly(2099, 10, 31)) true
+        let transfer = initiateTransfer tracker fromId toId 1000.00m None
+
+        // Simulate partial failure: insert a journal entry + reference as if phase 2
+        // succeeded but phase 3 (updateConfirm) failed on a prior attempt
+        let preExistingJeId =
+            use jeCmd = new NpgsqlCommand(
+                "INSERT INTO ledger.journal_entry (entry_date, description, source, fiscal_period_id) \
+                 VALUES (@d, @desc, 'transfer', @fp) RETURNING id", conn)
+            jeCmd.Parameters.AddWithValue("@d", DateOnly(2099, 10, 15)) |> ignore
+            jeCmd.Parameters.AddWithValue("@desc", "simulated partial failure") |> ignore
+            jeCmd.Parameters.AddWithValue("@fp", fpId) |> ignore
+            jeCmd.ExecuteScalar() :?> int
+        TestCleanup.trackJournalEntry preExistingJeId tracker
+
+        // Insert balanced lines
+        use debitCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) \
+             VALUES (@je, @acct, @amt, 'debit')", conn)
+        debitCmd.Parameters.AddWithValue("@je", preExistingJeId) |> ignore
+        debitCmd.Parameters.AddWithValue("@acct", toId) |> ignore
+        debitCmd.Parameters.AddWithValue("@amt", 1000.00m) |> ignore
+        debitCmd.ExecuteNonQuery() |> ignore
+
+        use creditCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) \
+             VALUES (@je, @acct, @amt, 'credit')", conn)
+        creditCmd.Parameters.AddWithValue("@je", preExistingJeId) |> ignore
+        creditCmd.Parameters.AddWithValue("@acct", fromId) |> ignore
+        creditCmd.Parameters.AddWithValue("@amt", 1000.00m) |> ignore
+        creditCmd.ExecuteNonQuery() |> ignore
+
+        // Insert the reference that the idempotency guard will find
+        use refCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_reference (journal_entry_id, reference_type, reference_value) \
+             VALUES (@je, 'transfer', @rv)", conn)
+        refCmd.Parameters.AddWithValue("@je", preExistingJeId) |> ignore
+        refCmd.Parameters.AddWithValue("@rv", string transfer.id) |> ignore
+        refCmd.ExecuteNonQuery() |> ignore
+
+        // Act: call confirm — guard should find the existing JE and skip phase 2
+        let confirmCmd : ConfirmTransferCommand =
+            { transferId = transfer.id
+              confirmedDate = DateOnly(2099, 10, 15) }
+
+        let result = TransferService.confirm confirmCmd
+
+        match result with
+        | Ok confirmed ->
+            // Track just in case a new JE was created (shouldn't be)
+            match confirmed.journalEntryId with
+            | Some jeId when jeId <> preExistingJeId -> TestCleanup.trackJournalEntry jeId tracker
+            | _ -> ()
+
+            // Assert: result uses the pre-existing JE, not a new one
+            Assert.Equal(Some preExistingJeId, confirmed.journalEntryId)
+            Assert.Equal(TransferStatus.Confirmed, confirmed.status)
+
+            // Assert: no duplicate — count non-voided references for this transfer
+            use countCmd = new NpgsqlCommand(
+                "SELECT COUNT(*) FROM ledger.journal_entry_reference jer \
+                 JOIN ledger.journal_entry je ON je.id = jer.journal_entry_id \
+                 WHERE jer.reference_type = 'transfer' AND jer.reference_value = @rv \
+                 AND je.voided_at IS NULL", conn)
+            countCmd.Parameters.AddWithValue("@rv", string transfer.id) |> ignore
+            let count = countCmd.ExecuteScalar() :?> int64
+            Assert.Equal(1L, count)
+
+            // Assert: transfer is confirmed with correct JE ID in DB
+            let dbTransfer = queryTransfer conn transfer.id
+            Assert.True(dbTransfer.IsSome)
+            Assert.Equal("confirmed", dbTransfer.Value.status)
+            Assert.Equal(Some preExistingJeId, dbTransfer.Value.journalEntryId)
+        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+    finally TestCleanup.deleteAll tracker
+
+// =====================================================================
+// Idempotency Guard: Voided entry doesn't trigger guard — @FT-TRF-016 (P043)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "@FT-TRF-016")>]
+let ``Voided prior journal entry does not trigger the idempotency guard`` () =
+    use conn = DataSource.openConnection()
+    let tracker = TestCleanup.create conn
+    try
+        let prefix = TestData.uniquePrefix()
+        let (fromId, toId) = setupTwoAssetAccounts conn tracker prefix
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 11, 1)) (DateOnly(2099, 11, 30)) true
+        let transfer = initiateTransfer tracker fromId toId 1000.00m None
+
+        // Insert a journal entry + reference, then void it
+        let voidedJeId =
+            use jeCmd = new NpgsqlCommand(
+                "INSERT INTO ledger.journal_entry (entry_date, description, source, fiscal_period_id) \
+                 VALUES (@d, @desc, 'transfer', @fp) RETURNING id", conn)
+            jeCmd.Parameters.AddWithValue("@d", DateOnly(2099, 11, 15)) |> ignore
+            jeCmd.Parameters.AddWithValue("@desc", "will be voided") |> ignore
+            jeCmd.Parameters.AddWithValue("@fp", fpId) |> ignore
+            jeCmd.ExecuteScalar() :?> int
+        TestCleanup.trackJournalEntry voidedJeId tracker
+
+        // Insert balanced lines
+        use debitCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) \
+             VALUES (@je, @acct, @amt, 'debit')", conn)
+        debitCmd.Parameters.AddWithValue("@je", voidedJeId) |> ignore
+        debitCmd.Parameters.AddWithValue("@acct", toId) |> ignore
+        debitCmd.Parameters.AddWithValue("@amt", 1000.00m) |> ignore
+        debitCmd.ExecuteNonQuery() |> ignore
+
+        use creditCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) \
+             VALUES (@je, @acct, @amt, 'credit')", conn)
+        creditCmd.Parameters.AddWithValue("@je", voidedJeId) |> ignore
+        creditCmd.Parameters.AddWithValue("@acct", fromId) |> ignore
+        creditCmd.Parameters.AddWithValue("@amt", 1000.00m) |> ignore
+        creditCmd.ExecuteNonQuery() |> ignore
+
+        // Insert the reference
+        use refCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_reference (journal_entry_id, reference_type, reference_value) \
+             VALUES (@je, 'transfer', @rv)", conn)
+        refCmd.Parameters.AddWithValue("@je", voidedJeId) |> ignore
+        refCmd.Parameters.AddWithValue("@rv", string transfer.id) |> ignore
+        refCmd.ExecuteNonQuery() |> ignore
+
+        // Void the journal entry
+        use voidCmd = new NpgsqlCommand(
+            "UPDATE ledger.journal_entry SET voided_at = now(), void_reason = 'test void' \
+             WHERE id = @id", conn)
+        voidCmd.Parameters.AddWithValue("@id", voidedJeId) |> ignore
+        voidCmd.ExecuteNonQuery() |> ignore
+
+        // Act: call confirm — guard should NOT find voided entry, should create new
+        let confirmCmd : ConfirmTransferCommand =
+            { transferId = transfer.id
+              confirmedDate = DateOnly(2099, 11, 15) }
+
+        let result = TransferService.confirm confirmCmd
+
+        match result with
+        | Ok confirmed ->
+            // Track the new JE for cleanup
+            match confirmed.journalEntryId with
+            | Some jeId -> TestCleanup.trackJournalEntry jeId tracker
+            | None -> ()
+
+            // Assert: a NEW journal entry was created, not the voided one
+            Assert.True(confirmed.journalEntryId.IsSome, "Expected journal_entry_id to be set")
+            Assert.NotEqual(Some voidedJeId, confirmed.journalEntryId)
+            Assert.Equal(TransferStatus.Confirmed, confirmed.status)
+
+            // Assert: transfer is confirmed in DB
+            let dbTransfer = queryTransfer conn transfer.id
+            Assert.True(dbTransfer.IsSome)
+            Assert.Equal("confirmed", dbTransfer.Value.status)
+        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+    finally TestCleanup.deleteAll tracker

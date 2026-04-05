@@ -597,6 +597,165 @@ let ``failed post to closed period leaves instance in confirmed status with no j
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
+// Idempotency Guard: Retry skips duplicate — @FT-POL-018 (P043)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "@FT-POL-018")>]
+let ``retry after partial failure skips duplicate journal entry`` () =
+    use conn = DataSource.openConnection()
+    let tracker = TestCleanup.create conn
+    try
+        let prefix = TestData.uniquePrefix()
+        let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+
+        // Simulate partial failure: insert a journal entry + reference as if phase 2
+        // succeeded but phase 3 (transition) failed on a prior attempt
+        let preExistingJeId =
+            use jeCmd = new NpgsqlCommand(
+                "INSERT INTO ledger.journal_entry (entry_date, description, source, fiscal_period_id) \
+                 VALUES (@d, @desc, 'obligation', @fp) RETURNING id", conn)
+            jeCmd.Parameters.AddWithValue("@d", DateOnly(2026, 4, 15)) |> ignore
+            jeCmd.Parameters.AddWithValue("@desc", "simulated partial failure") |> ignore
+            jeCmd.Parameters.AddWithValue("@fp", fpId) |> ignore
+            jeCmd.ExecuteScalar() :?> int
+        TestCleanup.trackJournalEntry preExistingJeId tracker
+
+        // Insert balanced lines so the JE is structurally valid
+        use debitCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) \
+             VALUES (@je, @acct, @amt, 'debit')", conn)
+        debitCmd.Parameters.AddWithValue("@je", preExistingJeId) |> ignore
+        debitCmd.Parameters.AddWithValue("@acct", destAcctId) |> ignore
+        debitCmd.Parameters.AddWithValue("@amt", 1000m) |> ignore
+        debitCmd.ExecuteNonQuery() |> ignore
+
+        use creditCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) \
+             VALUES (@je, @acct, @amt, 'credit')", conn)
+        creditCmd.Parameters.AddWithValue("@je", preExistingJeId) |> ignore
+        creditCmd.Parameters.AddWithValue("@acct", sourceAcctId) |> ignore
+        creditCmd.Parameters.AddWithValue("@amt", 1000m) |> ignore
+        creditCmd.ExecuteNonQuery() |> ignore
+
+        // Insert the reference that the idempotency guard will find
+        use refCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_reference (journal_entry_id, reference_type, reference_value) \
+             VALUES (@je, 'obligation', @rv)", conn)
+        refCmd.Parameters.AddWithValue("@je", preExistingJeId) |> ignore
+        refCmd.Parameters.AddWithValue("@rv", string instanceId) |> ignore
+        refCmd.ExecuteNonQuery() |> ignore
+
+        // Act: call the posting service — guard should find the existing JE and skip phase 2
+        let result = ObligationPostingService.postToLedger { instanceId = instanceId }
+
+        match result with
+        | Ok posted ->
+            // The service may have created nothing new, but track just in case
+            if posted.journalEntryId <> preExistingJeId then
+                TestCleanup.trackJournalEntry posted.journalEntryId tracker
+
+            // Assert: result uses the pre-existing JE, not a new one
+            Assert.Equal(preExistingJeId, posted.journalEntryId)
+
+            // Assert: no duplicate — count non-voided references for this instance
+            use countCmd = new NpgsqlCommand(
+                "SELECT COUNT(*) FROM ledger.journal_entry_reference jer \
+                 JOIN ledger.journal_entry je ON je.id = jer.journal_entry_id \
+                 WHERE jer.reference_type = 'obligation' AND jer.reference_value = @rv \
+                 AND je.voided_at IS NULL", conn)
+            countCmd.Parameters.AddWithValue("@rv", string instanceId) |> ignore
+            let count = countCmd.ExecuteScalar() :?> int64
+            Assert.Equal(1L, count)
+
+            // Assert: instance is now posted with correct JE ID
+            let inst = queryInstance conn instanceId
+            Assert.True(inst.IsSome)
+            Assert.Equal("posted", inst.Value.status)
+            Assert.Equal(Some preExistingJeId, inst.Value.journalEntryId)
+        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+    finally TestCleanup.deleteAll tracker
+
+// =====================================================================
+// Idempotency Guard: Voided entry doesn't trigger guard — @FT-POL-019 (P043)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "@FT-POL-019")>]
+let ``voided prior journal entry does not trigger the idempotency guard`` () =
+    use conn = DataSource.openConnection()
+    let tracker = TestCleanup.create conn
+    try
+        let prefix = TestData.uniquePrefix()
+        let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+
+        // Insert a journal entry + reference, then void it
+        let voidedJeId =
+            use jeCmd = new NpgsqlCommand(
+                "INSERT INTO ledger.journal_entry (entry_date, description, source, fiscal_period_id) \
+                 VALUES (@d, @desc, 'obligation', @fp) RETURNING id", conn)
+            jeCmd.Parameters.AddWithValue("@d", DateOnly(2026, 4, 15)) |> ignore
+            jeCmd.Parameters.AddWithValue("@desc", "will be voided") |> ignore
+            jeCmd.Parameters.AddWithValue("@fp", fpId) |> ignore
+            jeCmd.ExecuteScalar() :?> int
+        TestCleanup.trackJournalEntry voidedJeId tracker
+
+        // Insert balanced lines
+        use debitCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) \
+             VALUES (@je, @acct, @amt, 'debit')", conn)
+        debitCmd.Parameters.AddWithValue("@je", voidedJeId) |> ignore
+        debitCmd.Parameters.AddWithValue("@acct", destAcctId) |> ignore
+        debitCmd.Parameters.AddWithValue("@amt", 1000m) |> ignore
+        debitCmd.ExecuteNonQuery() |> ignore
+
+        use creditCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_line (journal_entry_id, account_id, amount, entry_type) \
+             VALUES (@je, @acct, @amt, 'credit')", conn)
+        creditCmd.Parameters.AddWithValue("@je", voidedJeId) |> ignore
+        creditCmd.Parameters.AddWithValue("@acct", sourceAcctId) |> ignore
+        creditCmd.Parameters.AddWithValue("@amt", 1000m) |> ignore
+        creditCmd.ExecuteNonQuery() |> ignore
+
+        // Insert the reference
+        use refCmd = new NpgsqlCommand(
+            "INSERT INTO ledger.journal_entry_reference (journal_entry_id, reference_type, reference_value) \
+             VALUES (@je, 'obligation', @rv)", conn)
+        refCmd.Parameters.AddWithValue("@je", voidedJeId) |> ignore
+        refCmd.Parameters.AddWithValue("@rv", string instanceId) |> ignore
+        refCmd.ExecuteNonQuery() |> ignore
+
+        // Void the journal entry
+        use voidCmd = new NpgsqlCommand(
+            "UPDATE ledger.journal_entry SET voided_at = now(), void_reason = 'test void' \
+             WHERE id = @id", conn)
+        voidCmd.Parameters.AddWithValue("@id", voidedJeId) |> ignore
+        voidCmd.ExecuteNonQuery() |> ignore
+
+        // Act: call the posting service — guard should NOT find voided entry, should create new
+        let result = ObligationPostingService.postToLedger { instanceId = instanceId }
+
+        match result with
+        | Ok posted ->
+            TestCleanup.trackJournalEntry posted.journalEntryId tracker
+
+            // Assert: a NEW journal entry was created, not the voided one
+            Assert.NotEqual(voidedJeId, posted.journalEntryId)
+
+            // Assert: instance is posted
+            let inst = queryInstance conn instanceId
+            Assert.True(inst.IsSome)
+            Assert.Equal("posted", inst.Value.status)
+        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+    finally TestCleanup.deleteAll tracker
+
+// =====================================================================
 // FiscalPeriodRepository.findByDate — @FT-POL-014
 // =====================================================================
 

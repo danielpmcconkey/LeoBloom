@@ -128,3 +128,26 @@ module JournalEntryRepository =
                   createdAt = reader.GetFieldValue<DateTimeOffset>(4) }
             reader.Close()
             ref')
+
+    let findNonVoidedByReference
+        (txn: NpgsqlTransaction)
+        (referenceType: string)
+        (referenceValue: string)
+        : int option =
+        use sql = new NpgsqlCommand(
+            "SELECT je.id \
+             FROM ledger.journal_entry_reference jer \
+             JOIN ledger.journal_entry je ON je.id = jer.journal_entry_id \
+             WHERE jer.reference_type = @rt \
+               AND jer.reference_value = @rv \
+               AND je.voided_at IS NULL \
+             LIMIT 1",
+            txn.Connection, txn)
+        sql.Parameters.AddWithValue("@rt", referenceType) |> ignore
+        sql.Parameters.AddWithValue("@rv", referenceValue) |> ignore
+        use reader = sql.ExecuteReader()
+        let result =
+            if reader.Read() then Some (reader.GetInt32(0))
+            else None
+        reader.Close()
+        result

@@ -98,30 +98,72 @@ module ObligationPostingService =
                     [ { referenceType = "obligation"
                         referenceValue = string instance.id } ] }
 
-            // Phase 2: Post journal entry
-            match JournalEntryService.post jeCmd with
-            | Error errs ->
-                Log.warn "Journal entry posting failed for instance {InstanceId}: {Errors}"
-                    [| instance.id :> obj; errs :> obj |]
-                Error errs
-            | Ok posted ->
-                Log.info "Created journal entry {JournalEntryId} for instance {InstanceId}"
-                    [| posted.entry.id :> obj; instance.id :> obj |]
+            // Idempotency guard: check for existing non-voided journal entry
+            let existingJeId =
+                use guardConn = DataSource.openConnection()
+                use guardTxn = guardConn.BeginTransaction()
+                try
+                    let result =
+                        JournalEntryRepository.findNonVoidedByReference
+                            guardTxn "obligation" (string instance.id)
+                    guardTxn.Commit()
+                    result
+                with ex ->
+                    try guardTxn.Rollback() with _ -> ()
+                    raise ex
 
-                // Phase 3: Transition instance to posted
+            match existingJeId with
+            | Some jeId ->
+                Log.info
+                    "Idempotency guard: found existing journal entry {JournalEntryId} for instance {InstanceId}, skipping post"
+                    [| jeId :> obj; instance.id :> obj |]
+
+                // Phase 3: Transition instance to posted (using existing JE)
                 let transitionCmd : TransitionCommand =
                     { instanceId = instance.id
                       targetStatus = InstanceStatus.Posted
-                      journalEntryId = Some posted.entry.id
+                      journalEntryId = Some jeId
                       amount = None
                       confirmedDate = None
                       notes = None }
 
                 match ObligationInstanceService.transition transitionCmd with
                 | Error errs ->
-                    Log.warn "Transition to posted failed for instance {InstanceId} after journal entry {JournalEntryId} was created"
-                        [| instance.id :> obj; posted.entry.id :> obj |]
+                    Log.warn
+                        "Transition to posted failed for instance {InstanceId} using existing journal entry {JournalEntryId}"
+                        [| instance.id :> obj; jeId :> obj |]
                     Error errs
                 | Ok updated ->
-                    Log.info "Transitioned instance {InstanceId} to posted" [| updated.id :> obj |]
-                    Ok { journalEntryId = posted.entry.id; instanceId = instance.id }
+                    Log.info "Transitioned instance {InstanceId} to posted (idempotent)"
+                        [| updated.id :> obj |]
+                    Ok { journalEntryId = jeId; instanceId = instance.id }
+
+            | None ->
+                // No existing entry -- proceed with normal phase 2 + phase 3
+                // Phase 2: Post journal entry
+                match JournalEntryService.post jeCmd with
+                | Error errs ->
+                    Log.warn "Journal entry posting failed for instance {InstanceId}: {Errors}"
+                        [| instance.id :> obj; errs :> obj |]
+                    Error errs
+                | Ok posted ->
+                    Log.info "Created journal entry {JournalEntryId} for instance {InstanceId}"
+                        [| posted.entry.id :> obj; instance.id :> obj |]
+
+                    // Phase 3: Transition instance to posted
+                    let transitionCmd : TransitionCommand =
+                        { instanceId = instance.id
+                          targetStatus = InstanceStatus.Posted
+                          journalEntryId = Some posted.entry.id
+                          amount = None
+                          confirmedDate = None
+                          notes = None }
+
+                    match ObligationInstanceService.transition transitionCmd with
+                    | Error errs ->
+                        Log.warn "Transition to posted failed for instance {InstanceId} after journal entry {JournalEntryId} was created"
+                            [| instance.id :> obj; posted.entry.id :> obj |]
+                        Error errs
+                    | Ok updated ->
+                        Log.info "Transitioned instance {InstanceId} to posted" [| updated.id :> obj |]
+                        Ok { journalEntryId = posted.entry.id; instanceId = instance.id }
