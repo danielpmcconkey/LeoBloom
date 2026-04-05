@@ -35,6 +35,8 @@
 | 031 | Foundational logging infrastructure | Done |
 | 032 | Test Author Agent Blueprint | Done |
 | 033 | Seal DataSource internals | Done |
+| 034 | GAAP remediation | Done |
+| 035 | Orphaned posting detection | Not started |
 
 ---
 
@@ -51,6 +53,9 @@
   tracks meet.
 - **Late dependencies:** Transfers (019), invoices (020–021), and projection
   (022) are relatively independent once their prerequisites are met.
+- **Remediation (034):** GAAP assessment patches to projects 001–018. Does not
+  block 020. 15 stories in 7 batches grouped by spec file. Details in
+  `remediation-stories.md`.
 - **API projects (023–027) cancelled.** Consumption layer TBD — may not be
   a traditional REST API.
 
@@ -68,3 +73,7 @@ Not scoped, not sized. Noted so we don't forget they exist.
   (Ally CSV, Fidelity CSV). Reuse Thatcher's parser patterns.
 - **Audit event log** — ops status change history (DataModelSpec open
   question #4). Track what changed, from what, by whom.
+- **Orphaned posting detection (035)** — read-only diagnostic query returning
+  obligation instances in posted status whose journal_entry_id references a
+  voided entry. Surfaces as "needs attention" via nagging agent. No state
+  changes. See S8 resolution in `remediation-stories.md`.

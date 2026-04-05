@@ -526,6 +526,77 @@ let ``posting when fiscal period is closed returns error`` () =
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
+// Double-posting prevention — @FT-POL-016 (REM-001)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "@FT-POL-016")>]
+let ``posting an already-posted instance is rejected with no duplicate journal entry`` () =
+    use conn = DataSource.openConnection()
+    let tracker = TestCleanup.create conn
+    try
+        let prefix = TestData.uniquePrefix()
+        let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+
+        // First post — should succeed
+        let firstResult = ObligationPostingService.postToLedger { instanceId = instanceId }
+        match firstResult with
+        | Error errs -> Assert.Fail(sprintf "First post expected to succeed: %A" errs)
+        | Ok posted ->
+            TestCleanup.trackJournalEntry posted.journalEntryId tracker
+            let originalJeId = posted.journalEntryId
+
+            // Second post — should fail
+            let secondResult = ObligationPostingService.postToLedger { instanceId = instanceId }
+            match secondResult with
+            | Ok _ -> Assert.Fail("Expected Error for double-posting")
+            | Error errs ->
+                Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("confirmed")),
+                            sprintf "Expected error containing 'confirmed': %A" errs)
+
+            // Verify no second journal entry: instance still points to original
+            let inst = queryInstance conn instanceId
+            Assert.True(inst.IsSome)
+            Assert.Equal(Some originalJeId, inst.Value.journalEntryId)
+    finally TestCleanup.deleteAll tracker
+
+// =====================================================================
+// Atomicity of failed posting — @FT-POL-017 (REM-007)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "@FT-POL-017")>]
+let ``failed post to closed period leaves instance in confirmed status with no journal entry`` () =
+    use conn = DataSource.openConnection()
+    let tracker = TestCleanup.create conn
+    try
+        let prefix = TestData.uniquePrefix()
+        let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
+        // Closed fiscal period
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) false
+        let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+
+        let result = ObligationPostingService.postToLedger { instanceId = instanceId }
+        match result with
+        | Ok posted ->
+            TestCleanup.trackJournalEntry posted.journalEntryId tracker
+            Assert.Fail("Expected Error for closed fiscal period")
+        | Error errs ->
+            Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("not open")),
+                        sprintf "Expected error containing 'not open': %A" errs)
+
+        // Verify instance is still confirmed with no journal entry
+        let inst = queryInstance conn instanceId
+        Assert.True(inst.IsSome)
+        Assert.Equal("confirmed", inst.Value.status)
+        Assert.True(inst.Value.journalEntryId.IsNone, "Expected journal_entry_id to remain null")
+    finally TestCleanup.deleteAll tracker
+
+// =====================================================================
 // FiscalPeriodRepository.findByDate — @FT-POL-014
 // =====================================================================
 

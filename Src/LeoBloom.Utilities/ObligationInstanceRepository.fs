@@ -118,6 +118,10 @@ module ObligationInstanceRepository =
             sql.Parameters.AddWithValue("@notes", n) |> ignore
         | None -> ()
 
+        // Skipped instances are inactive (backlog item 016)
+        if status = InstanceStatus.Skipped then
+            setClauses.Add("is_active = false")
+
         let setClause = System.String.Join(", ", setClauses)
         sql.CommandText <-
             $"UPDATE ops.obligation_instance SET {setClause} WHERE id = @id RETURNING {selectColumns}"

@@ -82,12 +82,8 @@ Feature: Close / Reopen Fiscal Period
 
     # --- Edge Cases ---
 
-    @FT-CFP-009
-    Scenario: Close a period with no journal entries
-        Given the ledger schema exists for period management
-        And a period-test open fiscal period from 2026-05-01 to 2026-05-31 with no entries
-        When I close the fiscal period
-        Then the close succeeds and the period has is_open = false
+    # CFP-009 removed (REM-014): redundant with CFP-001 — both close a period
+    # with no journal entries (CFP-001's setup creates no entries either).
 
     # --- Integration ---
 
@@ -103,6 +99,23 @@ Feature: Close / Reopen Fiscal Period
             | 1010    | 100.00 | debit      |
             | 4010    | 100.00 | credit     |
         Then the post fails with error containing "not open"
+
+    # --- Side Effects (REM-011) ---
+
+    @FT-CFP-012
+    Scenario: Closing a period does not modify account balances
+        Given the ledger schema exists for period management
+        And a period-test open fiscal period from 2026-04-01 to 2026-04-30
+        And a period-test active account 1010 of type asset
+        And a period-test active account 4010 of type revenue
+        And a period-test entry dated 2026-04-15 in the period with lines:
+            | account | amount | entry_type |
+            | 1010    | 500.00 | debit      |
+            | 4010    | 500.00 | credit     |
+        And I record the trial balance totals for the period
+        When I close the fiscal period
+        And I record the trial balance totals again
+        Then the trial balance totals are identical before and after close
 
     # --- Logging ---
 

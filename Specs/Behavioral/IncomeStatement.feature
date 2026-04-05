@@ -123,23 +123,8 @@ Feature: Income Statement
         And the revenue section contains 0 lines
         And the expenses section contains 0 lines
 
-    @FT-IS-008
-    Scenario: Net income is positive when revenue exceeds expenses
-        Given the ledger schema exists for income statement queries
-        And an income-statement-test open fiscal period "2026-03" from 2026-03-01 to 2026-03-31
-        And an income-statement-test active account 1010 of type asset
-        And an income-statement-test active account 4010 of type revenue
-        And an income-statement-test active account 5010 of type expense
-        And an income-statement-test entry dated 2026-03-10 described as "Big income" with lines:
-            | account | amount  | entry_type |
-            | 1010    | 2000.00 | debit      |
-            | 4010    | 2000.00 | credit     |
-        And an income-statement-test entry dated 2026-03-20 described as "Small expense" with lines:
-            | account | amount | entry_type |
-            | 5010    | 500.00 | debit      |
-            | 1010    | 500.00 | credit     |
-        When I request the income statement for period "2026-03"
-        Then the net income is 1500.00
+    # IS-008 removed (REM-014): redundant with IS-001 — both prove positive
+    # net income when revenue exceeds expenses, differing only in amounts.
 
     @FT-IS-009
     Scenario: Net loss when expenses exceed revenue
@@ -228,6 +213,29 @@ Feature: Income Statement
             | 5010    | 150.00 | credit     |
         When I request the income statement for period "2026-03"
         Then the expenses section contains account 5010 with balance 350.00
+
+    # --- Period Scoping (REM-010) ---
+
+    @FT-IS-017
+    Scenario: Income statement for one period excludes another period's activity
+        Given the ledger schema exists for income statement queries
+        And an income-statement-test open fiscal period "2026-03" from 2026-03-01 to 2026-03-31
+        And an income-statement-test open fiscal period "2026-04" from 2026-04-01 to 2026-04-30
+        And an income-statement-test active account 1010 of type asset
+        And an income-statement-test active account 4010 of type revenue
+        And an income-statement-test active account 5010 of type expense
+        And an income-statement-test entry dated 2026-03-15 in period "2026-03" described as "March revenue" with lines:
+            | account | amount | entry_type |
+            | 1010    | 800.00 | debit      |
+            | 4010    | 800.00 | credit     |
+        And an income-statement-test entry dated 2026-04-10 in period "2026-04" described as "April expense" with lines:
+            | account | amount | entry_type |
+            | 5010    | 300.00 | debit      |
+            | 1010    | 300.00 | credit     |
+        When I request the income statement for period "2026-03"
+        Then the revenue section total is 800.00
+        And the expenses section total is 0.00
+        And the net income is 800.00
 
     # --- Lookup Equivalence ---
 

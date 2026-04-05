@@ -106,13 +106,8 @@ Feature: Spawn Obligation Instances
         Then the spawn succeeds with 1 created instance and 0 skipped
         And the created instance has name "One-time" and amount 500.00
 
-    @FT-SI-014
-    Scenario: All spawned instances have isActive true
-        Given the ops schema exists for agreement management
-        And an active quarterly obligation agreement with expectedDay 1 and amount 300.00
-        When I spawn obligation instances from 2026-01-01 to 2026-12-31
-        Then the spawn succeeds with 4 created instances and 0 skipped
-        And each instance has isActive true
+    # SI-014 removed (REM-014): redundant with SI-011 — SI-011 already
+    # asserts "each instance has status 'expected' and isActive true".
 
     # --- Spawn Integration: Overlap and Idempotency ---
 
