@@ -125,6 +125,73 @@ module JournalEntryRepository =
             reader.Close()
             ref')
 
+    let getEntryById (txn: NpgsqlTransaction) (entryId: int) : PostedJournalEntry option =
+        // Fetch the entry header
+        use entrySql = new NpgsqlCommand(
+            "SELECT id, entry_date, description, source, fiscal_period_id,
+                    voided_at, void_reason, created_at, modified_at
+             FROM ledger.journal_entry WHERE id = @id",
+            txn.Connection, txn)
+        entrySql.Parameters.AddWithValue("@id", entryId) |> ignore
+        use entryReader = entrySql.ExecuteReader()
+        if not (entryReader.Read()) then
+            entryReader.Close()
+            None
+        else
+            let entry =
+                { id = entryReader.GetInt32(0)
+                  entryDate = entryReader.GetFieldValue<DateOnly>(1)
+                  description = entryReader.GetString(2)
+                  source = if entryReader.IsDBNull(3) then None else Some (entryReader.GetString(3))
+                  fiscalPeriodId = entryReader.GetInt32(4)
+                  voidedAt = if entryReader.IsDBNull(5) then None else Some (entryReader.GetFieldValue<DateTimeOffset>(5))
+                  voidReason = if entryReader.IsDBNull(6) then None else Some (entryReader.GetString(6))
+                  createdAt = entryReader.GetFieldValue<DateTimeOffset>(7)
+                  modifiedAt = entryReader.GetFieldValue<DateTimeOffset>(8) }
+            entryReader.Close()
+
+            // Fetch lines
+            use linesSql = new NpgsqlCommand(
+                "SELECT id, journal_entry_id, account_id, amount, entry_type, memo
+                 FROM ledger.journal_entry_line WHERE journal_entry_id = @je_id
+                 ORDER BY id",
+                txn.Connection, txn)
+            linesSql.Parameters.AddWithValue("@je_id", entryId) |> ignore
+            use linesReader = linesSql.ExecuteReader()
+            let mutable lines = []
+            while linesReader.Read() do
+                lines <- lines @ [
+                    { id = linesReader.GetInt32(0)
+                      journalEntryId = linesReader.GetInt32(1)
+                      accountId = linesReader.GetInt32(2)
+                      amount = linesReader.GetDecimal(3)
+                      entryType =
+                          match linesReader.GetString(4) with
+                          | "debit" -> EntryType.Debit
+                          | _ -> EntryType.Credit
+                      memo = if linesReader.IsDBNull(5) then None else Some (linesReader.GetString(5)) }]
+            linesReader.Close()
+
+            // Fetch references
+            use refsSql = new NpgsqlCommand(
+                "SELECT id, journal_entry_id, reference_type, reference_value, created_at
+                 FROM ledger.journal_entry_reference WHERE journal_entry_id = @je_id
+                 ORDER BY id",
+                txn.Connection, txn)
+            refsSql.Parameters.AddWithValue("@je_id", entryId) |> ignore
+            use refsReader = refsSql.ExecuteReader()
+            let mutable refs = []
+            while refsReader.Read() do
+                refs <- refs @ [
+                    { id = refsReader.GetInt32(0)
+                      journalEntryId = refsReader.GetInt32(1)
+                      referenceType = refsReader.GetString(2)
+                      referenceValue = refsReader.GetString(3)
+                      createdAt = refsReader.GetFieldValue<DateTimeOffset>(4) }]
+            refsReader.Close()
+
+            Some { entry = entry; lines = lines; references = refs }
+
     let findNonVoidedByReference
         (txn: NpgsqlTransaction)
         (referenceType: string)
