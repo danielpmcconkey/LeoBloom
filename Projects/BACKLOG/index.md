@@ -17,7 +17,7 @@
 | 013 | P&L by account subtree | Done |
 | 014 | Obligation agreements | Done |
 | 015 | Spawn obligation instances | Done |
-| 016 | Status transitions | Not started |
+| 016 | Status transitions | Done |
 | 017 | Overdue detection | Not started |
 | 018 | Post obligation to ledger | Not started |
 | 019 | Transfers | Not started |

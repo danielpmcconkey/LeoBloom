@@ -242,3 +242,26 @@ module InsertHelpers =
         let id = cmd.ExecuteScalar() :?> int
         // Tracked via agreement_id in cleanup (obligation_instance cleaned by agreement_id)
         id
+
+    let insertObligationInstanceFull
+        (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker)
+        (agreementId: int) (name: string) (status: string) (expectedDate: DateOnly)
+        (amount: decimal option) (notes: string option) (isActive: bool) : int =
+        use cmd = new NpgsqlCommand(
+            "INSERT INTO ops.obligation_instance \
+             (obligation_agreement_id, name, status, expected_date, amount, notes, is_active) \
+             VALUES (@aid, @n, @status, @ed, @amt, @notes, @a) RETURNING id",
+            conn)
+        cmd.Parameters.AddWithValue("@aid", agreementId) |> ignore
+        cmd.Parameters.AddWithValue("@n", name) |> ignore
+        cmd.Parameters.AddWithValue("@status", status) |> ignore
+        cmd.Parameters.AddWithValue("@ed", expectedDate) |> ignore
+        match amount with
+        | Some a -> cmd.Parameters.AddWithValue("@amt", a) |> ignore
+        | None -> cmd.Parameters.AddWithValue("@amt", DBNull.Value) |> ignore
+        match notes with
+        | Some n -> cmd.Parameters.AddWithValue("@notes", n) |> ignore
+        | None -> cmd.Parameters.AddWithValue("@notes", DBNull.Value) |> ignore
+        cmd.Parameters.AddWithValue("@a", isActive) |> ignore
+        let id = cmd.ExecuteScalar() :?> int
+        id

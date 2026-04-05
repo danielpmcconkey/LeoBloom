@@ -308,3 +308,35 @@ module Ops =
                   if cmd.obligationAgreementId <= 0 then
                       "obligationAgreementId must be greater than zero" ]
             if errors.IsEmpty then Ok () else Error errors
+
+    type TransitionCommand =
+        { instanceId: int
+          targetStatus: InstanceStatus
+          amount: decimal option
+          confirmedDate: DateOnly option
+          journalEntryId: int option
+          notes: string option }
+
+    module StatusTransition =
+
+        let private allowedTransitions =
+            Map.ofList
+                [ (InstanceStatus.Expected, set [ InstanceStatus.InFlight; InstanceStatus.Confirmed; InstanceStatus.Overdue; InstanceStatus.Skipped ])
+                  (InstanceStatus.InFlight, set [ InstanceStatus.Confirmed; InstanceStatus.Overdue ])
+                  (InstanceStatus.Overdue, set [ InstanceStatus.Confirmed ])
+                  (InstanceStatus.Confirmed, set [ InstanceStatus.Posted ]) ]
+
+        let isValidTransition (fromStatus: InstanceStatus) (toStatus: InstanceStatus) : bool =
+            match allowedTransitions |> Map.tryFind fromStatus with
+            | Some targets -> targets.Contains toStatus
+            | None -> false
+
+        let validateTransitionCommand (cmd: TransitionCommand) : Result<unit, string list> =
+            let errors =
+                [ if cmd.instanceId <= 0 then
+                      "instanceId must be greater than zero"
+                  if cmd.targetStatus = InstanceStatus.Posted && cmd.journalEntryId.IsNone then
+                      "journal_entry_id is required for posted transition"
+                  if cmd.targetStatus = InstanceStatus.Confirmed && cmd.confirmedDate.IsNone then
+                      "confirmed_date is required for confirmed transition" ]
+            if errors.IsEmpty then Ok () else Error errors
