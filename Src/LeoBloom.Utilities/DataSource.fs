@@ -37,7 +37,6 @@ module DataSource =
 
     let private dataSource =
         let builder = NpgsqlDataSourceBuilder(connStr)
-        builder.ConnectionStringBuilder.IncludeErrorDetail <- true
         builder.ConnectionStringBuilder.ApplicationName <- "LeoBloom"
         builder.ConnectionStringBuilder.Timeout <- 5
         builder.ConnectionStringBuilder.CommandTimeout <- 5
