@@ -231,3 +231,80 @@ module Ops =
                    validateExpectedDay cmd.expectedDay ]
                  |> List.collect (function Error errs -> errs | Ok _ -> []))
             if allErrors.IsEmpty then Ok () else Error allErrors
+
+    type SpawnObligationInstancesCommand =
+        { obligationAgreementId: int
+          startDate: DateOnly
+          endDate: DateOnly }
+
+    type SpawnResult =
+        { created: ObligationInstance list
+          skippedCount: int }
+
+    module ObligationInstanceSpawning =
+
+        let private clampDay (year: int) (month: int) (day: int) : int =
+            min day (DateTime.DaysInMonth(year, month))
+
+        let generateExpectedDates
+            (cadence: RecurrenceCadence)
+            (effectiveDay: int)
+            (startDate: DateOnly)
+            (endDate: DateOnly)
+            : DateOnly list =
+            match cadence with
+            | OneTime ->
+                [ startDate ]
+            | Monthly ->
+                let mutable dates = []
+                let mutable current = DateOnly(startDate.Year, startDate.Month, 1)
+                while current.Year < endDate.Year || (current.Year = endDate.Year && current.Month <= endDate.Month) do
+                    let clamped = clampDay current.Year current.Month effectiveDay
+                    let candidate = DateOnly(current.Year, current.Month, clamped)
+                    if candidate >= startDate && candidate <= endDate then
+                        dates <- candidate :: dates
+                    current <- current.AddMonths(1)
+                dates |> List.rev
+            | Quarterly ->
+                let quarterMonths = [ 1; 4; 7; 10 ]
+                let mutable dates = []
+                let mutable year = startDate.Year
+                while year <= endDate.Year do
+                    for month in quarterMonths do
+                        let clamped = clampDay year month effectiveDay
+                        let candidate = DateOnly(year, month, clamped)
+                        if candidate >= startDate && candidate <= endDate then
+                            dates <- candidate :: dates
+                    year <- year + 1
+                dates |> List.rev
+            | Annual ->
+                let anchorMonth = startDate.Month
+                let mutable dates = []
+                let mutable year = startDate.Year
+                while year <= endDate.Year do
+                    let clamped = clampDay year anchorMonth effectiveDay
+                    let candidate = DateOnly(year, anchorMonth, clamped)
+                    if candidate >= startDate && candidate <= endDate then
+                        dates <- candidate :: dates
+                    year <- year + 1
+                dates |> List.rev
+
+        let generateInstanceName (cadence: RecurrenceCadence) (date: DateOnly) : string =
+            match cadence with
+            | Monthly ->
+                date.ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture)
+            | Quarterly ->
+                let quarter = (date.Month - 1) / 3 + 1
+                sprintf "Q%d %d" quarter date.Year
+            | Annual ->
+                sprintf "%d" date.Year
+            | OneTime ->
+                "One-time"
+
+        let validateSpawnCommand (cmd: SpawnObligationInstancesCommand) : Result<unit, string list> =
+            let errors =
+                [ if cmd.startDate > cmd.endDate then
+                      "startDate must be on or before endDate"
+                  if cmd.obligationAgreementId <= 0 then
+                      "obligationAgreementId must be greater than zero" ]
+            if errors.IsEmpty then Ok () else Error errors
