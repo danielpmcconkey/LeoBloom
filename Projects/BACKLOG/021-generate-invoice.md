@@ -1,45 +1,42 @@
-# 021 — Generate Invoice
+# 021 — Invoice Record Persistence
 
-**Epic:** H — Invoice Generation
-**Depends On:** 020
+**Epic:** H — Invoice Lifecycle
+**Depends On:** 001
 **Status:** Not started
 
 ---
 
-Create the invoice record for a tenant + fiscal period.
+Create the persistence layer for invoice records in the ops schema. LeoBloom
+does not generate invoices — COYS bots handle calculation, PDF creation,
+utility splitting, and delivery. LeoBloom records the result.
 
-**Mechanics:**
+**Scope:**
 
-1. Verify readiness (Story 020). If not ready, reject.
-2. For the target `fiscal_period_id`, calculate total utilities:
-   - Sum the `amount` of all confirmed/posted `obligation_instance` rows for
-     variable-amount payable agreements with dest accounts under 5xxx, with
-     `expected_date` in the target month.
-3. `utility_share` = total_utilities / 3 (three tenants, equal split).
-4. `rent_amount` = from the tenant's receivable agreement (the agreement where
-   `counterparty` = tenant name, `obligation_type` = receivable, `cadence` =
-   monthly). This is the fixed amount from the agreement.
-5. `total_amount` = `rent_amount` + `utility_share`.
-6. Persist the `invoice` record.
+1. **Schema:** `invoice` table in the ops schema. Columns: tenant, fiscal
+   period, rent amount, utility share, total amount, document path (nullable),
+   notes (nullable), created timestamp, is_active flag. Unique constraint on
+   (tenant, fiscal_period_id).
+2. **Domain types:** Invoice record type with validation (amounts non-negative,
+   tenant non-empty, total = rent + utility share).
+3. **Service layer:**
+   - `RecordInvoice` — persist a new invoice record. Reject duplicates
+     (same tenant + period).
+   - `ListInvoices` — query with optional filters (tenant, period).
+   - `ShowInvoice` — retrieve a single invoice by ID.
 
-**Unique constraint:** One invoice per `(tenant, fiscal_period_id)`. Reject
-duplicates.
+**What this is NOT:**
 
-**Current tenants (from DataModelSpec):** Jeffrey, Alice, Matthew. Matthew's rent is
-$0 (living arrangement — the invoice still exists for the utility share).
+- No readiness check (cancelled P020 — that's the bot's job).
+- No calculation of utility shares or rent amounts (bot does this).
+- No PDF generation (bot does this).
+- No utility splitting logic.
+- No voiding/regeneration workflow (future scope if needed).
 
 **Edge cases CE should address in the BRD:**
 
-- Utility share results in fractional cents (e.g., $150.01 / 3) → round to
-  nearest cent. Rounding differences (total of rounded shares != original total)
-  are a real thing. **Decision:** round each share normally. Accept the
-  penny discrepancy. Don't over-engineer.
-- Matthew's rent is $0 but utility share is non-zero → valid invoice. `total_amount`
-  = `utility_share`.
-- What if a tenant has no receivable agreement? → error. Every tenant must have
-  an agreement for invoicing to work.
-- Regenerating an invoice (same tenant + period) → reject. Void the existing
-  invoice (set `is_active = false`) and create a new one if needed.
-- `document_path` is null at creation time. PDF generation is beyond the horizon.
+- Duplicate (tenant, period) -> reject with clear error.
+- Zero rent amount (e.g., Matthew) with non-zero utility share -> valid.
+- Null document_path at creation -> valid. Bot may update later.
 
-**DataModelSpec references:** `invoice` table, all columns and invariants.
+**Replaces:** Original P021 (Generate Invoice), which assumed LeoBloom owned
+the calculation and generation logic. That responsibility moved to COYS bots.

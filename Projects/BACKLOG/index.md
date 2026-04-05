@@ -21,8 +21,8 @@
 | 017 | Overdue detection | Done |
 | 018 | Post obligation to ledger | Done |
 | 019 | Transfers | Done |
-| 020 | Invoice readiness | Not started |
-| 021 | Generate invoice | Not started |
+| 020 | Invoice readiness | Cancelled |
+| 021 | Invoice record persistence | Not started |
 | 022 | Balance projection | Not started |
 | 023 | Journal entry endpoints | Cancelled |
 | 024 | Reporting endpoints | Cancelled |
@@ -37,27 +37,45 @@
 | 033 | Seal DataSource internals | Done |
 | 034 | GAAP remediation | Done |
 | 035 | Orphaned posting detection | Not started |
+| 036 | CLI framework + ledger commands | Not started |
+| 037 | CLI reporting commands (accounting) | Not started |
+| 038 | CLI obligation commands | Not started |
+| 039 | CLI transfer commands | Not started |
+| 040 | CLI tax reports | Not started |
+| 041 | CLI account + period commands | Not started |
+| 042 | CLI invoice commands | Not started |
 
 ---
 
 ## Sequencing Notes
 
-- **Critical path:** 004 → 029 → 005 → 007 → 008 → 011/012 → 013. This is
-  the ledger engine from types to financial statements. Project 029 (lookup
-  table elimination) slots in before 005 because the write path must be built
-  against the cleaned-up schema.
-- **Parallel track:** 004 → 014 → 015 → 016 → 017. Obligation lifecycle can
-  be built in parallel with the ledger reporting epics once Project 004 is done.
-- **Convergence point:** Story 018 (obligation→ledger posting) requires both
-  the posting engine (005) and the status machine (016). This is where the two
-  tracks meet.
-- **Late dependencies:** Transfers (019), invoices (020–021), and projection
-  (022) are relatively independent once their prerequisites are met.
-- **Remediation (034):** GAAP assessment patches to projects 001–018. Does not
-  block 020. 15 stories in 7 batches grouped by spec file. Details in
-  `remediation-stories.md`.
-- **API projects (023–027) cancelled.** Consumption layer TBD — may not be
-  a traditional REST API.
+- **Critical path (done):** 004 -> 029 -> 005 -> 007 -> 008 -> 011/012 -> 013.
+  Ledger engine from types to financial statements. Complete.
+- **Parallel track (done):** 004 -> 014 -> 015 -> 016 -> 017. Obligation
+  lifecycle. Complete.
+- **Convergence point (done):** 018 (obligation -> ledger posting) required
+  both the posting engine (005) and status machine (016). Complete.
+- **Remediation (034):** GAAP patches to projects 001-018. Complete.
+- **API projects (023-027) cancelled.** Replaced by CLI consumption layer
+  (036-042).
+- **P020 (Invoice Readiness) cancelled.** Readiness is the COYS bot's
+  responsibility.
+- **P021 rewritten** as invoice record persistence. No calculation, no PDF
+  generation. Just the DB layer for recording invoices.
+
+### CLI Sequencing (036-042)
+
+1. **036 (CLI framework + ledger commands)** — establishes the entry point,
+   argument parsing, output conventions. Everything else depends on this.
+2. **037, 038, 039, 041** in any order — thin wrappers around existing
+   services. No new domain logic needed.
+3. **021 (invoice record persistence), then 042 (CLI invoice commands)** —
+   lean persistence layer followed by its CLI wrapper.
+4. **040 (CLI tax reports)** — new report logic. Target completion well before
+   2027 tax season.
+5. **035 (orphaned posting detection)** — standalone diagnostic, no CLI
+   dependency. Slot wherever.
+6. **022 (balance projection)** — lowest priority, slot wherever.
 
 ---
 
@@ -68,12 +86,11 @@ Not scoped, not sized. Noted so we don't forget they exist.
 - **Nagging agent** — Discord bot (OpenClaw pattern) for overdue alerts,
   upcoming obligation reminders, in-flight settlement monitoring.
 - **UI** — dashboard, data entry, report views (Fable/Feliz/Elmish).
-- **Invoice document generation** — PDF output from invoice records.
+- **Invoice document generation** — PDF output from invoice records. COYS bot
+  responsibility, not LeoBloom's.
 - **Import pipeline** — bulk journal entry creation from bank exports
   (Ally CSV, Fidelity CSV). Reuse Thatcher's parser patterns.
 - **Audit event log** — ops status change history (DataModelSpec open
   question #4). Track what changed, from what, by whom.
-- **Orphaned posting detection (035)** — read-only diagnostic query returning
-  obligation instances in posted status whose journal_entry_id references a
-  voided entry. Surfaces as "needs attention" via nagging agent. No state
-  changes. See S8 resolution in `remediation-stories.md`.
+- **Fixed asset module** — full depreciation tracking. Currently handled via
+  config in P040. Revisit if Dan acquires more properties.
