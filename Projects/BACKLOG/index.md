@@ -44,6 +44,15 @@
 | 040 | CLI tax reports | Not started |
 | 041 | CLI account + period commands | Not started |
 | 042 | CLI invoice commands | Not started |
+| 043 | Idempotency guards | Not started |
+| 044 | Database indexes migration | Not started |
+| 045 | Domain-based project reorg | Not started |
+| 046 | Delete LeoBloom.Api | Not started |
+| 047 | Delete ghost directories | Not started |
+| 048 | Test cleanup | Not started |
+| 049 | Consolidate helpers | Not started |
+| 050 | Use EntryType.toDbString | Not started |
+| 051 | Move IncludeErrorDetail to appsettings | Not started |
 
 ---
 
@@ -62,6 +71,29 @@
   responsibility.
 - **P021 rewritten** as invoice record persistence. No calculation, no PDF
   generation. Just the DB layer for recording invoices.
+
+### Code Audit Remediation (043-051)
+
+Source: 2026-04-05 code audit (SYNTHESIS.md). ADRs in BdsNotes/decisions/.
+
+**Before any new feature work:**
+1. **043 (idempotency guards)** — correctness fix, #1 audit finding.
+2. **044 (database indexes)** — performance, one migration.
+
+**Before P036 (CLI framework):**
+3. **045 (domain-based project reorg)** — structural prerequisite so the CLI
+   consumes clean domain projects, not a god project.
+4. **046 (delete LeoBloom.Api)** — dead code removal, no dependencies.
+5. **047 (delete ghost directories)** — dead scaffolding, no dependencies.
+6. **048 (test cleanup)** — dead test removal, no dependencies.
+
+**Any order, low effort:**
+7. **049 (consolidate helpers)** — sequence after 045 if both in flight.
+8. **050 (use EntryType.toDbString)** — trivial one-liner.
+9. **051 (IncludeErrorDetail to appsettings)** — trivial config change.
+
+Items 046-048 and 050-051 can run in parallel. Item 049 should follow 045
+if the domain reorg moves files that contain the duplicated helpers.
 
 ### CLI Sequencing (036-042)
 
