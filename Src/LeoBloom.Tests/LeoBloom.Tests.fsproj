@@ -28,6 +28,7 @@
     <Compile Include="StatusTransitionTests.fs" />
     <Compile Include="PostObligationToLedgerTests.fs" />
     <Compile Include="OverdueDetectionTests.fs" />
+    <Compile Include="TransferTests.fs" />
     <Compile Include="LoggingInfrastructureTests.fs" />
   </ItemGroup>
 

@@ -20,7 +20,7 @@
 | 016 | Status transitions | Done |
 | 017 | Overdue detection | Done |
 | 018 | Post obligation to ledger | Done |
-| 019 | Transfers | Not started |
+| 019 | Transfers | Done |
 | 020 | Invoice readiness | Not started |
 | 021 | Generate invoice | Not started |
 | 022 | Balance projection | Not started |

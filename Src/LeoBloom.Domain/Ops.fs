@@ -352,3 +352,25 @@ module Ops =
     type PostToLedgerResult =
         { journalEntryId: int
           instanceId: int }
+
+    module TransferStatus =
+        let toString = function
+            | Initiated -> "initiated"
+            | Confirmed -> "confirmed"
+        let fromString (s: string) =
+            match s with
+            | "initiated" -> Ok Initiated
+            | "confirmed" -> Ok Confirmed
+            | _ -> Error (sprintf "Invalid TransferStatus: '%s'" s)
+
+    type InitiateTransferCommand =
+        { fromAccountId: int
+          toAccountId: int
+          amount: decimal
+          initiatedDate: DateOnly
+          expectedSettlement: DateOnly option
+          description: string option }
+
+    type ConfirmTransferCommand =
+        { transferId: int
+          confirmedDate: DateOnly }
