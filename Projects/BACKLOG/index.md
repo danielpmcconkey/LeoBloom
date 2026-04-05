@@ -49,10 +49,10 @@
 | 045 | Domain-based project reorg | Done |
 | 046 | Delete LeoBloom.Api | Done |
 | 047 | Delete ghost directories | Done |
-| 048 | Test cleanup | Not started |
+| 048 | Test cleanup | Done |
 | 049 | Consolidate helpers | Not started |
-| 050 | Use EntryType.toDbString | Not started |
-| 051 | Move IncludeErrorDetail to appsettings | Not started |
+| 050 | Use EntryType.toDbString | Done |
+| 051 | Move IncludeErrorDetail to appsettings | Done |
 
 ---
 

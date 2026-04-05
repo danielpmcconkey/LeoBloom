@@ -48,3 +48,17 @@
 **APPROVED**
 
 Every acceptance criterion is independently verified against the actual repo state. All 156 tests pass. The evidence chain is direct -- Governor ran the build, tests, and migrations; read every relevant source file; and grepped for prohibited references. No fabrication detected, no circular evidence.
+
+## Verified by Design (P048 Test Cleanup)
+
+The following tests were removed in Project 048. Their requirements are
+verified by surviving tests or are architectural decisions:
+
+- **FT-DSI-002** (No external connectionString references): The binding
+  no longer exists. FT-DSI-001 (surviving) verifies the complete public
+  API surface via reflection.
+- **FT-DSI-003 through FT-DSI-005** (Migrations self-sufficiency):
+  Architectural decision. If Migrations adds a reference to Utilities,
+  it is a code review concern, not a runtime failure.
+- **FT-DSI-006, FT-DSI-007** (Build integrity tautologies): The build
+  either works or it does not.

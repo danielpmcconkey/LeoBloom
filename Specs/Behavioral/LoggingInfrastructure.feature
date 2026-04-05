@@ -3,20 +3,6 @@ Feature: Logging Infrastructure
     entries to both console and file, and is configurable via appsettings.
     Service layer functions emit Info-level entries for traceability.
 
-    # --- Initialization ---
-
-    @FT-LI-001
-    Scenario: Log.initialize is called at Api startup
-        Given the file Src/LeoBloom.Api/Program.fs exists
-        When I inspect Program.fs for logging initialization
-        Then Log.initialize is called before the application starts
-
-    @FT-LI-002
-    Scenario: Log.initialize is called in test infrastructure
-        Given the file Src/LeoBloom.Tests/TestHelpers.fs exists
-        When I inspect TestHelpers.fs for logging initialization
-        Then Log.initialize is called at module initialization
-
     # --- File output ---
 
     @FT-LI-003
@@ -32,21 +18,6 @@ Feature: Logging Infrastructure
         And the log output directory /workspace/application_logs/leobloom exists
         When I run dotnet test on the solution
         Then the new log file matches the pattern leobloom-yyyyMMdd.HH.mm.ss.log
-
-    # --- Configuration ---
-
-    @FT-LI-005
-    Scenario: Minimum log level is configurable via appsettings
-        Given an appsettings file with Serilog:MinimumLevel set to "Warning"
-        When Log.initialize is called with that configuration
-        Then Info-level messages are not written to the log file
-        And Warning-level messages are written to the log file
-
-    @FT-LI-006
-    Scenario: File sink base path is configurable via appsettings
-        Given an appsettings file with Logging:FileBasePath set to a custom directory
-        When Log.initialize is called with that configuration
-        Then the log file is created in the custom directory
 
     # --- Service layer logging ---
 

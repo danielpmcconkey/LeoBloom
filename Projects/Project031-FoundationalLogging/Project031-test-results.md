@@ -86,3 +86,26 @@
 **APPROVED**
 
 All 16 acceptance criteria independently verified against the actual repo state. All 31 Gherkin scenarios have corresponding tests that pass. Evidence chain is solid -- build output, test output, log file contents, and source code all confirm the claimed work is complete.
+
+## Verified by Design (P048 Test Cleanup)
+
+The following tests were removed in Project 048. Their requirements are
+verified by the build, the compiler, or surviving runtime tests:
+
+- **FT-LMS-001 through FT-LMS-004** (Serilog package references): Build
+  fails if any package is removed.
+- **FT-LMS-005** (Log.fs exists): Build fails if deleted.
+- **FT-LMS-006** (Log module API surface): Compiler enforced -- callers
+  fail to build if signatures change.
+- **FT-LMS-007** (No debug function): Architectural decision, not a
+  runtime invariant.
+- **FT-LMS-010, FT-LMS-011** (Migrations isolation): Architectural
+  decision documented in ADR-002.
+- **FT-LI-002** (Log.initialize in test infra): Code review concern,
+  not a runtime invariant.
+- **FT-LI-005, FT-LI-006** (Configuration assertions): Verified by
+  the build (ReadFrom.Configuration) and by surviving runtime log tests
+  (FT-LI-003, FT-LI-004, FT-LI-007 through FT-LI-012).
+- **FT-DUR-001 through FT-DUR-008** (Dal-to-Utilities rename guards):
+  Ghost guards and tautologies. The rename shipped; the old name cannot
+  recur.

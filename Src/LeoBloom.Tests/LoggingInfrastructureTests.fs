@@ -30,14 +30,6 @@ let private srcDir = Path.Combine(repoRoot, "Src")
 
 let private logDir = "/workspace/application_logs/leobloom"
 
-/// Get the most recent log file in the log directory
-let private getLatestLogFile () =
-    if not (Directory.Exists logDir) then None
-    else
-        Directory.GetFiles(logDir, "leobloom-*.log")
-        |> Array.sortDescending
-        |> Array.tryHead
-
 /// Read all log file content from the log directory.
 /// Serilog's File sink flushes on each write by default, so content
 /// should be immediately available. We read ALL log files to handle
@@ -49,27 +41,7 @@ let private readLogContent () =
         |> Array.map File.ReadAllText
         |> String.concat "\n"
 
-/// Snapshot log files before an operation so we can detect new files/content
-let private snapshotLogFiles () =
-    if Directory.Exists logDir then
-        Directory.GetFiles(logDir, "leobloom-*.log") |> Set.ofArray
-    else Set.empty
-
 // @FT-LI-001 removed -- tested LeoBloom.Api (deleted in P046)
-
-// =====================================================================
-// @FT-LI-002 -- Log.initialize is called in test infrastructure
-// =====================================================================
-
-[<Fact>]
-[<Trait("GherkinId", "FT-LI-002")>]
-let ``Log.initialize is called in test infrastructure`` () =
-    let testHelpers = Path.Combine(srcDir, "LeoBloom.Tests", "TestHelpers.fs")
-    Assert.True(File.Exists(testHelpers), $"Expected file: {testHelpers}")
-
-    let content = File.ReadAllText(testHelpers)
-    Assert.True(content.Contains("Log.initialize"),
-        "TestHelpers.fs should call Log.initialize()")
 
 // =====================================================================
 // @FT-LI-003 -- Running tests creates a log file
@@ -109,54 +81,6 @@ let ``Log filename follows the expected format`` () =
     let foundNames = logFiles |> Array.map Path.GetFileName |> fun a -> String.Join(", ", a)
     let msg = sprintf "Expected at least one file matching pattern '%s', found: %s" pattern foundNames
     Assert.True(matchingFiles.Length > 0, msg)
-
-// =====================================================================
-// @FT-LI-005 -- Minimum log level is configurable via appsettings
-// (Structural verification: appsettings contains the config key)
-// =====================================================================
-
-[<Fact>]
-[<Trait("GherkinId", "FT-LI-005")>]
-let ``Minimum log level is configurable via appsettings`` () =
-    // Verify the config key exists in appsettings.Development.json
-    let appsettings = Path.Combine(srcDir, "LeoBloom.Tests", "appsettings.Development.json")
-    let content = File.ReadAllText(appsettings)
-    Assert.True(content.Contains("Serilog"),
-        "appsettings should contain Serilog section")
-    Assert.True(content.Contains("MinimumLevel"),
-        "appsettings should contain MinimumLevel key")
-
-    // Verify Log.initialize reads from configuration
-    let logFs = Path.Combine(srcDir, "LeoBloom.Utilities", "Log.fs")
-    let logContent = File.ReadAllText(logFs)
-    Assert.True(logContent.Contains("ReadFrom.Configuration"),
-        "Log.initialize should use ReadFrom.Configuration for level config")
-
-// =====================================================================
-// @FT-LI-006 -- File sink base path is configurable via appsettings
-// =====================================================================
-
-[<Fact>]
-[<Trait("GherkinId", "FT-LI-006")>]
-let ``File sink base path is configurable via appsettings`` () =
-    // Verify the config key exists in appsettings.Development.json
-    let appsettings = Path.Combine(srcDir, "LeoBloom.Tests", "appsettings.Development.json")
-    let content = File.ReadAllText(appsettings)
-    Assert.True(content.Contains("FileBasePath"),
-        "appsettings should contain Logging:FileBasePath key")
-
-    // Verify Log.fs reads the FileBasePath config key
-    let logFs = Path.Combine(srcDir, "LeoBloom.Utilities", "Log.fs")
-    let logContent = File.ReadAllText(logFs)
-    Assert.True(logContent.Contains("Logging:FileBasePath"),
-        "Log.initialize should read Logging:FileBasePath from config")
-
-    // Verify log files actually go to the configured directory
-    Log.info "FT-LI-006 path verification" [||]
-
-    let logFiles = Directory.GetFiles(logDir, "leobloom-*.log")
-    Assert.True(logFiles.Length > 0,
-        sprintf "Log files should be created in configured path: %s" logDir)
 
 // =====================================================================
 // @FT-LI-007 -- Posting a journal entry emits Info-level log entries
