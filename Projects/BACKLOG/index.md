@@ -55,6 +55,7 @@
 | 051 | Move IncludeErrorDetail to appsettings | Done |
 | 052 | Account sub-type classification | Done |
 | 053 | Fix pre-existing test failures | Not started |
+| 054 | Seed data separation | Not started |
 
 ---
 
@@ -97,15 +98,25 @@ Source: 2026-04-05 code audit (SYNTHESIS.md). ADRs in BdsNotes/decisions/.
 Items 046-048 and 050-051 can run in parallel. Item 049 should follow 045
 if the domain reorg moves files that contain the duplicated helpers.
 
-### Test Integrity (053)
+### Foundation Cleanup (053 + 054)
 
 **HIGH PRIORITY — before any new feature work.**
 
-**053 (fix pre-existing test failures)** — 5 tests in
-`PostObligationToLedgerTests` fail due to seed data collision on
-`ledger.fiscal_period`. Tests assume they're the only fiscal periods in the
-database; seed data proves them wrong. See
-`Projects/Project053-FixPreExistingTestFailures/Project053-brief.md`.
+These two projects clean up the foundation before more features go on top.
+Run them in order.
+
+1. **053 (fix pre-existing test failures)** — 5 tests in
+   `PostObligationToLedgerTests` fail due to seed data collision on
+   `ledger.fiscal_period`. Tests assume they're the only fiscal periods in the
+   database; seed data proves them wrong. See
+   `Projects/Project053-FixPreExistingTestFailures/Project053-brief.md`.
+
+2. **054 (seed data separation)** — extract baseline data (COA, fiscal
+   periods, obligation agreements) out of the migration chain into
+   idempotent seed scripts. Prevents the "works in dev, breaks prod" class
+   of bugs. See
+   `Projects/Project054-SeedDataSeparation/Project054-brief.md`.
+   Vision doc: `BdsNotes/seed-data-vision-2026-04-05.md`.
 
 ### CLI Sequencing (036-042)
 
