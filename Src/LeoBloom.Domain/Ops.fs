@@ -345,3 +345,10 @@ module Ops =
         { transitioned: int
           errors: (int * string) list
           queryFailed: bool }
+
+    type PostToLedgerCommand =
+        { instanceId: int }
+
+    type PostToLedgerResult =
+        { journalEntryId: int
+          instanceId: int }
