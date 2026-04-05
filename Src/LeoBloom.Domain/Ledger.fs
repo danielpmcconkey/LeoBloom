@@ -15,12 +15,67 @@ module Ledger =
           name: string
           normalBalance: NormalBalance }
 
+    type AccountSubType =
+        | Cash
+        | FixedAsset
+        | Investment
+        | CurrentLiability
+        | LongTermLiability
+        | OperatingRevenue
+        | OtherRevenue
+        | OperatingExpense
+        | OtherExpense
+
+    module AccountSubType =
+        let toDbString (st: AccountSubType) : string =
+            match st with
+            | Cash -> "Cash"
+            | FixedAsset -> "FixedAsset"
+            | Investment -> "Investment"
+            | CurrentLiability -> "CurrentLiability"
+            | LongTermLiability -> "LongTermLiability"
+            | OperatingRevenue -> "OperatingRevenue"
+            | OtherRevenue -> "OtherRevenue"
+            | OperatingExpense -> "OperatingExpense"
+            | OtherExpense -> "OtherExpense"
+
+        let fromDbString (s: string) : Result<AccountSubType, string> =
+            match s with
+            | "Cash" -> Ok Cash
+            | "FixedAsset" -> Ok FixedAsset
+            | "Investment" -> Ok Investment
+            | "CurrentLiability" -> Ok CurrentLiability
+            | "LongTermLiability" -> Ok LongTermLiability
+            | "OperatingRevenue" -> Ok OperatingRevenue
+            | "OtherRevenue" -> Ok OtherRevenue
+            | "OperatingExpense" -> Ok OperatingExpense
+            | "OtherExpense" -> Ok OtherExpense
+            | _ -> Error (sprintf "Invalid account_subtype: '%s'" s)
+
+        /// Returns the list of valid subtypes for a given account type name.
+        let validSubTypesForAccountType (accountTypeName: string) : AccountSubType list =
+            match accountTypeName.ToLowerInvariant() with
+            | "asset" -> [ Cash; FixedAsset; Investment ]
+            | "liability" -> [ CurrentLiability; LongTermLiability ]
+            | "equity" -> []
+            | "revenue" -> [ OperatingRevenue; OtherRevenue ]
+            | "expense" -> [ OperatingExpense; OtherExpense ]
+            | _ -> []
+
+        /// Validates that a subtype is valid for the given account type name.
+        /// None (null subtype) is always valid for any account type.
+        let isValidSubType (accountTypeName: string) (subType: AccountSubType option) : bool =
+            match subType with
+            | None -> true
+            | Some st -> validSubTypesForAccountType accountTypeName |> List.contains st
+
     type Account =
         { id: int
           code: string
           name: string
           accountTypeId: int
           parentCode: string option
+          subType: AccountSubType option
           isActive: bool
           createdAt: DateTimeOffset
           modifiedAt: DateTimeOffset }

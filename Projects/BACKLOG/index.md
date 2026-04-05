@@ -53,6 +53,7 @@
 | 049 | Consolidate helpers | Done |
 | 050 | Use EntryType.toDbString | Done |
 | 051 | Move IncludeErrorDetail to appsettings | Done |
+| 052 | Account sub-type classification | Done |
 
 ---
 
@@ -104,7 +105,8 @@ if the domain reorg moves files that contain the duplicated helpers.
 3. **021 (invoice record persistence), then 042 (CLI invoice commands)** —
    lean persistence layer followed by its CLI wrapper.
 4. **040 (CLI tax reports)** — new report logic. Target completion well before
-   2027 tax season.
+   2027 tax season. **P052 unblocks this** — cash flow queries can now use
+   `account_subtype = 'Cash'` instead of hardcoded account codes.
 5. **035 (orphaned posting detection)** — standalone diagnostic, no CLI
    dependency. Slot wherever.
 6. **022 (balance projection)** — lowest priority, slot wherever.
