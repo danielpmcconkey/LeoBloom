@@ -24,6 +24,8 @@
     <Compile Include="SubtreePLService.fs" />
     <Compile Include="ObligationAgreementRepository.fs" />
     <Compile Include="ObligationAgreementService.fs" />
+    <Compile Include="ObligationInstanceRepository.fs" />
+    <Compile Include="ObligationInstanceService.fs" />
     <Compile Include="OpeningBalanceService.fs" />
   </ItemGroup>
 

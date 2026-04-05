@@ -24,6 +24,7 @@
     <Compile Include="DalToUtilitiesRenameTests.fs" />
     <Compile Include="LogModuleStructureTests.fs" />
     <Compile Include="ObligationAgreementTests.fs" />
+    <Compile Include="SpawnObligationInstanceTests.fs" />
     <Compile Include="LoggingInfrastructureTests.fs" />
   </ItemGroup>
 

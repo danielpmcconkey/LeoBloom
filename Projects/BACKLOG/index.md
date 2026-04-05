@@ -16,7 +16,7 @@
 | 012 | Balance sheet | Done |
 | 013 | P&L by account subtree | Done |
 | 014 | Obligation agreements | Done |
-| 015 | Spawn obligation instances | Not started |
+| 015 | Spawn obligation instances | Done |
 | 016 | Status transitions | Not started |
 | 017 | Overdue detection | Not started |
 | 018 | Post obligation to ledger | Not started |
