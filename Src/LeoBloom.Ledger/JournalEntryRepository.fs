@@ -51,7 +51,7 @@ module JournalEntryRepository =
             sql.Parameters.AddWithValue("@je_id", entryId) |> ignore
             sql.Parameters.AddWithValue("@acct", l.accountId) |> ignore
             sql.Parameters.AddWithValue("@amt", l.amount) |> ignore
-            let etStr = match l.entryType with EntryType.Debit -> "debit" | EntryType.Credit -> "credit"
+            let etStr = EntryType.toDbString l.entryType
             sql.Parameters.AddWithValue("@et", etStr) |> ignore
             optParam "@memo" l.memo sql
 
