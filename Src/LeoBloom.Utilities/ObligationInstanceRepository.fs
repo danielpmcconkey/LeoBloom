@@ -65,6 +65,69 @@ module ObligationInstanceRepository =
         reader.Close()
         result
 
+    let findById (txn: NpgsqlTransaction) (id: int) : ObligationInstance option =
+        use sql = new NpgsqlCommand(
+            $"SELECT {selectColumns} FROM ops.obligation_instance WHERE id = @id",
+            txn.Connection, txn)
+        sql.Parameters.AddWithValue("@id", id) |> ignore
+        use reader = sql.ExecuteReader()
+        let result =
+            if reader.Read() then Some (mapReader reader)
+            else None
+        reader.Close()
+        result
+
+    let updateStatus
+        (txn: NpgsqlTransaction)
+        (id: int)
+        (status: InstanceStatus)
+        (amount: decimal option)
+        (confirmedDate: DateOnly option)
+        (journalEntryId: int option)
+        (notes: string option)
+        : ObligationInstance =
+        let setClauses = System.Collections.Generic.List<string>()
+        setClauses.Add("status = @status")
+        setClauses.Add("modified_at = now()")
+
+        use sql = new NpgsqlCommand("", txn.Connection, txn)
+        sql.Parameters.AddWithValue("@status", InstanceStatus.toString status) |> ignore
+        sql.Parameters.AddWithValue("@id", id) |> ignore
+
+        match amount with
+        | Some a ->
+            setClauses.Add("amount = @amount")
+            sql.Parameters.AddWithValue("@amount", a) |> ignore
+        | None -> ()
+
+        match confirmedDate with
+        | Some d ->
+            setClauses.Add("confirmed_date = @confirmed_date")
+            sql.Parameters.AddWithValue("@confirmed_date", d) |> ignore
+        | None -> ()
+
+        match journalEntryId with
+        | Some jid ->
+            setClauses.Add("journal_entry_id = @journal_entry_id")
+            sql.Parameters.AddWithValue("@journal_entry_id", jid) |> ignore
+        | None -> ()
+
+        match notes with
+        | Some n ->
+            setClauses.Add("notes = @notes")
+            sql.Parameters.AddWithValue("@notes", n) |> ignore
+        | None -> ()
+
+        let setClause = System.String.Join(", ", setClauses)
+        sql.CommandText <-
+            $"UPDATE ops.obligation_instance SET {setClause} WHERE id = @id RETURNING {selectColumns}"
+
+        use reader = sql.ExecuteReader()
+        reader.Read() |> ignore
+        let result = mapReader reader
+        reader.Close()
+        result
+
     let findExistingDates
         (txn: NpgsqlTransaction)
         (agreementId: int)
