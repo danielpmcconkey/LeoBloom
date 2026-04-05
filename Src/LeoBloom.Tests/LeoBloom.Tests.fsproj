@@ -34,6 +34,8 @@
     <Compile Include="CliFrameworkTests.fs" />
     <Compile Include="LedgerCommandsTests.fs" />
     <Compile Include="AcctAmountParsingTests.fs" />
+    <Compile Include="ReportingServiceTests.fs" />
+    <Compile Include="ReportCommandsTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -49,6 +51,7 @@
     <ProjectReference Include="..\LeoBloom.Utilities\LeoBloom.Utilities.fsproj" />
     <ProjectReference Include="..\LeoBloom.Ledger\LeoBloom.Ledger.fsproj" />
     <ProjectReference Include="..\LeoBloom.Ops\LeoBloom.Ops.fsproj" />
+    <ProjectReference Include="..\LeoBloom.Reporting\LeoBloom.Reporting.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

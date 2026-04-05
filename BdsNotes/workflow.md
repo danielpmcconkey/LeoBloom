@@ -3,7 +3,7 @@
 ## Pipeline
 
 ```
-PO → Brainstorm → Plan/Deepen → Gherkin Writer → Builder → QE → Reviewer → Governor → PO signoff → RTE → Stop (await Dan)
+PO → Brainstorm → Plan/Deepen → Gherkin Writer → Builder → [reread] → QE → Reviewer → Governor → PO signoff → RTE → Stop (await Dan)
 ```
 
 ## Step-by-Step
@@ -19,13 +19,16 @@ PO → Brainstorm → Plan/Deepen → Gherkin Writer → Builder → QE → Revi
 6. **PO** approves the plan
 7. **Gherkin Writer** writes behavioral specs to `Specs/{Category}/`
 8. **Builder** implements the plan. Runs existing tests to verify nothing breaks.
-9. **QE** writes test implementations against the Gherkin specs and Builder's code
-10. **Reviewer** adversarial code review
-11. Dan / BD take reviewer findings case-by-case
-12. **Governor** writes test results: `Projects/ProjectNNN-Name/ProjectNNN-test-results.md`
-13. **PO** signs off, marks backlog item complete
-14. **RTE** commits, pushes, creates PR, merges to main
-15. **Stop.** Report results to Dan and wait for his instruction before
+9. **BD re-reads this file.** Context checkpoint — Builder output is the
+   heaviest payload in the pipeline and compresses everything before it.
+   Re-reading refreshes the agent spawning protocol for the back half.
+10. **QE** writes test implementations against the Gherkin specs and Builder's code
+11. **Reviewer** adversarial code review
+12. Dan / BD take reviewer findings case-by-case
+13. **Governor** writes test results: `Projects/ProjectNNN-Name/ProjectNNN-test-results.md`
+14. **PO** signs off, marks backlog item complete
+15. **RTE** commits, pushes, creates PR, merges to main
+16. **Stop.** Report results to Dan and wait for his instruction before
     starting the next project. Dan evaluates context health between projects.
 
 ## GAAP Compliance
@@ -54,11 +57,44 @@ If migrations are needed:
 - Builder runs them in dev during the build phase
 - Migration Prod Executor (Hobson) confirms safety and runs in prod
 
-## DSWF
+## Agent Spawning Protocol
 
-All agents read `DSWF/{role}.md` before starting work on this project.
-That's where LeoBloom-specific conventions live (test patterns, file paths,
-domain knowledge).
+Every pipeline agent is spawned via the Agent tool with two layers:
+
+1. **Generic blueprint** — the `subagent_type` parameter. This is the agent's
+   core identity and toolset. Never omit it.
+2. **DSWF addendum** — if `DSWF/{role}.md` exists, the agent's prompt MUST
+   include an instruction to read it before starting work. This is where
+   LeoBloom-specific conventions live (test patterns, file paths, domain
+   knowledge).
+
+### Subagent types for each pipeline role
+
+| Pipeline Step | `subagent_type` | DSWF file (if exists) |
+|---|---|---|
+| Product Owner | `po` | `DSWF/po.md` |
+| Brainstorm Analyst | `ba` | `DSWF/ba.md` |
+| Planner | `planner` | `DSWF/planner.md` |
+| Gherkin Writer | `gherkin-writer` | `DSWF/gherkin-writer.md` |
+| Builder | `builder` | `DSWF/builder.md` |
+| Quality Engineer | `qe` | `DSWF/qe.md` |
+| Reviewer | `reviewer` | `DSWF/reviewer.md` |
+| Governor | `governor` | `DSWF/governor.md` |
+| Release Train Engineer | `rte` | `DSWF/rte.md` |
+
+### Prompt template
+
+When spawning any pipeline agent, the prompt must include:
+
+```
+Read BdsNotes/workflow.md for the full pipeline context.
+If DSWF/{role}.md exists, read it before starting — it contains
+LeoBloom-specific conventions for your role.
+```
+
+Not every role has a DSWF file yet. That's fine — the agent reads the
+generic blueprint and workflow.md and does its job. When a DSWF file
+is added later, the prompt template already tells the agent to look for it.
 
 ## Artifacts
 

@@ -41,7 +41,7 @@
 | 037 | CLI reporting commands (accounting) | Not started |
 | 038 | CLI obligation commands | Not started |
 | 039 | CLI transfer commands | Not started |
-| 040 | CLI tax reports | Not started |
+| 040 | CLI tax reports | Done |
 | 041 | CLI account + period commands | Not started |
 | 042 | CLI invoice commands | Not started |
 | 043 | Idempotency guards | Done |
@@ -104,9 +104,8 @@ if the domain reorg moves files that contain the duplicated helpers.
    services. No new domain logic needed.
 3. **021 (invoice record persistence), then 042 (CLI invoice commands)** —
    lean persistence layer followed by its CLI wrapper.
-4. **040 (CLI tax reports)** — new report logic. Target completion well before
-   2027 tax season. **P052 unblocks this** — cash flow queries can now use
-   `account_subtype = 'Cash'` instead of hardcoded account codes.
+4. **040 (CLI tax reports)** — Done. New report logic with LeoBloom.Reporting
+   project, 4 services, 4 CLI subcommands.
 5. **035 (orphaned posting detection)** — standalone diagnostic, no CLI
    dependency. Slot wherever.
 6. **022 (balance projection)** — lowest priority, slot wherever.
