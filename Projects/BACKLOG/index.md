@@ -47,8 +47,8 @@
 | 043 | Idempotency guards | Done |
 | 044 | Database indexes migration | Done |
 | 045 | Domain-based project reorg | Done |
-| 046 | Delete LeoBloom.Api | Not started |
-| 047 | Delete ghost directories | Not started |
+| 046 | Delete LeoBloom.Api | Done |
+| 047 | Delete ghost directories | Done |
 | 048 | Test cleanup | Not started |
 | 049 | Consolidate helpers | Not started |
 | 050 | Use EntryType.toDbString | Not started |

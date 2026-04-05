@@ -55,25 +55,7 @@ let private snapshotLogFiles () =
         Directory.GetFiles(logDir, "leobloom-*.log") |> Set.ofArray
     else Set.empty
 
-// =====================================================================
-// @FT-LI-001 -- Log.initialize is called at Api startup
-// =====================================================================
-
-[<Fact>]
-[<Trait("GherkinId", "FT-LI-001")>]
-let ``Log.initialize is called at Api startup`` () =
-    let programFs = Path.Combine(srcDir, "LeoBloom.Api", "Program.fs")
-    Assert.True(File.Exists(programFs), $"Expected file: {programFs}")
-
-    let content = File.ReadAllText(programFs)
-    Assert.True(content.Contains("Log.initialize"),
-        "Program.fs should call Log.initialize()")
-
-    // Verify it's called before the application runs
-    let initIdx = content.IndexOf("Log.initialize")
-    let runIdx = content.IndexOf("app.Run")
-    Assert.True(initIdx < runIdx,
-        "Log.initialize should be called before app.Run")
+// @FT-LI-001 removed -- tested LeoBloom.Api (deleted in P046)
 
 // =====================================================================
 // @FT-LI-002 -- Log.initialize is called in test infrastructure
