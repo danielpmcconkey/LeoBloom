@@ -16,6 +16,16 @@ This document replaces the cancelled API backlog items with CLI
 equivalents and adds tax-reporting capabilities that weren't in the
 original scope.
 
+**Separation of concerns:** LeoBloom is the accounting engine — it
+tracks what's owed, what's paid, and produces reports. All business
+process orchestration (invoice generation, PDF creation, utility
+splitting, bill delivery) is handled by COYS bots that call LeoBloom's
+CLI. LeoBloom doesn't generate invoices; it records them.
+
+**Project 020 (Invoice Readiness) is cancelled.** Readiness is the
+COYS bot's responsibility — it knows when the last bill is entered
+because it's the one entering them.
+
 ---
 
 ## Consumers
@@ -26,8 +36,7 @@ four in mind.
 | Consumer | How they call it | What they need |
 |---|---|---|
 | **Dan** | Terminal, ad hoc | Human-readable tables, quick lookups |
-| **Nagging agent** | COYS cron bot, subprocess | Machine-parseable output (--json), overdue/upcoming queries |
-| **Invoice agent** | COYS cron bot, subprocess | Spawn, generate, status transitions |
+| **COYS agents** | subprocess via `claude -p` | Machine-parseable output (--json), overdue/upcoming queries, obligation lifecycle, invoice record persistence |
 | **CPA** | Dan runs it, hands her the output | Tax-year reports, Schedule E worksheet, transaction detail |
 
 **Output convention:** Human-readable by default. `--json` flag for
@@ -141,8 +150,8 @@ leobloom obligation upcoming [--days N]
 with expected_date within the next N days. The nagging agent's primary
 query.
 
-**Consumer:** Nagging agent (overdue, upcoming), invoice agent (spawn,
-transition, post), Dan (ad hoc status checks).
+**Consumer:** COYS agents (overdue, upcoming, spawn, transition, post),
+Dan (ad hoc status checks).
 
 ---
 
@@ -156,6 +165,22 @@ leobloom transfer show <id>
 ```
 
 **Consumer:** Dan (recording inter-account transfers).
+
+---
+
+### Invoices
+
+Invoice record persistence only. PDF generation, utility splitting,
+and delivery are COYS bot responsibilities — not LeoBloom's.
+
+```
+leobloom invoice record --tenant TEXT --period <id-or-key> --rent-amount AMT --utility-share AMT --total-amount AMT [--document-path PATH] [--notes TEXT]
+leobloom invoice list [--tenant TEXT] [--period <id-or-key>]
+leobloom invoice show <id>
+```
+
+**Consumer:** COYS bot (records the invoice after it does the
+calculation and PDF generation), Dan (ad hoc queries).
 
 ---
 
@@ -184,7 +209,7 @@ The cancelled API projects map to CLI work as follows:
 | 023 — Journal entry endpoints | `leobloom ledger` commands |
 | 024 — Reporting endpoints | `leobloom report` commands (accounting + tax) |
 | 025 — Obligation endpoints | `leobloom obligation` commands |
-| 026 — Transfer & invoice endpoints | `leobloom transfer` commands + invoice work (020/021) |
+| 026 — Transfer & invoice endpoints | `leobloom transfer` + `leobloom invoice` commands |
 | 027 — Projection endpoint | `leobloom report balance-projection` (future, ties to 022) |
 
 ### Suggested new backlog items
@@ -197,6 +222,7 @@ The cancelled API projects map to CLI work as follows:
 | 037 | CLI transfer commands | Wrap existing transfer services. |
 | 038 | CLI tax reports | Schedule E, general ledger detail, cash receipts, cash disbursements. New report logic. |
 | 039 | CLI account + period commands | Read-only account queries, fiscal period management. |
+| 040 | CLI invoice commands | Invoice record persistence (record, list, show). Thin wrapper — COYS bot calculates and generates PDFs. |
 
 ### Sequencing
 
@@ -207,8 +233,9 @@ The cancelled API projects map to CLI work as follows:
    output conventions. Everything else depends on this.
 3. **035, 036, 037, 039** in any order — these are thin wrappers around
    existing services.
-4. **020, 021 (invoices)** — feature work that was already on the
-   backlog.
+4. **021 (invoice record), 040 (CLI invoice commands)** — lean. Just
+   persistence and CLI wrapper. Project 020 (invoice readiness) is
+   cancelled — readiness is the COYS bot's responsibility.
 5. **038 (tax reports)** — new report logic. Target completion well
    before 2027 tax season.
 6. **022 (balance projection)** — lowest priority, slot wherever.
