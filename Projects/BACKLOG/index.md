@@ -15,7 +15,7 @@
 | 011 | Income statement | Done |
 | 012 | Balance sheet | Done |
 | 013 | P&L by account subtree | Done |
-| 014 | Obligation agreements | Not started |
+| 014 | Obligation agreements | Done |
 | 015 | Spawn obligation instances | Not started |
 | 016 | Status transitions | Not started |
 | 017 | Overdue detection | Not started |

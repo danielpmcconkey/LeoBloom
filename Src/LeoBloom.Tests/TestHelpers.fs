@@ -177,3 +177,31 @@ module InsertHelpers =
         let id = cmd.ExecuteScalar() :?> int
         TestCleanup.trackObligationAgreement id tracker
         id
+
+    let insertObligationAgreementFull
+        (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker)
+        (name: string) (obligationType: string) (cadence: string) (isActive: bool) : int =
+        use cmd = new NpgsqlCommand(
+            "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence, is_active) VALUES (@n, @ot, @c, @a) RETURNING id",
+            conn)
+        cmd.Parameters.AddWithValue("@n", name) |> ignore
+        cmd.Parameters.AddWithValue("@ot", obligationType) |> ignore
+        cmd.Parameters.AddWithValue("@c", cadence) |> ignore
+        cmd.Parameters.AddWithValue("@a", isActive) |> ignore
+        let id = cmd.ExecuteScalar() :?> int
+        TestCleanup.trackObligationAgreement id tracker
+        id
+
+    let insertObligationInstance
+        (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker)
+        (agreementId: int) (name: string) (isActive: bool) : int =
+        use cmd = new NpgsqlCommand(
+            "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date, is_active) \
+             VALUES (@aid, @n, 'expected', '2026-04-01', @a) RETURNING id",
+            conn)
+        cmd.Parameters.AddWithValue("@aid", agreementId) |> ignore
+        cmd.Parameters.AddWithValue("@n", name) |> ignore
+        cmd.Parameters.AddWithValue("@a", isActive) |> ignore
+        let id = cmd.ExecuteScalar() :?> int
+        // Tracked via agreement_id in cleanup (obligation_instance cleaned by agreement_id)
+        id

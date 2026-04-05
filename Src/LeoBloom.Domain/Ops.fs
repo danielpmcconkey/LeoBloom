@@ -153,3 +153,81 @@ module Ops =
           isActive: bool
           createdAt: DateTimeOffset
           modifiedAt: DateTimeOffset }
+
+    type CreateObligationAgreementCommand =
+        { name: string
+          obligationType: ObligationDirection
+          counterparty: string option
+          amount: decimal option
+          cadence: RecurrenceCadence
+          expectedDay: int option
+          paymentMethod: PaymentMethodType option
+          sourceAccountId: int option
+          destAccountId: int option
+          notes: string option }
+
+    type UpdateObligationAgreementCommand =
+        { id: int
+          name: string
+          obligationType: ObligationDirection
+          counterparty: string option
+          amount: decimal option
+          cadence: RecurrenceCadence
+          expectedDay: int option
+          paymentMethod: PaymentMethodType option
+          sourceAccountId: int option
+          destAccountId: int option
+          isActive: bool
+          notes: string option }
+
+    module ObligationAgreementValidation =
+
+        let validateName (name: string) : Result<unit, string list> =
+            let errors =
+                [ if System.String.IsNullOrWhiteSpace name then
+                      "name is required and cannot be empty"
+                  if name.Length > 100 then
+                      "name must not exceed 100 characters" ]
+            if errors.IsEmpty then Ok () else Error errors
+
+        let validateCounterparty (counterparty: string option) : Result<unit, string list> =
+            match counterparty with
+            | None -> Ok ()
+            | Some cp when cp.Length > 100 ->
+                Error [ "counterparty must not exceed 100 characters" ]
+            | _ -> Ok ()
+
+        let validateAmount (amount: decimal option) : Result<unit, string list> =
+            match amount with
+            | None -> Ok ()
+            | Some a when a <= 0m ->
+                Error [ "amount must be greater than zero" ]
+            | _ -> Ok ()
+
+        let validateExpectedDay (day: int option) : Result<unit, string list> =
+            match day with
+            | None -> Ok ()
+            | Some d when d < 1 || d > 31 ->
+                Error [ "expected day must be between 1 and 31" ]
+            | _ -> Ok ()
+
+        let validateCreateCommand (cmd: CreateObligationAgreementCommand) : Result<unit, string list> =
+            let allErrors =
+                [ validateName cmd.name
+                  validateCounterparty cmd.counterparty
+                  validateAmount cmd.amount
+                  validateExpectedDay cmd.expectedDay ]
+                |> List.collect (function Error errs -> errs | Ok _ -> [])
+            if allErrors.IsEmpty then Ok () else Error allErrors
+
+        let validateUpdateCommand (cmd: UpdateObligationAgreementCommand) : Result<unit, string list> =
+            let idErrors =
+                if cmd.id <= 0 then [ "id must be greater than zero" ] else []
+            let allErrors =
+                idErrors @
+                ([ validateName cmd.name
+                   validateCounterparty cmd.counterparty
+                   validateAmount cmd.amount
+                   validateExpectedDay cmd.expectedDay ]
+                 |> List.collect (function Error errs -> errs | Ok _ -> []))
+            if allErrors.IsEmpty then Ok () else Error allErrors
