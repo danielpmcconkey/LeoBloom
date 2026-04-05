@@ -24,6 +24,7 @@ Feature: Obligation Agreement CRUD
             | notes           | Variable in winter |
         Then the create succeeds with a generated id and timestamps
         And the returned agreement has name "Enbridge gas bill" and obligationType "payable"
+        And a subsequent getById returns the same agreement with matching fields
 
     @FT-OA-002
     Scenario: Create agreement with only required fields
@@ -35,6 +36,7 @@ Feature: Obligation Agreement CRUD
             | cadence        | monthly           |
         Then the create succeeds with a generated id and timestamps
         And the returned agreement has null counterparty, amount, expectedDay, paymentMethod, sourceAccountId, destAccountId, and notes
+        And a subsequent getById returns the same agreement with matching fields
 
     # --- Create: Pure Validation ---
 
@@ -189,6 +191,7 @@ Feature: Obligation Agreement CRUD
         When I update the agreement with name "New Name" and amount 200.00
         Then the update succeeds and the returned agreement has name "New Name" and amount 200.00
         And the modified_at timestamp is later than created_at
+        And a subsequent getById returns the same agreement with matching fields
 
     # --- Update: Errors ---
 
@@ -233,6 +236,7 @@ Feature: Obligation Agreement CRUD
         And an existing deactivated obligation agreement named "Dormant Agreement"
         When I update the agreement with isActive true
         Then the update succeeds and the returned agreement has isActive = true
+        And a subsequent getById returns the same agreement with isActive = true
 
     # --- Deactivate ---
 
@@ -242,6 +246,7 @@ Feature: Obligation Agreement CRUD
         And an existing active obligation agreement named "Soon Inactive"
         When I deactivate the agreement
         Then the deactivate succeeds and the returned agreement has isActive = false
+        And a subsequent getById returns the same agreement with isActive = false
 
     @FT-OA-027
     Scenario: Deactivate a nonexistent agreement is rejected

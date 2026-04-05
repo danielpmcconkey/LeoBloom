@@ -210,25 +210,21 @@ verifies. No brainstorm, no plan docs.
 
 ### REM-012: Account-type validation for obligation agreements
 
-**Priority:** Significant
-**Spec file:** `Specs/Ops/ObligationAgreementCrud.feature` and/or
-`Specs/Behavioral/PostObligationToLedger.feature`
-**Effort:** Medium
+**Status:** CANCELLED — 2026-04-05
 
-**NOTE: This is the one story that requires new production code, not just
-new scenarios and test implementations.**
+**Reason:** The auditors correctly identified the risk (misconfigured agreements
+producing semantically wrong journal entries), but hard account-type constraints
+are the wrong remedy. Legitimate transactions (equipment purchases, loan
+repayments, prepaid expenses) involve account-type pairings that the proposed
+rules would reject. GAAP doesn't constrain account-type pairings — the "right"
+types depend on what the transaction represents, and the system can't know that
+from the agreement alone.
 
-**Acceptance criteria:**
-1. Creating a payable agreement where source is not an asset account or
-   dest is not an expense account returns a validation error.
-2. Creating a receivable agreement where source is not a revenue account
-   or dest is not an asset account returns a validation error.
-3. Validation occurs at agreement creation time (fail early), not at
-   post time.
-4. Existing valid agreements continue to work.
+Double-entry constraints ensure the numbers balance. Source≠dest validation
+(REM-008) catches the most obvious misconfiguration. Beyond that, pattern
+detection belongs in a diagnostic query (P035), not a hard gate.
 
-**Dependencies:** REM-008 (source = dest rejection) should land first
-since it's simpler validation in the same area.
+**Decision by:** Hobson (comptroller), confirmed by Dan.
 
 ---
 
@@ -326,8 +322,8 @@ REM-008, REM-009
 **Batch 5 — Reporting edge cases:**
 REM-010, REM-011
 
-**Batch 6 — New code (account-type validation):**
-REM-012
+**~~Batch 6 — CANCELLED:~~**
+~~REM-012~~ (see story for rationale)
 
 **Batch 7 — Cleanup (whenever):**
 REM-013, REM-014
@@ -355,7 +351,7 @@ is Cleanup — no urgency.
 | REM-009 | Inactive dest account rejection | Significant | Small | 4 |
 | REM-010 | Income statement period-scoping | Significant | Small | 5 |
 | REM-011 | Period-close side effects | Significant | Small | 5 |
-| REM-012 | Account-type validation (new code) | Significant | Medium | 6 |
+| REM-012 | ~~Account-type validation~~ CANCELLED | — | — | — |
 | REM-013 | CRUD persistence verification | Cleanup | Small | 7 |
 | REM-014 | Remove redundant scenarios | Cleanup | Small | 7 |
 | REM-015 | Document posted/voided design intent | Significant | Small | 2 |

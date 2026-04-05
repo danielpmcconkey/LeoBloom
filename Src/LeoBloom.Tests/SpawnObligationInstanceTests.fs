@@ -147,7 +147,7 @@ let ``instance names follow cadence-specific format`` (cadenceStr: string) (date
     Assert.Equal(expectedName, name)
 
 // =====================================================================
-// Integration: Happy Path (FT-SI-011 through FT-SI-014)
+// Integration: Happy Path (FT-SI-011 through FT-SI-013)
 // =====================================================================
 
 [<Fact>]
@@ -234,29 +234,7 @@ let ``spawn OneTime creates a single instance`` () =
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     finally TestCleanup.deleteAll tracker
 
-[<Fact>]
-[<Trait("GherkinId", "FT-SI-014")>]
-let ``all spawned instances have isActive true`` () =
-    use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let agreementId =
-            InsertHelpers.insertObligationAgreementForSpawn
-                conn tracker $"{prefix}_quarterly" "receivable" "quarterly" (Some 1) (Some 300.00m) true
-        let cmd =
-            { obligationAgreementId = agreementId
-              startDate = DateOnly(2026, 1, 1)
-              endDate = DateOnly(2026, 12, 31) }
-        let result = ObligationInstanceService.spawn cmd
-        match result with
-        | Ok spawnResult ->
-            Assert.Equal(4, spawnResult.created.Length)
-            Assert.Equal(0, spawnResult.skippedCount)
-            for inst in spawnResult.created do
-                Assert.True(inst.isActive, sprintf "Instance '%s' should have isActive=true" inst.name)
-        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
-    finally TestCleanup.deleteAll tracker
+// SI-014 removed (REM-014): redundant with SI-011
 
 // =====================================================================
 // Integration: Overlap and Idempotency (FT-SI-015, FT-SI-016)

@@ -82,12 +82,8 @@ Feature: Close / Reopen Fiscal Period
 
     # --- Edge Cases ---
 
-    @FT-CFP-009
-    Scenario: Close a period with no journal entries
-        Given the ledger schema exists for period management
-        And a period-test open fiscal period from 2026-05-01 to 2026-05-31 with no entries
-        When I close the fiscal period
-        Then the close succeeds and the period has is_open = false
+    # CFP-009 removed (REM-014): redundant with CFP-001 — both close a period
+    # with no journal entries (CFP-001's setup creates no entries either).
 
     # --- Integration ---
 

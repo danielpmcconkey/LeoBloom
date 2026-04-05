@@ -35,7 +35,7 @@
 | 031 | Foundational logging infrastructure | Done |
 | 032 | Test Author Agent Blueprint | Done |
 | 033 | Seal DataSource internals | Done |
-| 034 | GAAP remediation | Not started |
+| 034 | GAAP remediation | Done |
 | 035 | Orphaned posting detection | Not started |
 
 ---

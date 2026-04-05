@@ -84,6 +84,23 @@ let ``create agreement with all fields provided`` () =
             Assert.Equal(Some "Variable in winter", agreement.notes)
             Assert.True(agreement.createdAt > DateTimeOffset.MinValue)
             Assert.True(agreement.modifiedAt >= agreement.createdAt)
+            // REM-013: Verify persistence via independent read
+            let persisted = ObligationAgreementService.getById agreement.id
+            match persisted with
+            | Some p ->
+                Assert.Equal(agreement.id, p.id)
+                Assert.Equal(agreement.name, p.name)
+                Assert.Equal(agreement.obligationType, p.obligationType)
+                Assert.Equal(agreement.counterparty, p.counterparty)
+                Assert.Equal(agreement.amount, p.amount)
+                Assert.Equal(agreement.cadence, p.cadence)
+                Assert.Equal(agreement.expectedDay, p.expectedDay)
+                Assert.Equal(agreement.paymentMethod, p.paymentMethod)
+                Assert.Equal(agreement.sourceAccountId, p.sourceAccountId)
+                Assert.Equal(agreement.destAccountId, p.destAccountId)
+                Assert.Equal(agreement.notes, p.notes)
+                Assert.Equal(agreement.isActive, p.isActive)
+            | None -> Assert.Fail("getById returned None after successful create")
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     finally TestCleanup.deleteAll tracker
 
@@ -118,6 +135,20 @@ let ``create agreement with only required fields`` () =
             Assert.True(agreement.destAccountId.IsNone)
             Assert.True(agreement.notes.IsNone)
             Assert.True(agreement.isActive)
+            // REM-013: Verify persistence via independent read
+            let persisted = ObligationAgreementService.getById agreement.id
+            match persisted with
+            | Some p ->
+                Assert.Equal(agreement.id, p.id)
+                Assert.Equal(agreement.name, p.name)
+                Assert.True(p.counterparty.IsNone)
+                Assert.True(p.amount.IsNone)
+                Assert.True(p.expectedDay.IsNone)
+                Assert.True(p.paymentMethod.IsNone)
+                Assert.True(p.sourceAccountId.IsNone)
+                Assert.True(p.destAccountId.IsNone)
+                Assert.True(p.notes.IsNone)
+            | None -> Assert.Fail("getById returned None after successful create")
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     finally TestCleanup.deleteAll tracker
 
@@ -505,6 +536,13 @@ let ``update agreement with all fields`` () =
             Assert.Equal(Some 200.00m, updated.amount)
             Assert.True(updated.modifiedAt > created.createdAt,
                         "modified_at should be later than created_at")
+            // REM-013: Verify persistence via independent read
+            let persisted = ObligationAgreementService.getById updated.id
+            match persisted with
+            | Some p ->
+                Assert.Equal(updated.name, p.name)
+                Assert.Equal(updated.amount, p.amount)
+            | None -> Assert.Fail("getById returned None after successful update")
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     finally TestCleanup.deleteAll tracker
 
@@ -635,6 +673,11 @@ let ``reactivate a previously deactivated agreement`` () =
         match result with
         | Ok updated ->
             Assert.True(updated.isActive, "Expected isActive = true after reactivation")
+            // REM-013: Verify persistence via independent read
+            let persisted = ObligationAgreementService.getById updated.id
+            match persisted with
+            | Some p -> Assert.True(p.isActive, "getById should show isActive = true")
+            | None -> Assert.Fail("getById returned None after successful reactivation")
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     finally TestCleanup.deleteAll tracker
 
@@ -659,6 +702,11 @@ let ``deactivate an active agreement`` () =
         match result with
         | Ok deactivated ->
             Assert.False(deactivated.isActive, "Expected isActive = false after deactivation")
+            // REM-013: Verify persistence via independent read
+            let persisted = ObligationAgreementService.getById deactivated.id
+            match persisted with
+            | Some p -> Assert.False(p.isActive, "getById should show isActive = false")
+            | None -> Assert.Fail("getById returned None after successful deactivation")
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     finally TestCleanup.deleteAll tracker
 

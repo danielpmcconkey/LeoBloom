@@ -186,25 +186,7 @@ let ``empty period produces zero net income`` () =
         | Error err -> Assert.Fail(sprintf "Expected Ok: %s" err)
     finally TestCleanup.deleteAll tracker
 
-[<Fact>]
-[<Trait("GherkinId", "FT-IS-008")>]
-let ``net income is positive when revenue exceeds expenses`` () =
-    use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let assetAcct = InsertHelpers.insertAccount conn tracker (prefix + "AS") "Asset" assetTypeId true
-        let revAcct = InsertHelpers.insertAccount conn tracker (prefix + "RV") "Revenue" revenueTypeId true
-        let expAcct = InsertHelpers.insertAccount conn tracker (prefix + "EX") "Expense" expenseTypeId true
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
-        postEntry conn tracker assetAcct revAcct fpId (DateOnly(2026, 3, 10)) "Big income" 2000m |> ignore
-        postEntry conn tracker expAcct assetAcct fpId (DateOnly(2026, 3, 20)) "Small expense" 500m |> ignore
-        let result = IncomeStatementService.getByPeriodId fpId
-        match result with
-        | Ok report ->
-            Assert.Equal(1500m, report.netIncome)
-        | Error err -> Assert.Fail(sprintf "Expected Ok: %s" err)
-    finally TestCleanup.deleteAll tracker
+// IS-008 removed (REM-014): redundant with IS-001
 
 [<Fact>]
 [<Trait("GherkinId", "FT-IS-009")>]

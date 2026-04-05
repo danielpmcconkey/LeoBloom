@@ -232,26 +232,7 @@ let ``close then reopen then close again full cycle`` () =
         | Error errs -> Assert.Fail(sprintf "Second close failed: %A" errs)
     finally TestCleanup.deleteAll tracker
 
-// =====================================================================
-// @FT-CFP-009 -- Close a period with no journal entries
-// =====================================================================
-
-[<Fact>]
-[<Trait("GherkinId", "FT-CFP-009")>]
-let ``close an empty period with no entries`` () =
-    use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 5, 1)) (DateOnly(2026, 5, 31)) true
-        let cmd = { fiscalPeriodId = fpId }
-        let result = FiscalPeriodService.closePeriod cmd
-        match result with
-        | Ok period ->
-            Assert.Equal(fpId, period.id)
-            Assert.False(period.isOpen, "Empty period should close successfully")
-        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
-    finally TestCleanup.deleteAll tracker
+// CFP-009 removed (REM-014): redundant with CFP-001
 
 // =====================================================================
 // @FT-CFP-010 -- Posting is rejected after closing a period via closePeriod

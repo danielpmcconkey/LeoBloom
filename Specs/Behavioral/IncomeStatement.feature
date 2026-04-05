@@ -123,23 +123,8 @@ Feature: Income Statement
         And the revenue section contains 0 lines
         And the expenses section contains 0 lines
 
-    @FT-IS-008
-    Scenario: Net income is positive when revenue exceeds expenses
-        Given the ledger schema exists for income statement queries
-        And an income-statement-test open fiscal period "2026-03" from 2026-03-01 to 2026-03-31
-        And an income-statement-test active account 1010 of type asset
-        And an income-statement-test active account 4010 of type revenue
-        And an income-statement-test active account 5010 of type expense
-        And an income-statement-test entry dated 2026-03-10 described as "Big income" with lines:
-            | account | amount  | entry_type |
-            | 1010    | 2000.00 | debit      |
-            | 4010    | 2000.00 | credit     |
-        And an income-statement-test entry dated 2026-03-20 described as "Small expense" with lines:
-            | account | amount | entry_type |
-            | 5010    | 500.00 | debit      |
-            | 1010    | 500.00 | credit     |
-        When I request the income statement for period "2026-03"
-        Then the net income is 1500.00
+    # IS-008 removed (REM-014): redundant with IS-001 — both prove positive
+    # net income when revenue exceeds expenses, differing only in amounts.
 
     @FT-IS-009
     Scenario: Net loss when expenses exceed revenue
