@@ -3,6 +3,7 @@ module LeoBloom.CLI.Program
 open System
 open Argu
 open LeoBloom.CLI.LedgerCommands
+open LeoBloom.CLI.ReportCommands
 open LeoBloom.CLI.ErrorHandler
 open LeoBloom.Utilities
 
@@ -10,11 +11,13 @@ open LeoBloom.Utilities
 
 type LeoBloomArgs =
     | [<CliPrefix(CliPrefix.None)>] Ledger of ParseResults<LedgerArgs>
+    | [<CliPrefix(CliPrefix.None)>] Report of ParseResults<ReportArgs>
     | Json
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | Ledger _ -> "Ledger commands (post, void, show)"
+            | Report _ -> "Report commands (schedule-e, general-ledger, cash-receipts, cash-disbursements)"
             | Json -> "Output in JSON format"
 
 [<EntryPoint>]
@@ -32,6 +35,12 @@ let main (argv: string array) =
             match results.TryGetSubCommand() with
             | Some (Ledger ledgerResults) ->
                 LedgerCommands.dispatch isJson ledgerResults
+            | Some (Report reportResults) ->
+                if isJson then
+                    Console.Error.WriteLine("Error: --json is not supported for report commands")
+                    ExitCodes.businessError
+                else
+                    ReportCommands.dispatch reportResults
             | _ ->
                 Console.Error.WriteLine(parser.PrintUsage())
                 ExitCodes.systemError
