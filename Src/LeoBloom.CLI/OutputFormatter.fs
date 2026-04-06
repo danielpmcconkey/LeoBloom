@@ -152,6 +152,119 @@ let private formatCashDisbursements (report: CashDisbursementsReport) : string =
     lines.Add(sprintf "  %-12s  %-8s  %-30s  %-25s  %12s" "" "" "Total Disbursements" "" (sprintf "%M" report.totalDisbursements))
     String.Join(Environment.NewLine, lines)
 
+// --- Trial Balance formatting ---
+
+let private formatTrialBalance (report: TrialBalanceReport) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Trial Balance -- Period %s (ID: %d)" report.periodKey report.fiscalPeriodId)
+    lines.Add("")
+    for group in report.groups do
+        lines.Add(sprintf "  %s" (group.accountTypeName.ToUpper()))
+        lines.Add(sprintf "  %-6s  %-32s  %12s  %12s" "Code" "Account Name" "Debit" "Credit")
+        lines.Add(sprintf "  %s  %s  %s  %s" (String.replicate 6 "-") (String.replicate 32 "-") (String.replicate 12 "-") (String.replicate 12 "-"))
+        for line in group.lines do
+            let debit = if line.debitTotal <> 0m then sprintf "%M" line.debitTotal else ""
+            let credit = if line.creditTotal <> 0m then sprintf "%M" line.creditTotal else ""
+            let name = if line.accountName.Length > 32 then line.accountName.Substring(0, 29) + "..." else line.accountName
+            lines.Add(sprintf "  %-6s  %-32s  %12s  %12s" line.accountCode name debit credit)
+        lines.Add(sprintf "  %s  %s  %s  %s" (String.replicate 6 "-") (String.replicate 32 "-") (String.replicate 12 "-") (String.replicate 12 "-"))
+        lines.Add(sprintf "  %-6s  %-32s  %12s  %12s" "" "Subtotal" (sprintf "%M" group.groupDebitTotal) (sprintf "%M" group.groupCreditTotal))
+        lines.Add("")
+    lines.Add(sprintf "  %-6s  %-32s  %12s  %12s" "" "Grand Total" (sprintf "%M" report.grandTotalDebits) (sprintf "%M" report.grandTotalCredits))
+    let status = if report.isBalanced then "BALANCED" else "UNBALANCED"
+    lines.Add(sprintf "  Status: %s" status)
+    String.Join(Environment.NewLine, lines)
+
+// --- Balance Sheet formatting ---
+
+let private formatBalanceSheet (report: BalanceSheetReport) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Balance Sheet -- As of %s" (report.asOfDate.ToString("yyyy-MM-dd")))
+    lines.Add("")
+    // Assets
+    lines.Add(sprintf "  ASSETS")
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "Code" "Account Name" "Balance")
+    lines.Add(sprintf "  %s  %s  %s" (String.replicate 6 "-") (String.replicate 32 "-") (String.replicate 12 "-"))
+    for line in report.assets.lines do
+        let name = if line.accountName.Length > 32 then line.accountName.Substring(0, 29) + "..." else line.accountName
+        lines.Add(sprintf "  %-6s  %-32s  %12s" line.accountCode name (sprintf "%M" line.balance))
+    lines.Add(sprintf "  %s  %s  %s" (String.replicate 6 "-") (String.replicate 32 "-") (String.replicate 12 "-"))
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Total Assets" (sprintf "%M" report.assets.sectionTotal))
+    lines.Add("")
+    // Liabilities
+    lines.Add(sprintf "  LIABILITIES")
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "Code" "Account Name" "Balance")
+    lines.Add(sprintf "  %s  %s  %s" (String.replicate 6 "-") (String.replicate 32 "-") (String.replicate 12 "-"))
+    for line in report.liabilities.lines do
+        let name = if line.accountName.Length > 32 then line.accountName.Substring(0, 29) + "..." else line.accountName
+        lines.Add(sprintf "  %-6s  %-32s  %12s" line.accountCode name (sprintf "%M" line.balance))
+    lines.Add(sprintf "  %s  %s  %s" (String.replicate 6 "-") (String.replicate 32 "-") (String.replicate 12 "-"))
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Total Liabilities" (sprintf "%M" report.liabilities.sectionTotal))
+    lines.Add("")
+    // Equity
+    lines.Add(sprintf "  EQUITY")
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "Code" "Account Name" "Balance")
+    lines.Add(sprintf "  %s  %s  %s" (String.replicate 6 "-") (String.replicate 32 "-") (String.replicate 12 "-"))
+    for line in report.equity.lines do
+        let name = if line.accountName.Length > 32 then line.accountName.Substring(0, 29) + "..." else line.accountName
+        lines.Add(sprintf "  %-6s  %-32s  %12s" line.accountCode name (sprintf "%M" line.balance))
+    lines.Add(sprintf "  %s  %s  %s" (String.replicate 6 "-") (String.replicate 32 "-") (String.replicate 12 "-"))
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Subtotal Equity Accounts" (sprintf "%M" report.equity.sectionTotal))
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Retained Earnings" (sprintf "%M" report.retainedEarnings))
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Total Equity" (sprintf "%M" report.totalEquity))
+    lines.Add("")
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Total Liabilities + Equity" (sprintf "%M" (report.liabilities.sectionTotal + report.totalEquity)))
+    let status = if report.isBalanced then "BALANCED" else "UNBALANCED"
+    lines.Add(sprintf "  Status: %s" status)
+    String.Join(Environment.NewLine, lines)
+
+// --- Income Statement formatting ---
+
+let private formatIncomeStatementSection (lines: ResizeArray<string>) (section: IncomeStatementSection) =
+    lines.Add(sprintf "  %s" (section.sectionName.ToUpper()))
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "Code" "Account Name" "Amount")
+    lines.Add(sprintf "  %s  %s  %s" (String.replicate 6 "-") (String.replicate 32 "-") (String.replicate 12 "-"))
+    for line in section.lines do
+        let name = if line.accountName.Length > 32 then line.accountName.Substring(0, 29) + "..." else line.accountName
+        lines.Add(sprintf "  %-6s  %-32s  %12s" line.accountCode name (sprintf "%M" line.balance))
+    lines.Add(sprintf "  %s  %s  %s" (String.replicate 6 "-") (String.replicate 32 "-") (String.replicate 12 "-"))
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "" (sprintf "Total %s" section.sectionName) (sprintf "%M" section.sectionTotal))
+
+let private formatIncomeStatement (report: IncomeStatementReport) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Income Statement -- Period %s (ID: %d)" report.periodKey report.fiscalPeriodId)
+    lines.Add("")
+    formatIncomeStatementSection lines report.revenue
+    lines.Add("")
+    formatIncomeStatementSection lines report.expenses
+    lines.Add("")
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Net Income" (sprintf "%M" report.netIncome))
+    String.Join(Environment.NewLine, lines)
+
+// --- Subtree P&L formatting ---
+
+let private formatSubtreePL (report: SubtreePLReport) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "P&L Subtree -- %s %s -- Period %s (ID: %d)" report.rootAccountCode report.rootAccountName report.periodKey report.fiscalPeriodId)
+    lines.Add("")
+    formatIncomeStatementSection lines report.revenue
+    lines.Add("")
+    formatIncomeStatementSection lines report.expenses
+    lines.Add("")
+    lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Net Income" (sprintf "%M" report.netIncome))
+    String.Join(Environment.NewLine, lines)
+
+// --- Account Balance formatting ---
+
+let private formatAccountBalance (bal: AccountBalance) : string =
+    let normalBalStr = match bal.normalBalance with | NormalBalance.Debit -> "Debit" | NormalBalance.Credit -> "Credit"
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Account Balance -- %s %s" bal.accountCode bal.accountName)
+    lines.Add(sprintf "  As of:          %s" (bal.asOfDate.ToString("yyyy-MM-dd")))
+    lines.Add(sprintf "  Normal Balance: %s" normalBalStr)
+    lines.Add(sprintf "  Balance:        %M" bal.balance)
+    String.Join(Environment.NewLine, lines)
+
 // --- Invoice formatting ---
 
 let private formatInvoice (inv: Invoice) : string =
@@ -227,6 +340,11 @@ let formatHuman (value: obj) : string =
     | :? CashDisbursementsReport as r -> formatCashDisbursements r
     | :? Invoice as inv -> formatInvoice inv
     | :? Transfer as t -> formatTransfer t
+    | :? TrialBalanceReport as r -> formatTrialBalance r
+    | :? BalanceSheetReport as r -> formatBalanceSheet r
+    | :? IncomeStatementReport as r -> formatIncomeStatement r
+    | :? SubtreePLReport as r -> formatSubtreePL r
+    | :? AccountBalance as b -> formatAccountBalance b
     | _ -> sprintf "%A" value
 
 let formatJson (value: obj) : string =
