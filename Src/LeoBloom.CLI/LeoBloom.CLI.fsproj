@@ -14,6 +14,8 @@
     <Compile Include="ReportCommands.fs" />
     <Compile Include="InvoiceCommands.fs" />
     <Compile Include="TransferCommands.fs" />
+    <Compile Include="AccountCommands.fs" />
+    <Compile Include="PeriodCommands.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

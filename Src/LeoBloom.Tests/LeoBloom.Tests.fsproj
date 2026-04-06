@@ -39,6 +39,8 @@
     <Compile Include="InvoiceTests.fs" />
     <Compile Include="InvoiceCommandsTests.fs" />
     <Compile Include="TransferCommandsTests.fs" />
+    <Compile Include="AccountCommandsTests.fs" />
+    <Compile Include="PeriodCommandsTests.fs" />
     <Compile Include="SeedRunnerTests.fs" />
   </ItemGroup>
 

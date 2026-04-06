@@ -254,6 +254,69 @@ let private formatSubtreePL (report: SubtreePLReport) : string =
     lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Net Income" (sprintf "%M" report.netIncome))
     String.Join(Environment.NewLine, lines)
 
+// --- Account detail formatting ---
+
+let private formatAccount (a: Account) : string =
+    let subTypeStr =
+        match a.subType with
+        | Some st -> AccountSubType.toDbString st
+        | None -> "(none)"
+    let activeStr = if a.isActive then "Active" else "Inactive"
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Account %s -- %s" a.code a.name)
+    lines.Add(sprintf "  ID:            %d" a.id)
+    lines.Add(sprintf "  Type ID:       %d" a.accountTypeId)
+    lines.Add(sprintf "  Sub-Type:      %s" subTypeStr)
+    lines.Add(sprintf "  Parent Code:   %s" (a.parentCode |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Status:        %s" activeStr)
+    lines.Add(sprintf "  Created:       %s" (a.createdAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    lines.Add(sprintf "  Modified:      %s" (a.modifiedAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    String.Join(Environment.NewLine, lines)
+
+let private formatAccountList (accounts: Account list) : string =
+    if accounts.IsEmpty then "(no accounts found)"
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "  %-6s  %-10s  %-35s  %-8s  %-8s" "ID" "Code" "Name" "Type ID" "Active")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s"
+            (String.replicate 6 "-") (String.replicate 10 "-")
+            (String.replicate 35 "-") (String.replicate 8 "-") (String.replicate 8 "-"))
+        for a in accounts do
+            let name = if a.name.Length > 35 then a.name.Substring(0, 32) + "..." else a.name
+            let active = if a.isActive then "Yes" else "No"
+            lines.Add(sprintf "  %-6d  %-10s  %-35s  %-8d  %-8s"
+                a.id a.code name a.accountTypeId active)
+        String.Join(Environment.NewLine, lines)
+
+// --- Fiscal Period detail formatting ---
+
+let private formatFiscalPeriod (fp: FiscalPeriod) : string =
+    let statusStr = if fp.isOpen then "Open" else "Closed"
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Fiscal Period %s (ID: %d)" fp.periodKey fp.id)
+    lines.Add(sprintf "  Start Date:    %s" (fp.startDate.ToString("yyyy-MM-dd")))
+    lines.Add(sprintf "  End Date:      %s" (fp.endDate.ToString("yyyy-MM-dd")))
+    lines.Add(sprintf "  Status:        %s" statusStr)
+    lines.Add(sprintf "  Created:       %s" (fp.createdAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    String.Join(Environment.NewLine, lines)
+
+let private formatFiscalPeriodList (periods: FiscalPeriod list) : string =
+    if periods.IsEmpty then "(no fiscal periods found)"
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "  %-6s  %-10s  %-12s  %-12s  %-8s" "ID" "Key" "Start" "End" "Status")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s"
+            (String.replicate 6 "-") (String.replicate 10 "-")
+            (String.replicate 12 "-") (String.replicate 12 "-") (String.replicate 8 "-"))
+        for fp in periods do
+            let status = if fp.isOpen then "Open" else "Closed"
+            lines.Add(sprintf "  %-6d  %-10s  %-12s  %-12s  %-8s"
+                fp.id fp.periodKey
+                (fp.startDate.ToString("yyyy-MM-dd"))
+                (fp.endDate.ToString("yyyy-MM-dd"))
+                status)
+        String.Join(Environment.NewLine, lines)
+
 // --- Account Balance formatting ---
 
 let private formatAccountBalance (bal: AccountBalance) : string =
@@ -345,6 +408,8 @@ let formatHuman (value: obj) : string =
     | :? IncomeStatementReport as r -> formatIncomeStatement r
     | :? SubtreePLReport as r -> formatSubtreePL r
     | :? AccountBalance as b -> formatAccountBalance b
+    | :? Account as a -> formatAccount a
+    | :? FiscalPeriod as fp -> formatFiscalPeriod fp
     | _ -> sprintf "%A" value
 
 let formatJson (value: obj) : string =
@@ -402,6 +467,27 @@ let writeTransferList (isJson: bool) (transfers: Transfer list) : int =
         let output = formatTransferList transfers
         if not (String.IsNullOrEmpty output) then
             Console.Out.WriteLine(output)
+    ExitCodes.success
+
+/// Dedicated write function for Account list to avoid F# type erasure
+/// issues with generic list pattern matching in formatHuman.
+let writeAccountList (isJson: bool) (accounts: Account list) : int =
+    if isJson then
+        let output = formatJson accounts
+        Console.Out.WriteLine(output)
+    else
+        let output = formatAccountList accounts
+        Console.Out.WriteLine(output)
+    ExitCodes.success
+
+/// Dedicated write function for FiscalPeriod list.
+let writePeriodList (isJson: bool) (periods: FiscalPeriod list) : int =
+    if isJson then
+        let output = formatJson periods
+        Console.Out.WriteLine(output)
+    else
+        let output = formatFiscalPeriodList periods
+        Console.Out.WriteLine(output)
     ExitCodes.success
 
 let writeHumanErrors (errors: string list) : int =
