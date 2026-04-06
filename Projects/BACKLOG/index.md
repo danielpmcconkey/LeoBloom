@@ -55,7 +55,7 @@
 | 051 | Move IncludeErrorDetail to appsettings | Done |
 | 052 | Account sub-type classification | Done |
 | 053 | Fix pre-existing test failures | Done |
-| 054 | Seed data separation | Not started |
+| 054 | Seed data separation | Done |
 
 ---
 
@@ -100,21 +100,16 @@ if the domain reorg moves files that contain the duplicated helpers.
 
 ### Foundation Cleanup (053 + 054)
 
-**HIGH PRIORITY — before any new feature work.**
-
-These two projects clean up the foundation before more features go on top.
-Run them in order.
+Complete. Both projects done.
 
 1. **053 (fix pre-existing test failures)** — Done. 5 tests in
    `PostObligationToLedgerTests` fixed by moving fiscal period dates to 2099
    to avoid seed data collision. All 608 tests pass.
 
-2. **054 (seed data separation)** — extract baseline data (COA, fiscal
-   periods, obligation agreements) out of the migration chain into
-   idempotent seed scripts. Prevents the "works in dev, breaks prod" class
-   of bugs. See
-   `Projects/Project054-SeedDataSeparation/Project054-brief.md`.
-   Vision doc: `BdsNotes/seed-data-vision-2026-04-05.md`.
+2. **054 (seed data separation)** — Done. Baseline data (COA, fiscal periods)
+   extracted from migration chain into idempotent seed scripts under
+   `Seeds/dev/`. Shell runner, documentation, full BDD coverage. 615 tests
+   pass.
 
 ### CLI Sequencing (036-042)
 

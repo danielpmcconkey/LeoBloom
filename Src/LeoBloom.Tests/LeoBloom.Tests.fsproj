@@ -36,6 +36,7 @@
     <Compile Include="AcctAmountParsingTests.fs" />
     <Compile Include="ReportingServiceTests.fs" />
     <Compile Include="ReportCommandsTests.fs" />
+    <Compile Include="SeedRunnerTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
