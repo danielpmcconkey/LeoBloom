@@ -10,6 +10,9 @@ obj/
 packages/
 *.nupkg
 
+# Test output
+TestResults/
+
 # Fable
 .fable/
 
