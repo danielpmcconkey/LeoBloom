@@ -56,7 +56,7 @@
 | 052 | Account sub-type classification | Done |
 | 053 | Fix pre-existing test failures | Done |
 | 054 | Seed data separation | Done |
-| 055 | Closed fiscal period posting guard | Blocked (design decision) |
+| 055 | Closed fiscal period posting guard | Done |
 
 ---
 
@@ -114,19 +114,24 @@ Complete. Both projects done.
 
 ### Closed Period Posting Guard (055)
 
-**Blocked on design decision.** P053 fixed 5 of 7 original test failures
-(date collision bugs). The remaining 2 (POL-013, POL-017) are not bugs --
-they assert a closed-period rejection feature that was never implemented.
-The Gherkin specs and test implementations exist; the service-level guard
-does not.
+**Done.** The guard already existed in `JournalEntryService.post` (line 62-63)
+— it checks `isOpen` and rejects with "Fiscal period 'N' is not open". This
+is the correct placement: the JE service is the domain chokepoint for all
+ledger writes (obligations, transfers, direct posts), so the invariant is
+enforced once, universally.
 
-This is a GAAP-relevant design decision, not a simple bug fix. Dan needs to
-decide on hard reject vs. override mechanism, scope (obligation posting only
-vs. all ledger writes), and workflow (guard vs. reopen-then-post). See
-`Projects/Project055-ClosedPeriodPostingGuard/Project055-brief.md` for the
-full question set.
+The two "failing" tests (POL-013, POL-017) were actually passing through
+`JournalEntryService.post` and getting rejected correctly — but a fiscal
+period date collision across test files caused `findByDate` to return a
+different test's *open* period instead of the closed one the test created.
+Fix: gave each test file that exercises `findByDate` its own year
+(2091=PostObligationToLedgerTests, 2092=TransferTests). QE DSWF updated
+with the isolation rule. 658/658 tests pass.
 
-**Do not schedule this into the pipeline until Dan provides direction.**
+Design questions from the brief resolved via GAAP:
+- Hard reject, no override flag. Reopen-then-post is the correct workflow.
+- Guard covers all ledger writes (already does, at JE service level).
+- Existing Gherkin specs were correct as written.
 
 ### CLI Sequencing (036-042)
 

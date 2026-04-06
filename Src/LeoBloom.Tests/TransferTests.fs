@@ -103,7 +103,7 @@ let private initiateTransfer
         { fromAccountId = fromId
           toAccountId = toId
           amount = amount
-          initiatedDate = DateOnly(2099, 1, 1)
+          initiatedDate = DateOnly(2092, 1, 1)
           expectedSettlement = None
           description = description }
     match TransferService.initiate cmd with
@@ -127,7 +127,7 @@ let ``Initiating a transfer between two active asset accounts succeeds`` () =
             { fromAccountId = fromId
               toAccountId = toId
               amount = 500.00m
-              initiatedDate = DateOnly(2099, 1, 1)
+              initiatedDate = DateOnly(2092, 1, 1)
               expectedSettlement = None
               description = None }
 
@@ -138,7 +138,7 @@ let ``Initiating a transfer between two active asset accounts succeeds`` () =
             Assert.Equal(toId, transfer.toAccountId)
             Assert.Equal(500.00m, transfer.amount)
             Assert.Equal(TransferStatus.Initiated, transfer.status)
-            Assert.Equal(DateOnly(2099, 1, 1), transfer.initiatedDate)
+            Assert.Equal(DateOnly(2092, 1, 1), transfer.initiatedDate)
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     finally TestCleanup.deleteAll tracker
 
@@ -160,7 +160,7 @@ let ``Initiating with from_account equal to to_account returns error`` () =
             { fromAccountId = acctId
               toAccountId = acctId
               amount = 500.00m
-              initiatedDate = DateOnly(2099, 1, 1)
+              initiatedDate = DateOnly(2092, 1, 1)
               expectedSettlement = None
               description = None }
 
@@ -192,7 +192,7 @@ let ``Initiating with a non-asset account type returns error`` () =
             { fromAccountId = checkingId
               toAccountId = rentId
               amount = 500.00m
-              initiatedDate = DateOnly(2099, 1, 1)
+              initiatedDate = DateOnly(2092, 1, 1)
               expectedSettlement = None
               description = None }
 
@@ -223,7 +223,7 @@ let ``Initiating with an inactive account returns error`` () =
             { fromAccountId = checkingId
               toAccountId = closedId
               amount = 500.00m
-              initiatedDate = DateOnly(2099, 1, 1)
+              initiatedDate = DateOnly(2092, 1, 1)
               expectedSettlement = None
               description = None }
 
@@ -252,7 +252,7 @@ let ``Initiating with amount zero returns error`` () =
             { fromAccountId = fromId
               toAccountId = toId
               amount = 0.00m
-              initiatedDate = DateOnly(2099, 1, 1)
+              initiatedDate = DateOnly(2092, 1, 1)
               expectedSettlement = None
               description = None }
 
@@ -281,7 +281,7 @@ let ``Initiating with negative amount returns error`` () =
             { fromAccountId = fromId
               toAccountId = toId
               amount = -100.00m
-              initiatedDate = DateOnly(2099, 1, 1)
+              initiatedDate = DateOnly(2092, 1, 1)
               expectedSettlement = None
               description = None }
 
@@ -305,12 +305,12 @@ let ``Confirming an initiated transfer creates correct journal entry and sets st
     try
         let prefix = TestData.uniquePrefix()
         let (fromId, toId) = setupTwoAssetAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 3, 1)) (DateOnly(2099, 3, 31)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2092, 3, 1)) (DateOnly(2092, 3, 31)) true
         let transfer = initiateTransfer tracker fromId toId 1000.00m None
 
         let confirmCmd : ConfirmTransferCommand =
             { transferId = transfer.id
-              confirmedDate = DateOnly(2099, 3, 15) }
+              confirmedDate = DateOnly(2092, 3, 15) }
 
         let result = TransferService.confirm confirmCmd
         match result with
@@ -349,12 +349,12 @@ let ``Confirming sets confirmed_date and journal_entry_id on the transfer`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (fromId, toId) = setupTwoAssetAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2092, 4, 1)) (DateOnly(2092, 4, 30)) true
         let transfer = initiateTransfer tracker fromId toId 750.00m None
 
         let confirmCmd : ConfirmTransferCommand =
             { transferId = transfer.id
-              confirmedDate = DateOnly(2099, 4, 15) }
+              confirmedDate = DateOnly(2092, 4, 15) }
 
         let result = TransferService.confirm confirmCmd
         match result with
@@ -363,13 +363,13 @@ let ``Confirming sets confirmed_date and journal_entry_id on the transfer`` () =
             | Some jeId -> TestCleanup.trackJournalEntry jeId tracker
             | None -> ()
 
-            Assert.Equal(Some (DateOnly(2099, 4, 15)), confirmed.confirmedDate)
+            Assert.Equal(Some (DateOnly(2092, 4, 15)), confirmed.confirmedDate)
             Assert.True(confirmed.journalEntryId.IsSome, "Expected journal_entry_id to be set")
 
             // Cross-check with DB
             let dbTransfer = queryTransfer conn confirmed.id
             Assert.True(dbTransfer.IsSome)
-            Assert.Equal(Some (DateOnly(2099, 4, 15)), dbTransfer.Value.confirmedDate)
+            Assert.Equal(Some (DateOnly(2092, 4, 15)), dbTransfer.Value.confirmedDate)
             Assert.Equal(confirmed.journalEntryId, dbTransfer.Value.journalEntryId)
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     finally TestCleanup.deleteAll tracker
@@ -386,12 +386,12 @@ let ``Journal entry has transfer source and reference`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (fromId, toId) = setupTwoAssetAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 5, 1)) (DateOnly(2099, 5, 31)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2092, 5, 1)) (DateOnly(2092, 5, 31)) true
         let transfer = initiateTransfer tracker fromId toId 500.00m None
 
         let confirmCmd : ConfirmTransferCommand =
             { transferId = transfer.id
-              confirmedDate = DateOnly(2099, 5, 15) }
+              confirmedDate = DateOnly(2092, 5, 15) }
 
         let result = TransferService.confirm confirmCmd
         match result with
@@ -424,10 +424,10 @@ let ``Journal entry entry_date equals confirmed_date`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (fromId, toId) = setupTwoAssetAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 6, 1)) (DateOnly(2099, 6, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2092, 6, 1)) (DateOnly(2092, 6, 30)) true
         let transfer = initiateTransfer tracker fromId toId 500.00m None
 
-        let confirmedDate = DateOnly(2099, 6, 20)
+        let confirmedDate = DateOnly(2092, 6, 20)
         let confirmCmd : ConfirmTransferCommand =
             { transferId = transfer.id
               confirmedDate = confirmedDate }
@@ -456,12 +456,12 @@ let ``Journal entry uses transfer description when present`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (fromId, toId) = setupTwoAssetAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 7, 1)) (DateOnly(2099, 7, 31)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2092, 7, 1)) (DateOnly(2092, 7, 31)) true
         let transfer = initiateTransfer tracker fromId toId 500.00m (Some "Savings top-up")
 
         let confirmCmd : ConfirmTransferCommand =
             { transferId = transfer.id
-              confirmedDate = DateOnly(2099, 7, 15) }
+              confirmedDate = DateOnly(2092, 7, 15) }
 
         let result = TransferService.confirm confirmCmd
         match result with
@@ -487,12 +487,12 @@ let ``Journal entry auto-generates description when transfer has no description`
     try
         let prefix = TestData.uniquePrefix()
         let (fromId, toId) = setupTwoAssetAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 8, 1)) (DateOnly(2099, 8, 31)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2092, 8, 1)) (DateOnly(2092, 8, 31)) true
         let transfer = initiateTransfer tracker fromId toId 500.00m None
 
         let confirmCmd : ConfirmTransferCommand =
             { transferId = transfer.id
-              confirmedDate = DateOnly(2099, 8, 15) }
+              confirmedDate = DateOnly(2092, 8, 15) }
 
         let result = TransferService.confirm confirmCmd
         match result with
@@ -518,11 +518,11 @@ let ``Confirming a transfer not in initiated status returns error`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (fromId, toId) = setupTwoAssetAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 9, 1)) (DateOnly(2099, 9, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2092, 9, 1)) (DateOnly(2092, 9, 30)) true
 
         // Initiate and then confirm to get a confirmed transfer
         let transfer = initiateTransfer tracker fromId toId 500.00m None
-        let firstConfirm = TransferService.confirm { transferId = transfer.id; confirmedDate = DateOnly(2099, 9, 15) }
+        let firstConfirm = TransferService.confirm { transferId = transfer.id; confirmedDate = DateOnly(2092, 9, 15) }
         match firstConfirm with
         | Ok confirmed ->
             match confirmed.journalEntryId with
@@ -531,7 +531,7 @@ let ``Confirming a transfer not in initiated status returns error`` () =
         | Error errs -> failwithf "Setup failed — first confirm should succeed: %A" errs
 
         // Now try to confirm again — should fail because status is already confirmed
-        let result = TransferService.confirm { transferId = transfer.id; confirmedDate = DateOnly(2099, 9, 15) }
+        let result = TransferService.confirm { transferId = transfer.id; confirmedDate = DateOnly(2092, 9, 15) }
         match result with
         | Ok secondConfirmed ->
             match secondConfirmed.journalEntryId with
@@ -560,7 +560,7 @@ let ``Confirming when no fiscal period covers confirmed_date returns error`` () 
 
         let confirmCmd : ConfirmTransferCommand =
             { transferId = transfer.id
-              confirmedDate = DateOnly(2099, 12, 15) }
+              confirmedDate = DateOnly(2092, 12, 15) }
 
         let result = TransferService.confirm confirmCmd
         match result with
@@ -586,7 +586,7 @@ let ``Retry after partial failure skips duplicate journal entry`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (fromId, toId) = setupTwoAssetAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 10, 1)) (DateOnly(2099, 10, 31)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2092, 10, 1)) (DateOnly(2092, 10, 31)) true
         let transfer = initiateTransfer tracker fromId toId 1000.00m None
 
         // Simulate partial failure: insert a journal entry + reference as if phase 2
@@ -595,7 +595,7 @@ let ``Retry after partial failure skips duplicate journal entry`` () =
             use jeCmd = new NpgsqlCommand(
                 "INSERT INTO ledger.journal_entry (entry_date, description, source, fiscal_period_id) \
                  VALUES (@d, @desc, 'transfer', @fp) RETURNING id", conn)
-            jeCmd.Parameters.AddWithValue("@d", DateOnly(2099, 10, 15)) |> ignore
+            jeCmd.Parameters.AddWithValue("@d", DateOnly(2092, 10, 15)) |> ignore
             jeCmd.Parameters.AddWithValue("@desc", "simulated partial failure") |> ignore
             jeCmd.Parameters.AddWithValue("@fp", fpId) |> ignore
             jeCmd.ExecuteScalar() :?> int
@@ -629,7 +629,7 @@ let ``Retry after partial failure skips duplicate journal entry`` () =
         // Act: call confirm — guard should find the existing JE and skip phase 2
         let confirmCmd : ConfirmTransferCommand =
             { transferId = transfer.id
-              confirmedDate = DateOnly(2099, 10, 15) }
+              confirmedDate = DateOnly(2092, 10, 15) }
 
         let result = TransferService.confirm confirmCmd
 
@@ -674,7 +674,7 @@ let ``Voided prior journal entry does not trigger the idempotency guard`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (fromId, toId) = setupTwoAssetAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 11, 1)) (DateOnly(2099, 11, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2092, 11, 1)) (DateOnly(2092, 11, 30)) true
         let transfer = initiateTransfer tracker fromId toId 1000.00m None
 
         // Insert a journal entry + reference, then void it
@@ -682,7 +682,7 @@ let ``Voided prior journal entry does not trigger the idempotency guard`` () =
             use jeCmd = new NpgsqlCommand(
                 "INSERT INTO ledger.journal_entry (entry_date, description, source, fiscal_period_id) \
                  VALUES (@d, @desc, 'transfer', @fp) RETURNING id", conn)
-            jeCmd.Parameters.AddWithValue("@d", DateOnly(2099, 11, 15)) |> ignore
+            jeCmd.Parameters.AddWithValue("@d", DateOnly(2092, 11, 15)) |> ignore
             jeCmd.Parameters.AddWithValue("@desc", "will be voided") |> ignore
             jeCmd.Parameters.AddWithValue("@fp", fpId) |> ignore
             jeCmd.ExecuteScalar() :?> int
@@ -723,7 +723,7 @@ let ``Voided prior journal entry does not trigger the idempotency guard`` () =
         // Act: call confirm — guard should NOT find voided entry, should create new
         let confirmCmd : ConfirmTransferCommand =
             { transferId = transfer.id
-              confirmedDate = DateOnly(2099, 11, 15) }
+              confirmedDate = DateOnly(2092, 11, 15) }
 
         let result = TransferService.confirm confirmCmd
 

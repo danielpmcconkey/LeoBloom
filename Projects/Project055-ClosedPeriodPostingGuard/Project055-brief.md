@@ -1,10 +1,9 @@
 # Project 055 -- Closed Fiscal Period Posting Guard
 
-## Priority: MEDIUM
+## Status: Done
 
-**DESIGN DECISION REQUIRED -- Dan must weigh in before this enters the pipeline.**
-
-## Status: Blocked (awaiting design direction)
+**Resolved 2026-04-06.** Guard already existed at the domain layer.
+Test failures were caused by fiscal period date collisions, not missing feature.
 
 ## What's Broken
 
