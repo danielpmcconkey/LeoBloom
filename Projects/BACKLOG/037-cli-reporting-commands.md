@@ -3,7 +3,7 @@
 **Epic:** J — CLI Consumption Layer
 **Depends On:** 036, 008, 011, 012, 013, 007
 **Architecture:** [ADR-003 — CLI Architecture](../../Documentation/ADR/ADR-003-cli-architecture.md)
-**Status:** Not started
+**Status:** Done
 
 ---
 
@@ -15,7 +15,7 @@ Thin wrappers around existing accounting report services. No new report logic.
 leobloom report trial-balance --period <id-or-key>
 leobloom report balance-sheet --as-of DATE
 leobloom report income-statement --period <id-or-key>
-leobloom report pnl-subtree --account ACCT --from DATE --to DATE
+leobloom report pnl-subtree --account ACCT --period <id-or-key>
 leobloom report account-balance --account ACCT [--as-of DATE]
 ```
 
@@ -27,3 +27,6 @@ leobloom report account-balance --account ACCT [--as-of DATE]
 - Human-readable tabular output by default, `--json` for agents.
 - Report formatting (column widths, alignment, totals) lives in the CLI
   layer, not in the domain services.
+- `pnl-subtree` uses `--period` (not `--from/--to`) — matches the service API.
+
+**Completed:** 2026-04-06 | Commit: 6dbfeb5

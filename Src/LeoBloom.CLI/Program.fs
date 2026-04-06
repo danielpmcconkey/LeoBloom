@@ -21,7 +21,7 @@ type LeoBloomArgs =
         member this.Usage =
             match this with
             | Ledger _ -> "Ledger commands (post, void, show)"
-            | Report _ -> "Report commands (schedule-e, general-ledger, cash-receipts, cash-disbursements)"
+            | Report _ -> "Report commands (schedule-e, general-ledger, cash-receipts, cash-disbursements, trial-balance, balance-sheet, income-statement, pnl-subtree, account-balance)"
             | Invoice _ -> "Invoice commands (record, show, list)"
             | Transfer _ -> "Transfer commands (initiate, confirm, show, list)"
             | Json -> "Output in JSON format"
@@ -42,11 +42,7 @@ let main (argv: string array) =
             | Some (Ledger ledgerResults) ->
                 LedgerCommands.dispatch isJson ledgerResults
             | Some (Report reportResults) ->
-                if isJson then
-                    Console.Error.WriteLine("Error: --json is not supported for report commands")
-                    ExitCodes.businessError
-                else
-                    ReportCommands.dispatch reportResults
+                ReportCommands.dispatch reportResults
             | Some (Invoice invoiceResults) ->
                 InvoiceCommands.dispatch isJson invoiceResults
             | Some (Transfer transferResults) ->

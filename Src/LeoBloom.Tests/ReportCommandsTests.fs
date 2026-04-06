@@ -1,6 +1,7 @@
 module LeoBloom.Tests.ReportCommandsTests
 
 open System
+open System.Text.Json
 open Npgsql
 open Xunit
 open LeoBloom.Domain.Ledger
@@ -154,11 +155,13 @@ let ``Schedule E service validation error surfaces to stderr`` () =
 
 [<Fact>]
 [<Trait("GherkinId", "FT-RPT-016")>]
-let ``Schedule E does not accept --json flag`` () =
+let ``Schedule E ignores top-level --json flag and produces human output`` () =
+    // P037 removed the --json short-circuit for report commands. Old commands
+    // that use writeHuman simply ignore the flag and produce human output.
     let result = CliRunner.run "--json report schedule-e --year 2026"
-    Assert.True(result.ExitCode = 1 || result.ExitCode = 2,
-                sprintf "Expected exit code 1 or 2, got %d" result.ExitCode)
-    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    Assert.Contains("Schedule E", stdout)
 
 // =====================================================================
 // report general-ledger — FT-RPT-020 to FT-RPT-024
@@ -226,11 +229,13 @@ let ``General ledger with nonexistent account surfaces service error`` () =
 
 [<Fact>]
 [<Trait("GherkinId", "FT-RPT-024")>]
-let ``General ledger does not accept --json flag`` () =
+let ``General ledger ignores top-level --json flag and produces human output`` () =
+    // P037 removed the --json short-circuit for report commands. Old commands
+    // that use writeHuman simply ignore the flag and produce human output.
+    // Account 1110 may not exist, so we accept exit 0 (found) or exit 1 (not found).
     let result = CliRunner.run "--json report general-ledger --account 1110 --from 2026-01-01 --to 2026-12-31"
-    Assert.True(result.ExitCode = 1 || result.ExitCode = 2,
-                sprintf "Expected exit code 1 or 2, got %d" result.ExitCode)
-    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+    Assert.True(result.ExitCode = 0 || result.ExitCode = 1,
+                sprintf "Expected exit code 0 or 1, got %d" result.ExitCode)
 
 // =====================================================================
 // report cash-receipts — FT-RPT-030 to FT-RPT-033
@@ -269,11 +274,13 @@ let ``Cash receipts with invalid date format prints error to stderr`` () =
 
 [<Fact>]
 [<Trait("GherkinId", "FT-RPT-033")>]
-let ``Cash receipts does not accept --json flag`` () =
+let ``Cash receipts ignores top-level --json flag and produces human output`` () =
+    // P037 removed the --json short-circuit for report commands. Old commands
+    // that use writeHuman simply ignore the flag and produce human output.
     let result = CliRunner.run "--json report cash-receipts --from 2026-01-01 --to 2026-12-31"
-    Assert.True(result.ExitCode = 1 || result.ExitCode = 2,
-                sprintf "Expected exit code 1 or 2, got %d" result.ExitCode)
-    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    Assert.Contains("Cash Receipts", stdout)
 
 // =====================================================================
 // report cash-disbursements — FT-RPT-040 to FT-RPT-043
@@ -312,11 +319,13 @@ let ``Cash disbursements with invalid date format prints error to stderr`` () =
 
 [<Fact>]
 [<Trait("GherkinId", "FT-RPT-043")>]
-let ``Cash disbursements does not accept --json flag`` () =
+let ``Cash disbursements ignores top-level --json flag and produces human output`` () =
+    // P037 removed the --json short-circuit for report commands. Old commands
+    // that use writeHuman simply ignore the flag and produce human output.
     let result = CliRunner.run "--json report cash-disbursements --from 2026-01-01 --to 2026-12-31"
-    Assert.True(result.ExitCode = 1 || result.ExitCode = 2,
-                sprintf "Expected exit code 1 or 2, got %d" result.ExitCode)
-    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    Assert.Contains("Cash Disbursements", stdout)
 
 // =====================================================================
 // Shared patterns — FT-RPT-050 (subcommand --help)
@@ -349,4 +358,353 @@ let ``report cash-disbursements --help prints usage information`` () =
     let result = CliRunner.run "report cash-disbursements --help"
     Assert.Equal(0, result.ExitCode)
     Assert.False(String.IsNullOrWhiteSpace(result.Stdout), "Expected usage output on stdout")
+
+// =====================================================================
+// P037 — Accounting Report CLI Commands (FT-RPT-100 to FT-RPT-160)
+// =====================================================================
+
+// --- FT-RPT-100: report --help lists all 5 new accounting subcommands ---
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-100")>]
+let ``report --help lists all 5 new accounting subcommands`` () =
+    let result = CliRunner.run "report --help"
+    Assert.Equal(0, result.ExitCode)
+    Assert.Contains("trial-balance", result.Stdout, StringComparison.OrdinalIgnoreCase)
+    Assert.Contains("balance-sheet", result.Stdout, StringComparison.OrdinalIgnoreCase)
+    Assert.Contains("income-statement", result.Stdout, StringComparison.OrdinalIgnoreCase)
+    Assert.Contains("pnl-subtree", result.Stdout, StringComparison.OrdinalIgnoreCase)
+    Assert.Contains("account-balance", result.Stdout, StringComparison.OrdinalIgnoreCase)
+
+// --- FT-RPT-101: each new report subcommand prints help with --help ---
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-101a")>]
+let ``report trial-balance --help prints usage information`` () =
+    let result = CliRunner.run "report trial-balance --help"
+    Assert.Equal(0, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stdout), "Expected usage output on stdout")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-101b")>]
+let ``report balance-sheet --help prints usage information`` () =
+    let result = CliRunner.run "report balance-sheet --help"
+    Assert.Equal(0, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stdout), "Expected usage output on stdout")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-101c")>]
+let ``report income-statement --help prints usage information`` () =
+    let result = CliRunner.run "report income-statement --help"
+    Assert.Equal(0, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stdout), "Expected usage output on stdout")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-101d")>]
+let ``report pnl-subtree --help prints usage information`` () =
+    let result = CliRunner.run "report pnl-subtree --help"
+    Assert.Equal(0, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stdout), "Expected usage output on stdout")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-101e")>]
+let ``report account-balance --help prints usage information`` () =
+    let result = CliRunner.run "report account-balance --help"
+    Assert.Equal(0, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stdout), "Expected usage output on stdout")
+
+// =====================================================================
+// report trial-balance — FT-RPT-110 to FT-RPT-114
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-110")>]
+let ``trial balance by period ID produces human-readable output`` () =
+    let result = CliRunner.run "report trial-balance --period 26500"
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    // Human output always contains the Grand Total line and status
+    Assert.Contains("Trial Balance", stdout)
+    Assert.Contains("Grand Total", stdout)
+    Assert.True(stdout.Contains("BALANCED") || stdout.Contains("UNBALANCED"),
+                "Expected BALANCED or UNBALANCED status line")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-111")>]
+let ``trial balance by period key produces human-readable output`` () =
+    let result = CliRunner.run "report trial-balance --period 2026-01"
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    Assert.Contains("Trial Balance", stdout)
+    Assert.Contains("Grand Total", stdout)
+    Assert.True(stdout.Contains("BALANCED") || stdout.Contains("UNBALANCED"),
+                "Expected BALANCED or UNBALANCED status line")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-112")>]
+let ``trial balance with --json flag outputs valid JSON`` () =
+    let result = CliRunner.run "report trial-balance --period 26500 --json"
+    Assert.Equal(0, result.ExitCode)
+    let cleanStdout = CliRunner.stripLogLines result.Stdout
+    let doc = JsonDocument.Parse(cleanStdout)
+    Assert.NotNull(doc)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-113")>]
+let ``trial balance with no --period flag prints error to stderr`` () =
+    let result = CliRunner.run "report trial-balance"
+    Assert.Equal(2, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-114")>]
+let ``trial balance with nonexistent period surfaces service error`` () =
+    let result = CliRunner.run "report trial-balance --period 999999"
+    Assert.Equal(1, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+// =====================================================================
+// report balance-sheet — FT-RPT-120 to FT-RPT-123
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-120")>]
+let ``balance sheet as of a valid date produces human-readable output`` () =
+    let result = CliRunner.run "report balance-sheet --as-of 2026-03-31"
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    Assert.Contains("Assets", stdout, StringComparison.OrdinalIgnoreCase)
+    Assert.Contains("Liabilities", stdout, StringComparison.OrdinalIgnoreCase)
+    Assert.Contains("Equity", stdout, StringComparison.OrdinalIgnoreCase)
+    Assert.Contains("Retained Earnings", stdout)
+    Assert.True(stdout.Contains("BALANCED") || stdout.Contains("UNBALANCED"),
+                "Expected BALANCED or UNBALANCED status line")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-121")>]
+let ``balance sheet with --json flag outputs valid JSON`` () =
+    let result = CliRunner.run "report balance-sheet --as-of 2026-03-31 --json"
+    Assert.Equal(0, result.ExitCode)
+    let cleanStdout = CliRunner.stripLogLines result.Stdout
+    let doc = JsonDocument.Parse(cleanStdout)
+    Assert.NotNull(doc)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-122")>]
+let ``balance sheet with no --as-of flag prints error to stderr`` () =
+    let result = CliRunner.run "report balance-sheet"
+    Assert.Equal(2, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-123")>]
+let ``balance sheet with invalid date format prints error to stderr`` () =
+    let result = CliRunner.run "report balance-sheet --as-of not-a-date"
+    Assert.Equal(1, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+// =====================================================================
+// report income-statement — FT-RPT-130 to FT-RPT-134
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-130")>]
+let ``income statement by period ID produces human-readable output`` () =
+    let result = CliRunner.run "report income-statement --period 26500"
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    Assert.Contains("Revenue", stdout, StringComparison.OrdinalIgnoreCase)
+    Assert.Contains("Expense", stdout, StringComparison.OrdinalIgnoreCase)
+    Assert.Contains("Net Income", stdout)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-131")>]
+let ``income statement by period key produces human-readable output`` () =
+    let result = CliRunner.run "report income-statement --period 2026-01"
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    Assert.Contains("Revenue", stdout, StringComparison.OrdinalIgnoreCase)
+    Assert.Contains("Expense", stdout, StringComparison.OrdinalIgnoreCase)
+    Assert.Contains("Net Income", stdout)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-132")>]
+let ``income statement with --json flag outputs valid JSON`` () =
+    let result = CliRunner.run "report income-statement --period 26500 --json"
+    Assert.Equal(0, result.ExitCode)
+    let cleanStdout = CliRunner.stripLogLines result.Stdout
+    let doc = JsonDocument.Parse(cleanStdout)
+    Assert.NotNull(doc)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-133")>]
+let ``income statement with no --period flag prints error to stderr`` () =
+    let result = CliRunner.run "report income-statement"
+    Assert.Equal(2, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-134")>]
+let ``income statement with nonexistent period surfaces service error`` () =
+    let result = CliRunner.run "report income-statement --period 999999"
+    Assert.Equal(1, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+// =====================================================================
+// report pnl-subtree — FT-RPT-140 to FT-RPT-144
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-140")>]
+let ``pnl subtree with valid account and period produces human-readable output`` () =
+    let result = CliRunner.run "report pnl-subtree --account 5000 --period 26500"
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    // Contains the root account code and name
+    Assert.Contains("5000", stdout)
+    Assert.Contains("Net Income", stdout)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-141")>]
+let ``pnl subtree with --json flag outputs valid JSON`` () =
+    let result = CliRunner.run "report pnl-subtree --account 5000 --period 26500 --json"
+    Assert.Equal(0, result.ExitCode)
+    let cleanStdout = CliRunner.stripLogLines result.Stdout
+    let doc = JsonDocument.Parse(cleanStdout)
+    Assert.NotNull(doc)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-142a")>]
+let ``pnl subtree missing --account is rejected`` () =
+    let result = CliRunner.run "report pnl-subtree --period 26500"
+    Assert.True(result.ExitCode = 1 || result.ExitCode = 2,
+                sprintf "Expected exit code 1 or 2, got %d" result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-142b")>]
+let ``pnl subtree missing --period is rejected`` () =
+    let result = CliRunner.run "report pnl-subtree --account 5000"
+    Assert.True(result.ExitCode = 1 || result.ExitCode = 2,
+                sprintf "Expected exit code 1 or 2, got %d" result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-143")>]
+let ``pnl subtree with nonexistent account surfaces service error`` () =
+    let result = CliRunner.run "report pnl-subtree --account 9999 --period 26500"
+    Assert.Equal(1, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-144")>]
+let ``pnl subtree with nonexistent period surfaces service error`` () =
+    let result = CliRunner.run "report pnl-subtree --account 5000 --period 999999"
+    Assert.Equal(1, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+// =====================================================================
+// report account-balance — FT-RPT-150 to FT-RPT-155
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-150")>]
+let ``account balance with explicit --as-of produces human-readable output`` () =
+    let result = CliRunner.run "report account-balance --account 1110 --as-of 2026-03-31"
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    Assert.Contains("1110", stdout)
+    // Contains the normal balance type (Debit or Credit)
+    Assert.True(stdout.Contains("Debit") || stdout.Contains("Credit"),
+                "Expected normal balance type (Debit or Credit)")
+    // Contains the balance amount (the word "Balance" in the output)
+    Assert.Contains("Balance", stdout)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-151")>]
+let ``account balance defaults --as-of to today when omitted`` () =
+    let result = CliRunner.run "report account-balance --account 1110"
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    Assert.Contains("1110", stdout)
+    Assert.Contains("Balance", stdout)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-152")>]
+let ``account balance with --json flag outputs valid JSON`` () =
+    let result = CliRunner.run "report account-balance --account 1110 --as-of 2026-03-31 --json"
+    Assert.Equal(0, result.ExitCode)
+    let cleanStdout = CliRunner.stripLogLines result.Stdout
+    let doc = JsonDocument.Parse(cleanStdout)
+    Assert.NotNull(doc)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-153")>]
+let ``account balance with no --account flag prints error to stderr`` () =
+    let result = CliRunner.run "report account-balance"
+    Assert.Equal(2, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-154")>]
+let ``account balance with invalid date format prints error to stderr`` () =
+    let result = CliRunner.run "report account-balance --account 1110 --as-of not-a-date"
+    Assert.Equal(1, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-155")>]
+let ``account balance with nonexistent account surfaces service error`` () =
+    let result = CliRunner.run "report account-balance --account 9999"
+    Assert.Equal(1, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+// =====================================================================
+// --json flag per-command — FT-RPT-160
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-160a")>]
+let ``--json on trial-balance produces valid JSON`` () =
+    let result = CliRunner.run "report trial-balance --period 26500 --json"
+    Assert.Equal(0, result.ExitCode)
+    let cleanStdout = CliRunner.stripLogLines result.Stdout
+    let doc = JsonDocument.Parse(cleanStdout)
+    Assert.NotNull(doc)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-160b")>]
+let ``--json on balance-sheet produces valid JSON`` () =
+    let result = CliRunner.run "report balance-sheet --as-of 2026-03-31 --json"
+    Assert.Equal(0, result.ExitCode)
+    let cleanStdout = CliRunner.stripLogLines result.Stdout
+    let doc = JsonDocument.Parse(cleanStdout)
+    Assert.NotNull(doc)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-160c")>]
+let ``--json on income-statement produces valid JSON`` () =
+    let result = CliRunner.run "report income-statement --period 26500 --json"
+    Assert.Equal(0, result.ExitCode)
+    let cleanStdout = CliRunner.stripLogLines result.Stdout
+    let doc = JsonDocument.Parse(cleanStdout)
+    Assert.NotNull(doc)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-160d")>]
+let ``--json on pnl-subtree produces valid JSON`` () =
+    let result = CliRunner.run "report pnl-subtree --account 5000 --period 26500 --json"
+    Assert.Equal(0, result.ExitCode)
+    let cleanStdout = CliRunner.stripLogLines result.Stdout
+    let doc = JsonDocument.Parse(cleanStdout)
+    Assert.NotNull(doc)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-RPT-160e")>]
+let ``--json on account-balance produces valid JSON`` () =
+    let result = CliRunner.run "report account-balance --account 1110 --as-of 2026-03-31 --json"
+    Assert.Equal(0, result.ExitCode)
+    let cleanStdout = CliRunner.stripLogLines result.Stdout
+    let doc = JsonDocument.Parse(cleanStdout)
+    Assert.NotNull(doc)
 
