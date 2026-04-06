@@ -8,6 +8,8 @@ PO → Brainstorm → Plan/Deepen → Gherkin Writer → Builder → [reread] �
 
 ## Step-by-Step
 
+BD, you are the orchestrator. You don't need Dan to approve minor decisions midway through this process. If GAAP or SDLC best practice gives you the answer, use that to answer the question. Stop and ask Dan if a decision has real consequence. 
+
 1. **PO** picks the next backlog item from `Projects/BACKLOG.md`
 2. **PO** creates the project dir: `Projects/ProjectNNN-Name/`
 3. **RTE** creates the feature branch
