@@ -8,6 +8,14 @@ open LeoBloom.Domain.Ledger
 /// a caller-provided NpgsqlTransaction for atomicity.
 module FiscalPeriodRepository =
 
+    let private readPeriod (reader: System.Data.Common.DbDataReader) : FiscalPeriod =
+        { id = reader.GetInt32(0)
+          periodKey = reader.GetString(1)
+          startDate = reader.GetFieldValue<DateOnly>(2)
+          endDate = reader.GetFieldValue<DateOnly>(3)
+          isOpen = reader.GetBoolean(4)
+          createdAt = reader.GetFieldValue<DateTimeOffset>(5) }
+
     /// Look up a fiscal period by ID. Returns None if not found.
     let findById (txn: NpgsqlTransaction) (periodId: int) : FiscalPeriod option =
         use sql = new NpgsqlCommand(
@@ -17,13 +25,7 @@ module FiscalPeriodRepository =
         sql.Parameters.AddWithValue("@id", periodId) |> ignore
         use reader = sql.ExecuteReader()
         if reader.Read() then
-            let period =
-                { id = reader.GetInt32(0)
-                  periodKey = reader.GetString(1)
-                  startDate = reader.GetFieldValue<DateOnly>(2)
-                  endDate = reader.GetFieldValue<DateOnly>(3)
-                  isOpen = reader.GetBoolean(4)
-                  createdAt = reader.GetFieldValue<DateTimeOffset>(5) }
+            let period = readPeriod reader
             reader.Close()
             Some period
         else
@@ -40,13 +42,7 @@ module FiscalPeriodRepository =
         sql.Parameters.AddWithValue("@date", date) |> ignore
         use reader = sql.ExecuteReader()
         if reader.Read() then
-            let period =
-                { id = reader.GetInt32(0)
-                  periodKey = reader.GetString(1)
-                  startDate = reader.GetFieldValue<DateOnly>(2)
-                  endDate = reader.GetFieldValue<DateOnly>(3)
-                  isOpen = reader.GetBoolean(4)
-                  createdAt = reader.GetFieldValue<DateTimeOffset>(5) }
+            let period = readPeriod reader
             reader.Close()
             Some period
         else
@@ -63,15 +59,60 @@ module FiscalPeriodRepository =
         sql.Parameters.AddWithValue("@id", periodId) |> ignore
         use reader = sql.ExecuteReader()
         if reader.Read() then
-            let period =
-                { id = reader.GetInt32(0)
-                  periodKey = reader.GetString(1)
-                  startDate = reader.GetFieldValue<DateOnly>(2)
-                  endDate = reader.GetFieldValue<DateOnly>(3)
-                  isOpen = reader.GetBoolean(4)
-                  createdAt = reader.GetFieldValue<DateTimeOffset>(5) }
+            let period = readPeriod reader
             reader.Close()
             Some period
         else
             reader.Close()
             None
+
+    /// List all fiscal periods, ordered by start_date.
+    let listAll (txn: NpgsqlTransaction) : FiscalPeriod list =
+        use sql = new NpgsqlCommand(
+            "SELECT id, period_key, start_date, end_date, is_open, created_at
+             FROM ledger.fiscal_period
+             ORDER BY start_date",
+            txn.Connection, txn)
+        use reader = sql.ExecuteReader()
+        let results = ResizeArray<FiscalPeriod>()
+        while reader.Read() do
+            results.Add(readPeriod reader)
+        reader.Close()
+        results |> Seq.toList
+
+    /// Find a fiscal period by period_key. Returns None if not found.
+    let findByKey (txn: NpgsqlTransaction) (periodKey: string) : FiscalPeriod option =
+        use sql = new NpgsqlCommand(
+            "SELECT id, period_key, start_date, end_date, is_open, created_at
+             FROM ledger.fiscal_period WHERE period_key = @key",
+            txn.Connection, txn)
+        sql.Parameters.AddWithValue("@key", periodKey) |> ignore
+        use reader = sql.ExecuteReader()
+        if reader.Read() then
+            let period = readPeriod reader
+            reader.Close()
+            Some period
+        else
+            reader.Close()
+            None
+
+    /// Insert a new fiscal period. Returns the created record.
+    let create
+        (txn: NpgsqlTransaction)
+        (periodKey: string)
+        (startDate: DateOnly)
+        (endDate: DateOnly)
+        : FiscalPeriod =
+        use sql = new NpgsqlCommand(
+            "INSERT INTO ledger.fiscal_period (period_key, start_date, end_date)
+             VALUES (@key, @start, @end)
+             RETURNING id, period_key, start_date, end_date, is_open, created_at",
+            txn.Connection, txn)
+        sql.Parameters.AddWithValue("@key", periodKey) |> ignore
+        sql.Parameters.AddWithValue("@start", startDate) |> ignore
+        sql.Parameters.AddWithValue("@end", endDate) |> ignore
+        use reader = sql.ExecuteReader()
+        reader.Read() |> ignore
+        let period = readPeriod reader
+        reader.Close()
+        period
