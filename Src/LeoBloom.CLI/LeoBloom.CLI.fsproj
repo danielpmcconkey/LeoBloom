@@ -12,6 +12,7 @@
     <Compile Include="ErrorHandler.fs" />
     <Compile Include="LedgerCommands.fs" />
     <Compile Include="ReportCommands.fs" />
+    <Compile Include="InvoiceCommands.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -19,6 +20,7 @@
     <ProjectReference Include="..\LeoBloom.Domain\LeoBloom.Domain.fsproj" />
     <ProjectReference Include="..\LeoBloom.Ledger\LeoBloom.Ledger.fsproj" />
     <ProjectReference Include="..\LeoBloom.Reporting\LeoBloom.Reporting.fsproj" />
+    <ProjectReference Include="..\LeoBloom.Ops\LeoBloom.Ops.fsproj" />
     <ProjectReference Include="..\LeoBloom.Utilities\LeoBloom.Utilities.fsproj" />
   </ItemGroup>
 
