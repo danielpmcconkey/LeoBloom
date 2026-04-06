@@ -1,5 +1,8 @@
 # LeoBloom Product Backlog
 
+> **Note:** Done and cancelled item files have been moved to `Done/` as of
+> 2026-04-06. Only active (not started) items remain in this directory.
+
 | # | Project | Status |
 |---|---------|--------|
 | 001 | Database schema, migrations, seed data | Done |
@@ -23,7 +26,7 @@
 | 019 | Transfers | Done |
 | 020 | Invoice readiness | Cancelled |
 | 021 | Invoice record persistence | Done |
-| 022 | Balance projection | Not started |
+| **022** | **Balance projection** | **Not started** |
 | 023 | Journal entry endpoints | Cancelled |
 | 024 | Reporting endpoints | Cancelled |
 | 025 | Obligation endpoints | Cancelled |
@@ -36,13 +39,13 @@
 | 032 | Test Author Agent Blueprint | Done |
 | 033 | Seal DataSource internals | Done |
 | 034 | GAAP remediation | Done |
-| 035 | Orphaned posting detection | Not started |
+| **035** | **Orphaned posting detection** | **Not started** |
 | 036 | CLI framework + ledger commands | Done |
-| 037 | CLI reporting commands (accounting) | Not started |
-| 038 | CLI obligation commands | Not started |
+| 037 | CLI reporting commands (accounting) | Done |
+| **038** | **CLI obligation commands** | **Not started** |
 | 039 | CLI transfer commands | Done |
 | 040 | CLI tax reports | Done |
-| 041 | CLI account + period commands | Not started |
+| 041 | CLI account + period commands | Done |
 | 042 | CLI invoice commands | Done |
 | 043 | Idempotency guards | Done |
 | 044 | Database indexes migration | Done |
@@ -57,6 +60,28 @@
 | 053 | Fix pre-existing test failures | Done |
 | 054 | Seed data separation | Done |
 | 055 | Closed fiscal period posting guard | Done |
+| **056** | **Replace parent_code with parent_id** | **Not started** |
+
+---
+
+## Active Items (files in this directory)
+
+| # | File | Status |
+|---|------|--------|
+| 022 | `022-balance-projection.md` | Not started |
+| 035 | `035-orphaned-posting-detection.md` | Not started |
+| 038 | `038-cli-obligation-commands.md` | Not started |
+| 056 | `056-parent-account-fk-to-id.md` | Not started |
+
+P028 (write-level ledger validation) has no spec file — it exists only in
+this index (status: Done, covered by 005/006).
+
+Also in this directory: `remediation-stories.md` (GAAP remediation sub-backlog
+from P034).
+
+## Done/Cancelled Items
+
+All spec files for done and cancelled items are in `Done/`. 30 files total.
 
 ---
 
@@ -79,25 +104,7 @@
 ### Code Audit Remediation (043-051)
 
 Source: 2026-04-05 code audit (SYNTHESIS.md). ADRs in BdsNotes/decisions/.
-
-**Before any new feature work:**
-1. **043 (idempotency guards)** — correctness fix, #1 audit finding.
-2. **044 (database indexes)** — performance, one migration.
-
-**Before P036 (CLI framework):**
-3. **045 (domain-based project reorg)** — structural prerequisite so the CLI
-   consumes clean domain projects, not a god project.
-4. **046 (delete LeoBloom.Api)** — dead code removal, no dependencies.
-5. **047 (delete ghost directories)** — dead scaffolding, no dependencies.
-6. **048 (test cleanup)** — dead test removal, no dependencies.
-
-**Any order, low effort:**
-7. **049 (consolidate helpers)** — sequence after 045 if both in flight.
-8. **050 (use EntryType.toDbString)** — trivial one-liner.
-9. **051 (IncludeErrorDetail to appsettings)** — trivial config change.
-
-Items 046-048 and 050-051 can run in parallel. Item 049 should follow 045
-if the domain reorg moves files that contain the duplicated helpers.
+All items complete.
 
 ### Foundation Cleanup (053 + 054)
 
@@ -135,14 +142,10 @@ Design questions from the brief resolved via GAAP:
 
 ### CLI Sequencing (036-042)
 
-1. **036 (CLI framework + ledger commands)** — establishes the entry point,
-   argument parsing, output conventions. Everything else depends on this.
-2. **037, 038, 039, 041** in any order — thin wrappers around existing
-   services. No new domain logic needed.
-3. **021 (invoice record persistence), then 042 (CLI invoice commands)** —
-   lean persistence layer followed by its CLI wrapper. Complete.
-4. **040 (CLI tax reports)** — Done. New report logic with LeoBloom.Reporting
-   project, 4 services, 4 CLI subcommands.
+1. **036 (CLI framework + ledger commands)** — Done.
+2. **037, 038, 039, 041** — 037, 039, 041 done. **038 not started.**
+3. **021 (invoice record persistence), then 042 (CLI invoice commands)** — Complete.
+4. **040 (CLI tax reports)** — Done.
 5. **035 (orphaned posting detection)** — standalone diagnostic, no CLI
    dependency. Slot wherever.
 6. **022 (balance projection)** — lowest priority, slot wherever.
