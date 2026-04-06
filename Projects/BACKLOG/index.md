@@ -22,7 +22,7 @@
 | 018 | Post obligation to ledger | Done |
 | 019 | Transfers | Done |
 | 020 | Invoice readiness | Cancelled |
-| 021 | Invoice record persistence | Not started |
+| 021 | Invoice record persistence | Done |
 | 022 | Balance projection | Not started |
 | 023 | Journal entry endpoints | Cancelled |
 | 024 | Reporting endpoints | Cancelled |
@@ -73,7 +73,7 @@
 - **P020 (Invoice Readiness) cancelled.** Readiness is the COYS bot's
   responsibility.
 - **P021 rewritten** as invoice record persistence. No calculation, no PDF
-  generation. Just the DB layer for recording invoices.
+  generation. Just the DB layer for recording invoices. Complete.
 
 ### Code Audit Remediation (043-051)
 
