@@ -13,6 +13,7 @@
     <Compile Include="LedgerCommands.fs" />
     <Compile Include="ReportCommands.fs" />
     <Compile Include="InvoiceCommands.fs" />
+    <Compile Include="TransferCommands.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

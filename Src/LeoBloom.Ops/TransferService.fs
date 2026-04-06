@@ -202,3 +202,33 @@ module TransferService =
                         Log.warn "Transfer {TransferId} remains initiated but journal entry {JournalEntryId} exists — retry is safe"
                             [| transfer.id :> obj; posted.entry.id :> obj |]
                         Error [ sprintf "Failed to update transfer after journal entry was posted: %s" ex.Message ]
+
+    let show (id: int) : Result<Transfer, string list> =
+        Log.info "Showing transfer {TransferId}" [| id :> obj |]
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let transfer = TransferRepository.findById txn id
+            txn.Commit()
+            match transfer with
+            | None ->
+                Error [ sprintf "Transfer with id %d does not exist" id ]
+            | Some t ->
+                Ok t
+        with ex ->
+            Log.errorExn ex "Failed to show transfer {TransferId}" [| id :> obj |]
+            try txn.Rollback() with _ -> ()
+            Error [ sprintf "Persistence error: %s" ex.Message ]
+
+    let list (filter: ListTransfersFilter) : Transfer list =
+        Log.info "Listing transfers" [||]
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = TransferRepository.list txn filter
+            txn.Commit()
+            result
+        with ex ->
+            Log.errorExn ex "Failed to list transfers" [||]
+            try txn.Rollback() with _ -> ()
+            []

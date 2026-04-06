@@ -92,6 +92,35 @@ New features get a new category prefix. Check existing tags in
 - Feature specs: `Specs/Behavioral/`
 - Coverage script: `Scripts/check-gherkin-coverage.fsx`
 
+## Fiscal Period Date Isolation
+
+Some service methods (e.g. `ObligationPostingService.postToLedger`,
+`TransferService.confirm`) resolve fiscal periods via
+`FiscalPeriodRepository.findByDate`, which returns `LIMIT 1` for any
+period covering a given date. If two test files create fiscal periods
+with overlapping date ranges, `findByDate` can return the wrong file's
+period — causing tests to pass or fail depending on parallel execution
+order.
+
+**Rule: each test file that exercises a `findByDate` code path must use
+a year that no other test file uses.** Current assignments:
+
+| Year | Test file |
+|------|-----------|
+| 2091 | PostObligationToLedgerTests.fs |
+| 2092 | TransferTests.fs |
+
+Before choosing a year for a new test file, check this table and the
+existing test files. Pick the next unused year in the 2090s range.
+
+Files that pass `fiscalPeriodId` directly (e.g. PostJournalEntryTests,
+InvoiceTests) don't go through `findByDate` and can share date ranges
+safely — but keeping them out of the 2090s reserved range is still good
+hygiene.
+
+All test dates must also avoid the seed data range (2026-01 through
+2028-12). See Project053 for that root cause analysis.
+
 ## Anti-Patterns
 
 - **Don't mock the database.** We got burned when mocked tests passed but
