@@ -13,6 +13,8 @@
     <Compile Include="ObligationPostingService.fs" />
     <Compile Include="TransferRepository.fs" />
     <Compile Include="TransferService.fs" />
+    <Compile Include="InvoiceRepository.fs" />
+    <Compile Include="InvoiceService.fs" />
   </ItemGroup>
 
   <ItemGroup>

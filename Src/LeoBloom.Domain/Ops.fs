@@ -374,3 +374,54 @@ module Ops =
     type ConfirmTransferCommand =
         { transferId: int
           confirmedDate: DateOnly }
+
+    type RecordInvoiceCommand =
+        { tenant: string
+          fiscalPeriodId: int
+          rentAmount: decimal
+          utilityShare: decimal
+          totalAmount: decimal
+          generatedAt: DateTimeOffset
+          documentPath: string option
+          notes: string option }
+
+    module InvoiceValidation =
+
+        let validateTenant (tenant: string) : Result<unit, string list> =
+            let errors =
+                [ if System.String.IsNullOrWhiteSpace tenant then
+                      "tenant is required and cannot be empty"
+                  if tenant.Length > 50 then
+                      "tenant must not exceed 50 characters" ]
+            if errors.IsEmpty then Ok () else Error errors
+
+        let validateAmount (fieldName: string) (amount: decimal) : Result<unit, string list> =
+            let errors =
+                [ if amount < 0m then
+                      sprintf "%s must not be negative" fieldName
+                  if amount <> System.Math.Round(amount, 2, MidpointRounding.AwayFromZero) then
+                      sprintf "%s must have at most 2 decimal places" fieldName ]
+            if errors.IsEmpty then Ok () else Error errors
+
+        let validateTotalEqualsComponents (rent: decimal) (utility: decimal) (total: decimal) : Result<unit, string list> =
+            if total <> rent + utility then
+                Error [ "totalAmount must equal rentAmount + utilityShare" ]
+            else
+                Ok ()
+
+        let validateFiscalPeriodId (id: int) : Result<unit, string list> =
+            if id <= 0 then
+                Error [ "fiscalPeriodId must be greater than zero" ]
+            else
+                Ok ()
+
+        let validateCommand (cmd: RecordInvoiceCommand) : Result<unit, string list> =
+            let allErrors =
+                [ validateTenant cmd.tenant
+                  validateAmount "rentAmount" cmd.rentAmount
+                  validateAmount "utilityShare" cmd.utilityShare
+                  validateAmount "totalAmount" cmd.totalAmount
+                  validateTotalEqualsComponents cmd.rentAmount cmd.utilityShare cmd.totalAmount
+                  validateFiscalPeriodId cmd.fiscalPeriodId ]
+                |> List.collect (function Error errs -> errs | Ok _ -> [])
+            if allErrors.IsEmpty then Ok () else Error allErrors

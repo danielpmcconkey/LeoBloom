@@ -35,6 +35,7 @@ module TestCleanup =
           mutable AccountTypeIds: int list
           mutable FiscalPeriodIds: int list
           mutable ObligationAgreementIds: int list
+          mutable InvoiceIds: int list
           Connection: NpgsqlConnection }
 
     let create (conn: NpgsqlConnection) =
@@ -44,6 +45,7 @@ module TestCleanup =
           AccountTypeIds = []
           FiscalPeriodIds = []
           ObligationAgreementIds = []
+          InvoiceIds = []
           Connection = conn }
 
     let trackJournalEntry id tracker =
@@ -60,6 +62,9 @@ module TestCleanup =
 
     let trackObligationAgreement id tracker =
         tracker.ObligationAgreementIds <- id :: tracker.ObligationAgreementIds
+
+    let trackInvoice id tracker =
+        tracker.InvoiceIds <- id :: tracker.InvoiceIds
 
     /// Delete all tracked rows in FK-safe order.
     /// Catches exceptions per-table so one failure doesn't block the rest.
@@ -98,6 +103,7 @@ module TestCleanup =
             [ "journal_entry_id", tracker.JournalEntryIds
               "from_account_id", tracker.AccountIds
               "to_account_id", tracker.AccountIds ]
+        tryDelete "ops.invoice" "id" tracker.InvoiceIds
         tryDelete "ops.invoice" "fiscal_period_id" tracker.FiscalPeriodIds
         tryDelete "ledger.journal_entry" "id" tracker.JournalEntryIds
         tryDeleteMultiColumn "ops.obligation_agreement"
@@ -297,6 +303,24 @@ module InsertHelpers =
         | None -> cmd.Parameters.AddWithValue("@notes", DBNull.Value) |> ignore
         cmd.Parameters.AddWithValue("@a", isActive) |> ignore
         let id = cmd.ExecuteScalar() :?> int
+        id
+
+    let insertInvoice
+        (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker)
+        (tenant: string) (fiscalPeriodId: int)
+        (rent: decimal) (utility: decimal) (total: decimal) : int =
+        use cmd = new NpgsqlCommand(
+            "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount, generated_at) \
+             VALUES (@t, @fp, @r, @u, @tot, @ga) RETURNING id",
+            conn)
+        cmd.Parameters.AddWithValue("@t", tenant) |> ignore
+        cmd.Parameters.AddWithValue("@fp", fiscalPeriodId) |> ignore
+        cmd.Parameters.AddWithValue("@r", rent) |> ignore
+        cmd.Parameters.AddWithValue("@u", utility) |> ignore
+        cmd.Parameters.AddWithValue("@tot", total) |> ignore
+        cmd.Parameters.AddWithValue("@ga", DateTimeOffset.UtcNow) |> ignore
+        let id = cmd.ExecuteScalar() :?> int
+        TestCleanup.trackInvoice id tracker
         id
 
 // =====================================================================
