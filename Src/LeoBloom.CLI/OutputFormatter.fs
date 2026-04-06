@@ -183,6 +183,38 @@ let private formatInvoiceList (invoices: Invoice list) : string =
                 (sprintf "%M" inv.rentAmount) (sprintf "%M" inv.utilityShare) (sprintf "%M" inv.totalAmount))
         String.Join(Environment.NewLine, lines)
 
+// --- Transfer formatting ---
+
+let private formatTransfer (t: Transfer) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Transfer #%d" t.id)
+    lines.Add(sprintf "  From Account:   %d" t.fromAccountId)
+    lines.Add(sprintf "  To Account:     %d" t.toAccountId)
+    lines.Add(sprintf "  Amount:         %M" t.amount)
+    lines.Add(sprintf "  Status:         %s" (TransferStatus.toString t.status))
+    lines.Add(sprintf "  Initiated:      %s" (t.initiatedDate.ToString("yyyy-MM-dd")))
+    lines.Add(sprintf "  Exp. Settle:    %s" (t.expectedSettlement |> Option.map (fun d -> d.ToString("yyyy-MM-dd")) |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Confirmed:      %s" (t.confirmedDate |> Option.map (fun d -> d.ToString("yyyy-MM-dd")) |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Journal Entry:  %s" (t.journalEntryId |> Option.map string |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Description:    %s" (t.description |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Created:        %s" (t.createdAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    lines.Add(sprintf "  Modified:       %s" (t.modifiedAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    String.Join(Environment.NewLine, lines)
+
+let private formatTransferList (transfers: Transfer list) : string =
+    if transfers.IsEmpty then ""
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "  %-6s  %-10s  %-8s  %-8s  %12s  %-12s" "ID" "Status" "From" "To" "Amount" "Initiated")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s  %s"
+            (String.replicate 6 "-") (String.replicate 10 "-") (String.replicate 8 "-")
+            (String.replicate 8 "-") (String.replicate 12 "-") (String.replicate 12 "-"))
+        for t in transfers do
+            lines.Add(sprintf "  %-6d  %-10s  %-8d  %-8d  %12s  %-12s"
+                t.id (TransferStatus.toString t.status) t.fromAccountId t.toAccountId
+                (sprintf "%M" t.amount) (t.initiatedDate.ToString("yyyy-MM-dd")))
+        String.Join(Environment.NewLine, lines)
+
 // --- Dispatch formatting based on type ---
 
 let formatHuman (value: obj) : string =
@@ -194,6 +226,7 @@ let formatHuman (value: obj) : string =
     | :? CashReceiptsReport as r -> formatCashReceipts r
     | :? CashDisbursementsReport as r -> formatCashDisbursements r
     | :? Invoice as inv -> formatInvoice inv
+    | :? Transfer as t -> formatTransfer t
     | _ -> sprintf "%A" value
 
 let formatJson (value: obj) : string =
@@ -237,6 +270,18 @@ let writeInvoiceList (isJson: bool) (invoices: Invoice list) : int =
         Console.Out.WriteLine(output)
     else
         let output = formatInvoiceList invoices
+        if not (String.IsNullOrEmpty output) then
+            Console.Out.WriteLine(output)
+    ExitCodes.success
+
+/// Dedicated write function for Transfer list to avoid F# type erasure
+/// issues with generic list pattern matching in formatHuman.
+let writeTransferList (isJson: bool) (transfers: Transfer list) : int =
+    if isJson then
+        let output = formatJson transfers
+        Console.Out.WriteLine(output)
+    else
+        let output = formatTransferList transfers
         if not (String.IsNullOrEmpty output) then
             Console.Out.WriteLine(output)
     ExitCodes.success

@@ -40,7 +40,7 @@
 | 036 | CLI framework + ledger commands | Done |
 | 037 | CLI reporting commands (accounting) | Not started |
 | 038 | CLI obligation commands | Not started |
-| 039 | CLI transfer commands | Not started |
+| 039 | CLI transfer commands | Done |
 | 040 | CLI tax reports | Done |
 | 041 | CLI account + period commands | Not started |
 | 042 | CLI invoice commands | Done |

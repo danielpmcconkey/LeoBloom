@@ -5,6 +5,11 @@ open Npgsql
 open LeoBloom.Domain.Ops
 open LeoBloom.Utilities
 
+type ListTransfersFilter =
+    { status: TransferStatus option
+      fromDate: DateOnly option
+      toDate: DateOnly option }
+
 /// Raw SQL persistence for transfer operations. All operations run within
 /// a caller-provided NpgsqlTransaction for atomicity.
 module TransferRepository =
@@ -88,3 +93,41 @@ module TransferRepository =
         let result = mapReader reader
         reader.Close()
         result
+
+    let list (txn: NpgsqlTransaction) (filter: ListTransfersFilter) : Transfer list =
+        let mutable clauses = [ "is_active = true" ]
+        let mutable paramList : (string * obj) list = []
+
+        match filter.status with
+        | Some s ->
+            clauses <- clauses @ [ "status = @status" ]
+            paramList <- paramList @ [ ("@status", TransferStatus.toString s :> obj) ]
+        | None -> ()
+
+        match filter.fromDate with
+        | Some d ->
+            clauses <- clauses @ [ "initiated_date >= @from_date" ]
+            paramList <- paramList @ [ ("@from_date", d :> obj) ]
+        | None -> ()
+
+        match filter.toDate with
+        | Some d ->
+            clauses <- clauses @ [ "initiated_date <= @to_date" ]
+            paramList <- paramList @ [ ("@to_date", d :> obj) ]
+        | None -> ()
+
+        let whereClause = " WHERE " + (clauses |> String.concat " AND ")
+
+        use sql = new NpgsqlCommand(
+            $"SELECT {selectColumns} FROM ops.transfer{whereClause} ORDER BY id DESC",
+            txn.Connection, txn)
+
+        for (name, value) in paramList do
+            sql.Parameters.AddWithValue(name, value) |> ignore
+
+        use reader = sql.ExecuteReader()
+        let mutable results = []
+        while reader.Read() do
+            results <- mapReader reader :: results
+        reader.Close()
+        results |> List.rev
