@@ -51,10 +51,13 @@ type AccountArgs =
 
 // --- Helpers ---
 
-let private parseAccountArg (raw: string) : Choice<int, string> =
-    match Int32.TryParse(raw) with
-    | true, id -> Choice1Of2 id
-    | false, _ -> Choice2Of2 raw
+let private resolveAccount (raw: string) =
+    match AccountBalanceService.showAccountByCode raw with
+    | Ok account -> Ok account
+    | Error _ ->
+        match Int32.TryParse(raw) with
+        | true, id -> AccountBalanceService.showAccountById id
+        | false, _ -> Error (sprintf "Account '%s' does not exist" raw)
 
 let private parseDate (raw: string) : Result<DateOnly, string> =
     match DateOnly.TryParseExact(raw, "yyyy-MM-dd") with
@@ -84,11 +87,7 @@ let private handleShow (isJson: bool) (args: ParseResults<AccountShowArgs>) : in
     let isJson = isJson || args.Contains AccountShowArgs.Json
     let accountRaw = args.GetResult AccountShowArgs.Account
 
-    let result =
-        match parseAccountArg accountRaw with
-        | Choice1Of2 id -> AccountBalanceService.showAccountById id
-        | Choice2Of2 code -> AccountBalanceService.showAccountByCode code
-
+    let result = resolveAccount accountRaw
     write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
 
 let private handleBalance (isJson: bool) (args: ParseResults<AccountBalanceCmdArgs>) : int =
@@ -105,9 +104,12 @@ let private handleBalance (isJson: bool) (args: ParseResults<AccountBalanceCmdAr
     | Error e -> write isJson (Error [e])
     | Ok asOfDate ->
         let result =
-            match parseAccountArg accountRaw with
-            | Choice1Of2 id -> AccountBalanceService.getBalanceById id asOfDate
-            | Choice2Of2 code -> AccountBalanceService.getBalanceByCode code asOfDate
+            match AccountBalanceService.getBalanceByCode accountRaw asOfDate with
+            | Ok _ as found -> found
+            | Error _ ->
+                match Int32.TryParse(accountRaw) with
+                | true, id -> AccountBalanceService.getBalanceById id asOfDate
+                | false, _ -> Error (sprintf "Account '%s' does not exist" accountRaw)
         write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
 
 // --- Dispatch ---
