@@ -37,6 +37,7 @@
     <Compile Include="ReportingServiceTests.fs" />
     <Compile Include="ReportCommandsTests.fs" />
     <Compile Include="InvoiceTests.fs" />
+    <Compile Include="InvoiceCommandsTests.fs" />
     <Compile Include="SeedRunnerTests.fs" />
   </ItemGroup>
 

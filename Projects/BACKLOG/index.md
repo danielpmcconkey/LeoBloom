@@ -43,7 +43,7 @@
 | 039 | CLI transfer commands | Not started |
 | 040 | CLI tax reports | Done |
 | 041 | CLI account + period commands | Not started |
-| 042 | CLI invoice commands | Not started |
+| 042 | CLI invoice commands | Done |
 | 043 | Idempotency guards | Done |
 | 044 | Database indexes migration | Done |
 | 045 | Domain-based project reorg | Done |
@@ -56,6 +56,7 @@
 | 052 | Account sub-type classification | Done |
 | 053 | Fix pre-existing test failures | Done |
 | 054 | Seed data separation | Done |
+| 055 | Closed fiscal period posting guard | Blocked (design decision) |
 
 ---
 
@@ -111,6 +112,22 @@ Complete. Both projects done.
    `Seeds/dev/`. Shell runner, documentation, full BDD coverage. 615 tests
    pass.
 
+### Closed Period Posting Guard (055)
+
+**Blocked on design decision.** P053 fixed 5 of 7 original test failures
+(date collision bugs). The remaining 2 (POL-013, POL-017) are not bugs --
+they assert a closed-period rejection feature that was never implemented.
+The Gherkin specs and test implementations exist; the service-level guard
+does not.
+
+This is a GAAP-relevant design decision, not a simple bug fix. Dan needs to
+decide on hard reject vs. override mechanism, scope (obligation posting only
+vs. all ledger writes), and workflow (guard vs. reopen-then-post). See
+`Projects/Project055-ClosedPeriodPostingGuard/Project055-brief.md` for the
+full question set.
+
+**Do not schedule this into the pipeline until Dan provides direction.**
+
 ### CLI Sequencing (036-042)
 
 1. **036 (CLI framework + ledger commands)** — establishes the entry point,
@@ -118,7 +135,7 @@ Complete. Both projects done.
 2. **037, 038, 039, 041** in any order — thin wrappers around existing
    services. No new domain logic needed.
 3. **021 (invoice record persistence), then 042 (CLI invoice commands)** —
-   lean persistence layer followed by its CLI wrapper.
+   lean persistence layer followed by its CLI wrapper. Complete.
 4. **040 (CLI tax reports)** — Done. New report logic with LeoBloom.Reporting
    project, 4 services, 4 CLI subcommands.
 5. **035 (orphaned posting detection)** — standalone diagnostic, no CLI

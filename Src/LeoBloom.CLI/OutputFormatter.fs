@@ -4,6 +4,7 @@ open System
 open System.Text.Json
 open System.Text.Json.Serialization
 open LeoBloom.Domain.Ledger
+open LeoBloom.Domain.Ops
 open LeoBloom.Reporting.ReportingTypes
 
 // --- JSON serialization options ---
@@ -151,6 +152,37 @@ let private formatCashDisbursements (report: CashDisbursementsReport) : string =
     lines.Add(sprintf "  %-12s  %-8s  %-30s  %-25s  %12s" "" "" "Total Disbursements" "" (sprintf "%M" report.totalDisbursements))
     String.Join(Environment.NewLine, lines)
 
+// --- Invoice formatting ---
+
+let private formatInvoice (inv: Invoice) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Invoice #%d" inv.id)
+    lines.Add(sprintf "  Tenant:         %s" inv.tenant)
+    lines.Add(sprintf "  Fiscal Period:  %d" inv.fiscalPeriodId)
+    lines.Add(sprintf "  Rent Amount:    %M" inv.rentAmount)
+    lines.Add(sprintf "  Utility Share:  %M" inv.utilityShare)
+    lines.Add(sprintf "  Total Amount:   %M" inv.totalAmount)
+    lines.Add(sprintf "  Generated At:   %s" (inv.generatedAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    lines.Add(sprintf "  Document Path:  %s" (inv.documentPath |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Notes:          %s" (inv.notes |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Created:        %s" (inv.createdAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    lines.Add(sprintf "  Modified:       %s" (inv.modifiedAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    String.Join(Environment.NewLine, lines)
+
+let private formatInvoiceList (invoices: Invoice list) : string =
+    if invoices.IsEmpty then ""
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "  %-6s  %-15s  %-8s  %12s  %12s  %12s" "ID" "Tenant" "Period" "Rent" "Utility" "Total")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s  %s"
+            (String.replicate 6 "-") (String.replicate 15 "-") (String.replicate 8 "-")
+            (String.replicate 12 "-") (String.replicate 12 "-") (String.replicate 12 "-"))
+        for inv in invoices do
+            lines.Add(sprintf "  %-6d  %-15s  %-8d  %12s  %12s  %12s"
+                inv.id inv.tenant inv.fiscalPeriodId
+                (sprintf "%M" inv.rentAmount) (sprintf "%M" inv.utilityShare) (sprintf "%M" inv.totalAmount))
+        String.Join(Environment.NewLine, lines)
+
 // --- Dispatch formatting based on type ---
 
 let formatHuman (value: obj) : string =
@@ -161,6 +193,7 @@ let formatHuman (value: obj) : string =
     | :? GeneralLedgerReport as r -> formatGeneralLedger r
     | :? CashReceiptsReport as r -> formatCashReceipts r
     | :? CashDisbursementsReport as r -> formatCashDisbursements r
+    | :? Invoice as inv -> formatInvoice inv
     | _ -> sprintf "%A" value
 
 let formatJson (value: obj) : string =
@@ -195,6 +228,18 @@ let writeHuman (result: Result<'a, string list>) : int =
         for err in errors do
             Console.Error.WriteLine(sprintf "Error: %s" err)
         ExitCodes.businessError
+
+/// Dedicated write function for Invoice list to avoid F# type erasure
+/// issues with generic list pattern matching in formatHuman.
+let writeInvoiceList (isJson: bool) (invoices: Invoice list) : int =
+    if isJson then
+        let output = formatJson invoices
+        Console.Out.WriteLine(output)
+    else
+        let output = formatInvoiceList invoices
+        if not (String.IsNullOrEmpty output) then
+            Console.Out.WriteLine(output)
+    ExitCodes.success
 
 let writeHumanErrors (errors: string list) : int =
     for err in errors do
