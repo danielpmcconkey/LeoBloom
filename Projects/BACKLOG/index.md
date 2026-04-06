@@ -54,7 +54,7 @@
 | 050 | Use EntryType.toDbString | Done |
 | 051 | Move IncludeErrorDetail to appsettings | Done |
 | 052 | Account sub-type classification | Done |
-| 053 | Fix pre-existing test failures | Not started |
+| 053 | Fix pre-existing test failures | Done |
 | 054 | Seed data separation | Not started |
 
 ---
@@ -105,11 +105,9 @@ if the domain reorg moves files that contain the duplicated helpers.
 These two projects clean up the foundation before more features go on top.
 Run them in order.
 
-1. **053 (fix pre-existing test failures)** — 5 tests in
-   `PostObligationToLedgerTests` fail due to seed data collision on
-   `ledger.fiscal_period`. Tests assume they're the only fiscal periods in the
-   database; seed data proves them wrong. See
-   `Projects/Project053-FixPreExistingTestFailures/Project053-brief.md`.
+1. **053 (fix pre-existing test failures)** — Done. 5 tests in
+   `PostObligationToLedgerTests` fixed by moving fiscal period dates to 2099
+   to avoid seed data collision. All 608 tests pass.
 
 2. **054 (seed data separation)** — extract baseline data (COA, fiscal
    periods, obligation agreements) out of the migration chain into
