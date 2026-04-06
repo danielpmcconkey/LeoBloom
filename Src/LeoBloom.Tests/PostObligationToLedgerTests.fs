@@ -10,6 +10,12 @@ open LeoBloom.Ledger
 open LeoBloom.Ops
 open LeoBloom.Tests.TestHelpers
 
+// IMPORTANT: All fiscal period dates in this file use 2099-xx to avoid
+// colliding with seed data (1712000005000_SeedFiscalPeriods.sql populates
+// 2026-01 through 2028-12). Tests that need findByDate to return THEIR
+// period — or to find NO period — will break if dates overlap with seed data.
+// See Project053 for the full root cause analysis.
+
 // =====================================================================
 // Local helpers — set up the data constellations these tests need
 // =====================================================================
@@ -150,9 +156,9 @@ let ``posting a confirmed receivable instance creates correct journal entry and 
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1200m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1200m (DateOnly(2099, 4, 15))
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
         match result with
@@ -188,9 +194,9 @@ let ``posting a confirmed payable instance creates correct journal entry and tra
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupPayableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "payable" (Some sourceAcctId) (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 850m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 850m (DateOnly(2099, 4, 15))
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
         match result with
@@ -222,11 +228,11 @@ let ``journal entry description matches agreement and instance names`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrName = $"{prefix} Brian Rent"
         let instName = $"{prefix} April 2026"
         let agrId = insertAgreementWithAccounts conn tracker agrName "receivable" (Some sourceAcctId) (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId instName 1000m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId instName 1000m (DateOnly(2099, 4, 15))
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
         match result with
@@ -251,9 +257,9 @@ let ``journal entry has obligation source and reference`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2099, 4, 15))
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
         match result with
@@ -283,9 +289,9 @@ let ``journal entry entry_date equals the instance confirmed_date`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
-        let confirmedDate = DateOnly(2026, 4, 20)
+        let confirmedDate = DateOnly(2099, 4, 20)
         let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 500m confirmedDate
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
@@ -310,9 +316,9 @@ let ``instance journal_entry_id is set after posting`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2099, 4, 15))
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
         match result with
@@ -336,7 +342,7 @@ let ``posting an instance not in confirmed status returns error`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
         // Leave instance in expected status — do not transition
         let instanceId =
@@ -364,18 +370,18 @@ let ``posting an instance with no amount returns error`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
         // Insert instance as confirmed but with no amount — use raw SQL to bypass transition validation
         let instanceId =
             InsertHelpers.insertObligationInstanceFull
                 conn tracker agrId $"{prefix}_inst" "confirmed"
-                (DateOnly(2026, 4, 1)) None None true
+                (DateOnly(2099, 4, 1)) None None true
 
         // Set confirmed_date directly since insertObligationInstanceFull doesn't set it
         use updCmd = new NpgsqlCommand(
             "UPDATE ops.obligation_instance SET confirmed_date = @cd WHERE id = @id", conn)
-        updCmd.Parameters.AddWithValue("@cd", DateOnly(2026, 4, 15)) |> ignore
+        updCmd.Parameters.AddWithValue("@cd", DateOnly(2099, 4, 15)) |> ignore
         updCmd.Parameters.AddWithValue("@id", instanceId) |> ignore
         updCmd.ExecuteNonQuery() |> ignore
 
@@ -401,13 +407,13 @@ let ``posting an instance with no confirmed_date returns error`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
         // Insert instance as confirmed with amount but no confirmed_date
         let instanceId =
             InsertHelpers.insertObligationInstanceFull
                 conn tracker agrId $"{prefix}_inst" "confirmed"
-                (DateOnly(2026, 4, 1)) (Some 1000m) None true
+                (DateOnly(2099, 4, 1)) (Some 1000m) None true
         // Do NOT set confirmed_date — leave it null
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
@@ -432,10 +438,10 @@ let ``posting when agreement has no source_account_id returns error`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (_, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         // No source account on agreement
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" None (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2099, 4, 15))
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
         match result with
@@ -459,10 +465,10 @@ let ``posting when agreement has no dest_account_id returns error`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, _) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         // No dest account on agreement
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) None
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2099, 4, 15))
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
         match result with
@@ -486,9 +492,9 @@ let ``posting when no fiscal period covers confirmed_date returns error`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        // No fiscal period covering July 2026
+        // No fiscal period covering July 2099
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 7, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2099, 7, 15))
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
         match result with
@@ -513,9 +519,9 @@ let ``posting when fiscal period is closed returns error`` () =
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
         // Closed fiscal period
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) false
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) false
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2099, 4, 15))
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
         match result with
@@ -539,9 +545,9 @@ let ``posting an already-posted instance is rejected with no duplicate journal e
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2099, 4, 15))
 
         // First post — should succeed
         let firstResult = ObligationPostingService.postToLedger { instanceId = instanceId }
@@ -578,9 +584,9 @@ let ``failed post to closed period leaves instance in confirmed status with no j
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
         // Closed fiscal period
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) false
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) false
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2099, 4, 15))
 
         let result = ObligationPostingService.postToLedger { instanceId = instanceId }
         match result with
@@ -610,9 +616,9 @@ let ``retry after partial failure skips duplicate journal entry`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2099, 4, 15))
 
         // Simulate partial failure: insert a journal entry + reference as if phase 2
         // succeeded but phase 3 (transition) failed on a prior attempt
@@ -620,7 +626,7 @@ let ``retry after partial failure skips duplicate journal entry`` () =
             use jeCmd = new NpgsqlCommand(
                 "INSERT INTO ledger.journal_entry (entry_date, description, source, fiscal_period_id) \
                  VALUES (@d, @desc, 'obligation', @fp) RETURNING id", conn)
-            jeCmd.Parameters.AddWithValue("@d", DateOnly(2026, 4, 15)) |> ignore
+            jeCmd.Parameters.AddWithValue("@d", DateOnly(2099, 4, 15)) |> ignore
             jeCmd.Parameters.AddWithValue("@desc", "simulated partial failure") |> ignore
             jeCmd.Parameters.AddWithValue("@fp", fpId) |> ignore
             jeCmd.ExecuteScalar() :?> int
@@ -693,16 +699,16 @@ let ``voided prior journal entry does not trigger the idempotency guard`` () =
     try
         let prefix = TestData.uniquePrefix()
         let (sourceAcctId, destAcctId) = setupReceivableAccounts conn tracker prefix
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
         let agrId = insertAgreementWithAccounts conn tracker $"{prefix}_agr" "receivable" (Some sourceAcctId) (Some destAcctId)
-        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2026, 4, 15))
+        let instanceId = createConfirmedInstance conn tracker agrId $"{prefix}_inst" 1000m (DateOnly(2099, 4, 15))
 
         // Insert a journal entry + reference, then void it
         let voidedJeId =
             use jeCmd = new NpgsqlCommand(
                 "INSERT INTO ledger.journal_entry (entry_date, description, source, fiscal_period_id) \
                  VALUES (@d, @desc, 'obligation', @fp) RETURNING id", conn)
-            jeCmd.Parameters.AddWithValue("@d", DateOnly(2026, 4, 15)) |> ignore
+            jeCmd.Parameters.AddWithValue("@d", DateOnly(2099, 4, 15)) |> ignore
             jeCmd.Parameters.AddWithValue("@desc", "will be voided") |> ignore
             jeCmd.Parameters.AddWithValue("@fp", fpId) |> ignore
             jeCmd.ExecuteScalar() :?> int
@@ -768,12 +774,12 @@ let ``findByDate returns correct period for a date within range`` () =
     let tracker = TestCleanup.create conn
     try
         let prefix = TestData.uniquePrefix()
-        let startDate = DateOnly(2026, 5, 1)
-        let endDate = DateOnly(2026, 5, 31)
+        let startDate = DateOnly(2099, 5, 1)
+        let endDate = DateOnly(2099, 5, 31)
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" startDate endDate true
 
         use txn = conn.BeginTransaction()
-        let result = FiscalPeriodRepository.findByDate txn (DateOnly(2026, 5, 15))
+        let result = FiscalPeriodRepository.findByDate txn (DateOnly(2099, 5, 15))
         txn.Commit()
 
         Assert.True(result.IsSome, "Expected a fiscal period to be found")
@@ -793,10 +799,10 @@ let ``findByDate returns None for a date outside all periods`` () =
     let tracker = TestCleanup.create conn
     try
         let prefix = TestData.uniquePrefix()
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2026, 5, 1)) (DateOnly(2026, 5, 31)) true
+        let fpId = InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}FP" (DateOnly(2099, 5, 1)) (DateOnly(2099, 5, 31)) true
 
         use txn = conn.BeginTransaction()
-        let result = FiscalPeriodRepository.findByDate txn (DateOnly(2026, 8, 15))
+        let result = FiscalPeriodRepository.findByDate txn (DateOnly(2099, 8, 15))
         txn.Commit()
 
         Assert.True(result.IsNone, "Expected no fiscal period for date outside range")
