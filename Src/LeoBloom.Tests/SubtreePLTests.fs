@@ -44,13 +44,13 @@ let ``subtree with revenue and expense children produces correct P&L`` () =
         let prefix = TestData.uniquePrefix()
         // Parent account (asset — won't appear in P&L itself)
         let parentCode = prefix + "PA"
-        let _parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
+        let parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
         // Revenue child under parent
         let revCode = prefix + "RV"
-        let revAcct = InsertHelpers.insertAccountWithParent conn tracker revCode "Revenue Child" revenueTypeId parentCode true
+        let revAcct = InsertHelpers.insertAccountWithParent conn tracker revCode "Revenue Child" revenueTypeId parentAcct true
         // Expense child under parent
         let expCode = prefix + "EX"
-        let expAcct = InsertHelpers.insertAccountWithParent conn tracker expCode "Expense Child" expenseTypeId parentCode true
+        let expAcct = InsertHelpers.insertAccountWithParent conn tracker expCode "Expense Child" expenseTypeId parentAcct true
         // Asset account for the other side of entries (outside subtree)
         let bankAcct = InsertHelpers.insertAccount conn tracker (prefix + "BK") "Bank" assetTypeId true
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
@@ -74,9 +74,9 @@ let ``subtree with only revenue descendants shows empty expense section`` () =
     try
         let prefix = TestData.uniquePrefix()
         let parentCode = prefix + "PA"
-        let _parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
+        let parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
         let revCode = prefix + "RV"
-        let revAcct = InsertHelpers.insertAccountWithParent conn tracker revCode "Revenue Child" revenueTypeId parentCode true
+        let revAcct = InsertHelpers.insertAccountWithParent conn tracker revCode "Revenue Child" revenueTypeId parentAcct true
         let bankAcct = InsertHelpers.insertAccount conn tracker (prefix + "BK") "Bank" assetTypeId true
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
         postEntry conn tracker bankAcct revAcct fpId (DateOnly(2026, 3, 15)) "Revenue only" 750m |> ignore
@@ -98,9 +98,9 @@ let ``subtree with only expense descendants shows empty revenue section`` () =
     try
         let prefix = TestData.uniquePrefix()
         let parentCode = prefix + "PA"
-        let _parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
+        let parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
         let expCode = prefix + "EX"
-        let expAcct = InsertHelpers.insertAccountWithParent conn tracker expCode "Expense Child" expenseTypeId parentCode true
+        let expAcct = InsertHelpers.insertAccountWithParent conn tracker expCode "Expense Child" expenseTypeId parentAcct true
         let bankAcct = InsertHelpers.insertAccount conn tracker (prefix + "BK") "Bank" assetTypeId true
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
         postEntry conn tracker expAcct bankAcct fpId (DateOnly(2026, 3, 15)) "Expense only" 300m |> ignore
@@ -144,9 +144,9 @@ let ``root account not revenue or expense with no rev/exp descendants returns em
     try
         let prefix = TestData.uniquePrefix()
         let parentCode = prefix + "PA"
-        let _parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Asset Parent" assetTypeId true
+        let parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Asset Parent" assetTypeId true
         // Child is also an asset — no revenue/expense in subtree
-        let _childAcct = InsertHelpers.insertAccountWithParent conn tracker (prefix + "CH") "Asset Child" assetTypeId parentCode true
+        let _childAcct = InsertHelpers.insertAccountWithParent conn tracker (prefix + "CH") "Asset Child" assetTypeId parentAcct true
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
         let result = SubtreePLService.getByAccountCodeAndPeriodId parentCode fpId
         match result with
@@ -167,9 +167,9 @@ let ``voided entries excluded from subtree P&L`` () =
     try
         let prefix = TestData.uniquePrefix()
         let parentCode = prefix + "PA"
-        let _parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
+        let parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
         let revCode = prefix + "RV"
-        let revAcct = InsertHelpers.insertAccountWithParent conn tracker revCode "Revenue Child" revenueTypeId parentCode true
+        let revAcct = InsertHelpers.insertAccountWithParent conn tracker revCode "Revenue Child" revenueTypeId parentAcct true
         let bankAcct = InsertHelpers.insertAccount conn tracker (prefix + "BK") "Bank" assetTypeId true
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
         postEntry conn tracker bankAcct revAcct fpId (DateOnly(2026, 3, 10)) "Good income" 500m |> ignore
@@ -195,8 +195,8 @@ let ``accounts outside the subtree are excluded`` () =
         let prefix = TestData.uniquePrefix()
         // Subtree parent
         let parentCode = prefix + "PA"
-        let _parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
-        let revInSubtree = InsertHelpers.insertAccountWithParent conn tracker (prefix + "RI") "Rev In Subtree" revenueTypeId parentCode true
+        let parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
+        let revInSubtree = InsertHelpers.insertAccountWithParent conn tracker (prefix + "RI") "Rev In Subtree" revenueTypeId parentAcct true
         // Revenue account OUTSIDE subtree
         let revOutside = InsertHelpers.insertAccount conn tracker (prefix + "RO") "Rev Outside" revenueTypeId true
         let bankAcct = InsertHelpers.insertAccount conn tracker (prefix + "BK") "Bank" assetTypeId true
@@ -222,11 +222,11 @@ let ``multi-level hierarchy includes grandchildren in subtree`` () =
         let prefix = TestData.uniquePrefix()
         // Root -> Child -> Grandchild
         let rootCode = prefix + "RT"
-        let _rootAcct = InsertHelpers.insertAccount conn tracker rootCode "Root" assetTypeId true
+        let rootAcct = InsertHelpers.insertAccount conn tracker rootCode "Root" assetTypeId true
         let childCode = prefix + "CH"
-        let _childAcct = InsertHelpers.insertAccountWithParent conn tracker childCode "Child" assetTypeId rootCode true
+        let childAcct = InsertHelpers.insertAccountWithParent conn tracker childCode "Child" assetTypeId rootAcct true
         let grandchildCode = prefix + "GC"
-        let grandchildAcct = InsertHelpers.insertAccountWithParent conn tracker grandchildCode "Grandchild Expense" expenseTypeId childCode true
+        let grandchildAcct = InsertHelpers.insertAccountWithParent conn tracker grandchildCode "Grandchild Expense" expenseTypeId childAcct true
         let bankAcct = InsertHelpers.insertAccount conn tracker (prefix + "BK") "Bank" assetTypeId true
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
         postEntry conn tracker grandchildAcct bankAcct fpId (DateOnly(2026, 3, 15)) "Deep expense" 250m |> ignore
@@ -248,9 +248,9 @@ let ``lookup by period key returns same result as by period ID`` () =
     try
         let prefix = TestData.uniquePrefix()
         let parentCode = prefix + "PA"
-        let _parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
+        let parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
         let revCode = prefix + "RV"
-        let revAcct = InsertHelpers.insertAccountWithParent conn tracker revCode "Revenue Child" revenueTypeId parentCode true
+        let revAcct = InsertHelpers.insertAccountWithParent conn tracker revCode "Revenue Child" revenueTypeId parentAcct true
         let bankAcct = InsertHelpers.insertAccount conn tracker (prefix + "BK") "Bank" assetTypeId true
         let periodKey = prefix + "FP"
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker periodKey (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
@@ -306,8 +306,8 @@ let ``empty period for subtree produces zero net income`` () =
     try
         let prefix = TestData.uniquePrefix()
         let parentCode = prefix + "PA"
-        let _parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
-        let _revAcct = InsertHelpers.insertAccountWithParent conn tracker (prefix + "RV") "Revenue Child" revenueTypeId parentCode true
+        let parentAcct = InsertHelpers.insertAccount conn tracker parentCode "Parent" assetTypeId true
+        let _revAcct = InsertHelpers.insertAccountWithParent conn tracker (prefix + "RV") "Revenue Child" revenueTypeId parentAcct true
         let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
         let result = SubtreePLService.getByAccountCodeAndPeriodId parentCode fpId
         match result with

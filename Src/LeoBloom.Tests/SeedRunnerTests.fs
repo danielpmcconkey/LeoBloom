@@ -125,14 +125,14 @@ let ``Seeds populate chart of accounts on a fresh database`` () =
     let count = cmd.ExecuteScalar() :?> int64
     Assert.Equal(69L, count)
 
-    // Every account with a parent_code references an existing account
+    // Every account with a parent_id references an existing account
     use cmd2 = conn.CreateCommand()
     cmd2.CommandText <-
-        "SELECT a.code, a.parent_code FROM ledger.account a
-         WHERE a.parent_code IS NOT NULL
-           AND NOT EXISTS (SELECT 1 FROM ledger.account p WHERE p.code = a.parent_code)"
+        "SELECT a.code, a.parent_id FROM ledger.account a
+         WHERE a.parent_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM ledger.account p WHERE p.id = a.parent_id)"
     use reader = cmd2.ExecuteReader()
-    Assert.False(reader.HasRows, "Found accounts with parent_code referencing non-existent accounts")
+    Assert.False(reader.HasRows, "Found accounts with parent_id referencing non-existent accounts")
 
 // =====================================================================
 // @FT-SR-003 — Seeds apply account subtypes from the chart of accounts
@@ -146,7 +146,7 @@ let ``Seeds apply account subtypes from the chart of accounts`` () =
 
     use conn = DataSource.openConnection()
     use cmd = conn.CreateCommand()
-    // Leaf accounts: seeded accounts with parent_code that have no children of their own
+    // Leaf accounts: seeded accounts with parent_id that have no children of their own
     cmd.CommandText <-
         "SELECT a.code, a.account_subtype
          FROM ledger.account a

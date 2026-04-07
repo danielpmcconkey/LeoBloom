@@ -205,6 +205,17 @@ let ``show with no account argument prints error to stderr`` () =
     Assert.Equal(2, result.ExitCode)
     Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
 
+[<Fact>]
+[<Trait("GherkinId", "FT-ACT-026")>]
+let ``show an account with a parent displays Parent ID field`` () =
+    // Account 1110 has parent 1100 in seed data
+    let accountId = AccountCliEnv.lookupSeedAccountId "1110"
+    let result = CliRunner.run (sprintf "account show %d" accountId)
+    Assert.Equal(0, result.ExitCode)
+    let stdout = CliRunner.stripLogLines result.Stdout
+    Assert.Contains("Parent ID:", stdout)
+    Assert.DoesNotContain("Parent Code:", stdout)
+
 // =====================================================================
 // account balance -- Happy Path
 // =====================================================================

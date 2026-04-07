@@ -21,8 +21,8 @@ module AccountBalanceRepository =
           code = reader.GetString(1)
           name = reader.GetString(2)
           accountTypeId = reader.GetInt32(3)
-          parentCode =
-              if reader.IsDBNull(4) then None else Some (reader.GetString(4))
+          parentId =
+              if reader.IsDBNull(4) then None else Some (reader.GetInt32(4))
           subType = subType
           isActive = reader.GetBoolean(6)
           createdAt = reader.GetFieldValue<DateTimeOffset>(7)
@@ -37,7 +37,7 @@ module AccountBalanceRepository =
         (includeInactive: bool)
         : Account list =
         let baseSql =
-            "SELECT a.id, a.code, a.name, a.account_type_id, a.parent_code,
+            "SELECT a.id, a.code, a.name, a.account_type_id, a.parent_id,
                     a.account_subtype, a.is_active, a.created_at, a.modified_at
              FROM ledger.account a
              JOIN ledger.account_type at ON a.account_type_id = at.id
@@ -63,7 +63,7 @@ module AccountBalanceRepository =
     /// Find a single account by ID. Returns full Account record.
     let findAccountById (txn: NpgsqlTransaction) (accountId: int) : Account option =
         use cmd = new NpgsqlCommand(
-            "SELECT a.id, a.code, a.name, a.account_type_id, a.parent_code,
+            "SELECT a.id, a.code, a.name, a.account_type_id, a.parent_id,
                     a.account_subtype, a.is_active, a.created_at, a.modified_at
              FROM ledger.account a
              WHERE a.id = @id",
@@ -81,7 +81,7 @@ module AccountBalanceRepository =
     /// Find a single account by code. Returns full Account record.
     let findAccountByCode (txn: NpgsqlTransaction) (code: string) : Account option =
         use cmd = new NpgsqlCommand(
-            "SELECT a.id, a.code, a.name, a.account_type_id, a.parent_code,
+            "SELECT a.id, a.code, a.name, a.account_type_id, a.parent_id,
                     a.account_subtype, a.is_active, a.created_at, a.modified_at
              FROM ledger.account a
              WHERE a.code = @code",

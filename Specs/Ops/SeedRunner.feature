@@ -17,7 +17,7 @@ Feature: Seed Runner
         Given a fresh database with migrations applied
         When I run the seed runner for the dev environment
         Then the database contains 69 accounts
-        And every account with a parent_code references an existing account
+        And every account with a parent_id references an existing account
 
     @FT-SR-003
     Scenario: Seeds apply account subtypes from the chart of accounts

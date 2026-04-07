@@ -60,15 +60,15 @@ Feature: Ledger schema structural constraints
     Then the insert is rejected with a FK violation
 
   @FT-LSC-009
-  Scenario: account parent_code must reference a valid account code
+  Scenario: account parent_id must reference a valid account id
     Given the ledger schema exists
-    When I insert into account with parent_code "XXXX" that does not exist
+    When I insert into account with parent_id 9999 that does not exist
     Then the insert is rejected with a FK violation
 
   @FT-LSC-010
-  Scenario: account parent_code is nullable
+  Scenario: account parent_id is nullable
     Given the ledger schema exists
-    When I insert a valid account with a null parent_code
+    When I insert a valid account with a null parent_id
     Then the insert succeeds
 
   # --- fiscal_period ---

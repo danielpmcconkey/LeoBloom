@@ -20,10 +20,10 @@ module SubtreePLRepository =
     let getSubtreeActivityByPeriod (txn: NpgsqlTransaction) (rootAccountCode: string) (fiscalPeriodId: int) : (string * IncomeStatementLine) list =
         use cmd = new NpgsqlCommand(
             "WITH RECURSIVE subtree AS (
-                SELECT code FROM ledger.account WHERE code = @root_code
+                SELECT id, code FROM ledger.account WHERE code = @root_code
                 UNION ALL
-                SELECT a.code FROM ledger.account a
-                JOIN subtree s ON a.parent_code = s.code
+                SELECT a.id, a.code FROM ledger.account a
+                JOIN subtree s ON a.parent_id = s.id
             )
             SELECT
                 a.id,
