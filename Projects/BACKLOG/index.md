@@ -61,6 +61,11 @@
 | 054 | Seed data separation | Done |
 | 055 | Closed fiscal period posting guard | Done |
 | **056** | **Replace parent_code with parent_id** | **Not started** |
+| **057** | **Investment schema** | **Not started** |
+| **058** | **Investment domain types and repository** | **Not started** |
+| **059** | **CLI portfolio commands** | **Not started** |
+| **060** | **Portfolio data migration from PersonalFinance** | **Not started (Hobson, not Nightshift)** |
+| **061** | **Portfolio allocation reporting** | **Not started** |
 
 ---
 
@@ -72,6 +77,11 @@
 | 035 | `035-orphaned-posting-detection.md` | Not started |
 | 038 | `038-cli-obligation-commands.md` | Not started |
 | 056 | `056-parent-account-fk-to-id.md` | Not started |
+| 057 | `057-investment-schema.md` | Not started |
+| 058 | `058-investment-domain-and-repository.md` | Not started |
+| 059 | `059-cli-portfolio-commands.md` | Not started |
+| 060 | `060-portfolio-data-migration.md` | Not started |
+| 061 | `061-portfolio-allocation-reporting.md` | Not started |
 
 P028 (write-level ledger validation) has no spec file — it exists only in
 this index (status: Done, covered by 005/006).
@@ -149,6 +159,26 @@ Design questions from the brief resolved via GAAP:
 5. **035 (orphaned posting detection)** — standalone diagnostic, no CLI
    dependency. Slot wherever.
 6. **022 (balance projection)** — lowest priority, slot wherever.
+
+### Investment Portfolio Module (057-061)
+
+Epic L. Brings Dan's investment tracking from PersonalFinance into LeoBloom.
+
+1. **057 (investment schema)** — Greenfield. Creates `portfolio` schema, all
+   10 tables, dev seeds. No dependencies on existing Leo code.
+2. **058 (domain + repository)** — New `LeoBloom.Portfolio` F# project.
+   Domain types, repos, services. Depends on 057.
+3. **059 (CLI portfolio commands)** — Account, fund, position, dimension
+   management. Depends on 058.
+4. **060 (data migration)** — **Hobson's job, not Nightshift.** One-time
+   script run on the host against prod. No BDD, no CLI command, no tests.
+   Depends on 057 schema being applied to prod.
+5. **061 (allocation reporting)** — Portfolio analysis reports (allocation by
+   dimension, summary, history, gains). Depends on 058. Independent of 059/060
+   but most useful after 060 populates real data.
+
+**Nightshift sequencing:** 057 → 058 → {059, 060, 061} (last three are
+independent, can run in any order).
 
 ---
 
