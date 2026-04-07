@@ -24,6 +24,7 @@ Feature: Report CLI Commands
         And stdout contains "general-ledger"
         And stdout contains "cash-receipts"
         And stdout contains "cash-disbursements"
+        And stdout contains "projection"
         And the exit code is 0
 
     @FT-RPT-003
@@ -241,3 +242,74 @@ Feature: Report CLI Commands
             | general-ledger      |
             | cash-receipts       |
             | cash-disbursements  |
+            | projection          |
+
+    # ===================================================================
+    # report projection
+    # ===================================================================
+
+    # --- Happy Path ---
+
+    @FT-RPT-060
+    Scenario: Projection for a valid account and future date produces formatted daily series
+        Given a CLI-testable projection environment with seeded data
+        When I run the CLI with "report projection --account 1110 --through 2026-04-30"
+        Then stdout contains a table with daily balance entries
+        And the exit code is 0
+
+    @FT-RPT-061
+    Scenario: Projection for an account with no future items shows flat balance line
+        Given a CLI-testable projection environment with no future obligations or transfers
+        When I run the CLI with "report projection --account 1110 --through 2026-04-10"
+        Then stdout contains balance entries with the same amount for every day
+        And the exit code is 0
+
+    @FT-RPT-062
+    Scenario: Projection output flags null-amount obligations as unknown outflow
+        Given a CLI-testable projection environment with a null-amount payable for account 1110 on 2026-04-10
+        When I run the CLI with "report projection --account 1110 --through 2026-04-12"
+        Then stdout contains "unknown outflow"
+        And the exit code is 0
+
+    # --- Missing Required Args ---
+
+    @FT-RPT-063
+    Scenario Outline: Projection missing a required argument is rejected
+        When I run the CLI with "report projection <partial-args>"
+        Then stderr contains an error message
+        And the exit code is 1 or 2
+
+        Examples:
+            | partial-args              | # missing      |
+            | --through 2026-04-30      | # no --account |
+            | --account 1110            | # no --through |
+
+    # --- Invalid Args ---
+
+    @FT-RPT-064
+    Scenario: Projection with invalid date format prints error to stderr
+        When I run the CLI with "report projection --account 1110 --through 04/30/2026"
+        Then stderr contains an error message
+        And the exit code is 1
+
+    @FT-RPT-065
+    Scenario: Projection with a past date is rejected
+        Given a CLI-testable projection environment with seeded data
+        When I run the CLI with "report projection --account 1110 --through 2026-01-01"
+        Then stderr contains an error message
+        And the exit code is 1
+
+    @FT-RPT-066
+    Scenario: Projection with nonexistent account surfaces service error
+        Given a CLI-testable projection environment with seeded data
+        When I run the CLI with "report projection --account 9999 --through 2026-04-30"
+        Then stderr contains an error message
+        And the exit code is 1
+
+    # --- No --json ---
+
+    @FT-RPT-067
+    Scenario: Projection does not accept --json flag
+        When I run the CLI with "--json report projection --account 1110 --through 2026-04-30"
+        Then stderr contains an error message
+        And the exit code is 1 or 2

@@ -385,6 +385,40 @@ module Ops =
           documentPath: string option
           notes: string option }
 
+    // --- Balance Projection Types ---
+
+    type ProjectionDirection = Inflow | Outflow
+
+    type ProjectionSourceType =
+        | ObligationInflow
+        | ObligationOutflow
+        | TransferIn
+        | TransferOut
+
+    type ProjectionLineItem =
+        { date: DateOnly
+          description: string
+          amount: decimal option       // None = unknown amount
+          direction: ProjectionDirection
+          sourceType: ProjectionSourceType }
+
+    type ProjectionDayDetail =
+        { date: DateOnly
+          openingBalance: decimal
+          items: ProjectionLineItem list
+          knownNetChange: decimal      // sum of items with known amounts (inflows +, outflows -)
+          closingBalance: decimal      // openingBalance + knownNetChange
+          hasUnknownAmounts: bool }    // true if any item.amount = None
+
+    type BalanceProjection =
+        { accountId: int
+          accountCode: string
+          accountName: string
+          asOfDate: DateOnly           // today — the balance anchor
+          projectionEndDate: DateOnly
+          currentBalance: decimal
+          days: ProjectionDayDetail list }
+
     module InvoiceValidation =
 
         let validateTenant (tenant: string) : Result<unit, string list> =
@@ -425,3 +459,4 @@ module Ops =
                   validateFiscalPeriodId cmd.fiscalPeriodId ]
                 |> List.collect (function Error errs -> errs | Ok _ -> [])
             if allErrors.IsEmpty then Ok () else Error allErrors
+

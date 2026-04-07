@@ -15,6 +15,8 @@
     <Compile Include="TransferService.fs" />
     <Compile Include="InvoiceRepository.fs" />
     <Compile Include="InvoiceService.fs" />
+    <Compile Include="BalanceProjectionRepository.fs" />
+    <Compile Include="BalanceProjectionService.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -4,6 +4,7 @@ open System
 open Argu
 open LeoBloom.Reporting
 open LeoBloom.Ledger
+open LeoBloom.Ops
 open LeoBloom.CLI.OutputFormatter
 
 // --- Argu DU definitions for report subcommands ---
@@ -93,6 +94,15 @@ type AccountBalanceArgs =
             | As_Of _ -> "As-of date (yyyy-MM-dd, defaults to today)"
             | Json -> "Output in JSON format"
 
+type ProjectionArgs =
+    | [<Mandatory>] Account of string
+    | [<Mandatory>] Through of string
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Account _ -> "Account code (e.g. 1110)"
+            | Through _ -> "Projection end date (yyyy-MM-dd, must be in the future)"
+
 type ReportArgs =
     | [<CliPrefix(CliPrefix.None)>] Schedule_E of ParseResults<ScheduleEArgs>
     | [<CliPrefix(CliPrefix.None)>] General_Ledger of ParseResults<GeneralLedgerArgs>
@@ -103,6 +113,7 @@ type ReportArgs =
     | [<CliPrefix(CliPrefix.None)>] Income_Statement of ParseResults<IncomeStatementArgs>
     | [<CliPrefix(CliPrefix.None)>] Pnl_Subtree of ParseResults<PnlSubtreeArgs>
     | [<CliPrefix(CliPrefix.None)>] Account_Balance of ParseResults<AccountBalanceArgs>
+    | [<CliPrefix(CliPrefix.None)>] Projection of ParseResults<ProjectionArgs>
     interface IArgParserTemplate with
         member this.Usage =
             match this with
@@ -115,6 +126,7 @@ type ReportArgs =
             | Income_Statement _ -> "Income statement for a fiscal period"
             | Pnl_Subtree _ -> "P&L subtree for an account and period"
             | Account_Balance _ -> "Account balance as of a date"
+            | Projection _ -> "Balance projection through a future date"
 
 // --- Date parsing helper ---
 
@@ -224,6 +236,19 @@ let private handlePnlSubtree (args: ParseResults<PnlSubtreeArgs>) : int =
 
     write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
 
+let private handleProjection (args: ParseResults<ProjectionArgs>) : int =
+    let account = args.GetResult ProjectionArgs.Account
+    let throughRaw = args.GetResult ProjectionArgs.Through
+
+    match parseDate throughRaw with
+    | Error e ->
+        writeHumanErrors [ e ]
+    | Ok throughDate ->
+        let result = BalanceProjectionService.project account throughDate
+        match result with
+        | Error errs -> writeHumanErrors errs
+        | Ok projection -> writeBalanceProjection projection
+
 let private handleAccountBalance (args: ParseResults<AccountBalanceArgs>) : int =
     let isJson = args.Contains AccountBalanceArgs.Json
     let account = args.GetResult AccountBalanceArgs.Account
@@ -254,6 +279,7 @@ let dispatch (args: ParseResults<ReportArgs>) : int =
     | Some (Income_Statement isArgs) -> handleIncomeStatement isArgs
     | Some (Pnl_Subtree plArgs) -> handlePnlSubtree plArgs
     | Some (Account_Balance abArgs) -> handleAccountBalance abArgs
+    | Some (Projection projArgs) -> handleProjection projArgs
     | None ->
         Console.Error.WriteLine(args.Parser.PrintUsage())
         ExitCodes.systemError
