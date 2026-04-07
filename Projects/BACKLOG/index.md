@@ -66,6 +66,17 @@
 | **059** | **CLI portfolio commands** | **Not started** |
 | **060** | **Portfolio data migration from PersonalFinance** | **Not started (Hobson, not Nightshift)** |
 | **061** | **Portfolio allocation reporting** | **Not started** |
+| **062** | **Consolidate normal balance resolution logic** | **Not started** |
+| **063** | **Portfolio schema delete restriction tests** | **Not started** |
+| **064** | **Balance sheet A=L+E independent verification** | **Not started** |
+| **065** | **Balance projection status filter negative tests** | **Not started** |
+| **066** | **Transfer atomicity and closed-period tests** | **Not started** |
+| **067** | **Portfolio validation gaps (cost_basis, future dates)** | **Not started** |
+| **068** | **Fiscal period overlap prevention** | **Not started** |
+| **069** | **Account CRUD behavioral specs** | **Not started** |
+| **070** | **Missing portfolio CLI commands** | **Not started** |
+| **071** | **Consolidate CLI parseDate + fix TransferCommands** | **Not started** |
+| **072** | **Housekeeping batch (audit cleanup)** | **Not started** |
 
 ---
 
@@ -82,6 +93,17 @@
 | 059 | `059-cli-portfolio-commands.md` | Not started |
 | 060 | `060-portfolio-data-migration.md` | Not started |
 | 061 | `061-portfolio-allocation-reporting.md` | Not started |
+| 062 | `062-normal-balance-consolidation.md` | Not started |
+| 063 | `063-portfolio-delete-restrictions.md` | Not started |
+| 064 | `064-balance-sheet-equation-test.md` | Not started |
+| 065 | `065-balance-projection-filter-tests.md` | Not started |
+| 066 | `066-transfer-parity-tests.md` | Not started |
+| 067 | `067-portfolio-validation-gaps.md` | Not started |
+| 068 | `068-fiscal-period-overlap-guard.md` | Not started |
+| 069 | `069-account-crud-behavioral-specs.md` | Not started |
+| 070 | `070-missing-portfolio-cli-commands.md` | Not started |
+| 071 | `071-cli-parsedate-consolidation.md` | Not started |
+| 072 | `072-housekeeping-batch.md` | Not started |
 
 P028 (write-level ledger validation) has no spec file — it exists only in
 this index (status: Done, covered by 005/006).
@@ -179,6 +201,34 @@ Epic L. Brings Dan's investment tracking from PersonalFinance into LeoBloom.
 
 **Nightshift sequencing:** 057 → 058 → {059, 060, 061} (last three are
 independent, can run in any order).
+
+### Audit Remediation (062-072)
+
+Source: Nine-agent GAAP assessment, 2026-04-07. Reports in
+`HobsonsNotes/GaapAssessment-2026-04-07/`.
+
+**No dependencies on each other** unless noted. BD can enqueue in any order.
+
+**High priority (data integrity):**
+- **062** — Normal balance consolidation. Pure refactor, no deps.
+- **063** — Portfolio delete restriction tests. Depends on 057.
+- **064** — Balance sheet A=L+E test. No deps.
+- **065** — Balance projection filter tests. No deps.
+- **068** — Fiscal period overlap guard. No deps. Includes code + test.
+
+**Medium priority (correctness gaps):**
+- **066** — Transfer parity tests. No deps.
+- **067** — Portfolio validation gaps. Depends on 058.
+- **069** — Account CRUD behavioral specs. No deps.
+- **070** — Missing portfolio CLI commands. Depends on 059.
+
+**Low priority (cleanup):**
+- **071** — CLI parseDate consolidation. No deps.
+- **072** — Housekeeping batch. No deps.
+
+**Note:** Test harness structural issues (connection/transaction architecture)
+are being handled separately by BD as an architectural change. Cards 062-072
+are independent of that work and can proceed in parallel.
 
 ---
 
