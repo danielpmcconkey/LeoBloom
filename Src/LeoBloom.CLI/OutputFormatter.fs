@@ -494,6 +494,43 @@ let private formatSpawnResult (r: SpawnResult) : string =
 let private formatPostToLedgerResult (r: PostToLedgerResult) : string =
     sprintf "Posted instance %d to journal entry %d." r.instanceId r.journalEntryId
 
+// --- Balance Projection formatting ---
+
+let private formatBalanceProjection (p: BalanceProjection) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Balance Projection: Account %s (%s)" p.accountCode p.accountName)
+    lines.Add(sprintf "  Current balance as of %s: %M" (p.asOfDate.ToString("yyyy-MM-dd")) p.currentBalance)
+    lines.Add(sprintf "  Projection through: %s" (p.projectionEndDate.ToString("yyyy-MM-dd")))
+    lines.Add("")
+    lines.Add(sprintf "  %-12s  %15s  %15s" "Date" "Balance" "Change")
+    lines.Add(sprintf "  %s  %s  %s" (String.replicate 12 "-") (String.replicate 15 "-") (String.replicate 15 "-"))
+    for day in p.days do
+        if day.items.IsEmpty then
+            lines.Add(sprintf "  %-12s  %15M  %15s"
+                (day.date.ToString("yyyy-MM-dd")) day.closingBalance "")
+        else
+            let changeStr =
+                if day.hasUnknownAmounts && day.knownNetChange = 0m then "[unknown]"
+                elif day.hasUnknownAmounts then
+                    sprintf "%+M + [unknown]" day.knownNetChange
+                else
+                    sprintf "%+M" day.knownNetChange
+            lines.Add(sprintf "  %-12s  %15M  %15s"
+                (day.date.ToString("yyyy-MM-dd")) day.closingBalance changeStr)
+            for item in day.items do
+                let itemStr =
+                    match item.amount with
+                    | None ->
+                        let marker =
+                            if item.direction = Inflow then "unknown inflow"
+                            else "unknown outflow"
+                        sprintf "    %s  %s: %s" (String.replicate 12 " ") item.description marker
+                    | Some a ->
+                        let sign = if item.direction = Inflow then "+" else "-"
+                        sprintf "    %s  %s%M  %s" (String.replicate 12 " ") sign a item.description
+                lines.Add(itemStr)
+    String.Join(Environment.NewLine, lines)
+
 // --- Dispatch formatting based on type ---
 
 let formatHuman (value: obj) : string =
@@ -678,3 +715,9 @@ let writeOrphanedPostings (isJson: bool) (result: OrphanedPostingResult) : int =
     else
         Console.Out.WriteLine(formatOrphanedPostings result)
     ExitCodes.success
+
+/// Dedicated write function for BalanceProjection (human-only — no --json support).
+let writeBalanceProjection (projection: BalanceProjection) : int =
+    Console.Out.WriteLine(formatBalanceProjection projection)
+    ExitCodes.success
+

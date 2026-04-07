@@ -17,6 +17,8 @@
     <Compile Include="InvoiceService.fs" />
     <Compile Include="OrphanedPostingRepository.fs" />
     <Compile Include="OrphanedPostingService.fs" />
+    <Compile Include="BalanceProjectionRepository.fs" />
+    <Compile Include="BalanceProjectionService.fs" />
   </ItemGroup>
 
   <ItemGroup>
