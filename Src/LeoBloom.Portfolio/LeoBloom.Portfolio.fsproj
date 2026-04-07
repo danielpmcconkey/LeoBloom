@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="InvestmentAccountRepository.fs" />
+    <Compile Include="FundRepository.fs" />
+    <Compile Include="PositionRepository.fs" />
+    <Compile Include="InvestmentAccountService.fs" />
+    <Compile Include="FundService.fs" />
+    <Compile Include="PositionService.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LeoBloom.Domain\LeoBloom.Domain.fsproj" />
+    <ProjectReference Include="..\LeoBloom.Utilities\LeoBloom.Utilities.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+  </ItemGroup>
+
+</Project>

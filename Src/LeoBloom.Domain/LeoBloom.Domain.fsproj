@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="Ledger.fs" />
     <Compile Include="Ops.fs" />
+    <Compile Include="Portfolio.fs" />
   </ItemGroup>
 
 </Project>

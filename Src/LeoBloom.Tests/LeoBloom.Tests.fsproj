@@ -45,6 +45,10 @@
     <Compile Include="OrphanedPostingDetectionTests.fs" />
     <Compile Include="BalanceProjectionTests.fs" />
     <Compile Include="PortfolioStructuralConstraintsTests.fs" />
+    <Compile Include="PortfolioTestHelpers.fs" />
+    <Compile Include="InvestmentAccountTests.fs" />
+    <Compile Include="FundTests.fs" />
+    <Compile Include="PositionTests.fs" />
     <Compile Include="SeedRunnerTests.fs" />
   </ItemGroup>
 
@@ -62,6 +66,7 @@
     <ProjectReference Include="..\LeoBloom.Ledger\LeoBloom.Ledger.fsproj" />
     <ProjectReference Include="..\LeoBloom.Ops\LeoBloom.Ops.fsproj" />
     <ProjectReference Include="..\LeoBloom.Reporting\LeoBloom.Reporting.fsproj" />
+    <ProjectReference Include="..\LeoBloom.Portfolio\LeoBloom.Portfolio.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
