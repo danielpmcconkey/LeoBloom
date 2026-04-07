@@ -271,3 +271,100 @@ let ``Seeds execute in numeric filename order`` () =
     Assert.True(idx020 >= 0, "020-chart-of-accounts.sql not found in output")
     Assert.True(idx010 < idx020,
         sprintf "010 (at %d) should appear before 020 (at %d) in output" idx010 idx020)
+
+// =====================================================================
+// @FT-SR-008 — Seeds populate the 5 tax buckets on a fresh database
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-SR-008")>]
+let ``Seeds populate the 5 tax buckets on a fresh database`` () =
+    let (exitCode, _, stderr) = runSeedsDev ()
+    Assert.True((exitCode = 0), sprintf "Seed runner failed: %s" stderr)
+
+    use conn = DataSource.openConnection()
+    use cmd = conn.CreateCommand()
+    cmd.CommandText <- "SELECT COUNT(*) FROM portfolio.tax_bucket"
+    let count = cmd.ExecuteScalar() :?> int64
+    Assert.Equal(5L, count)
+
+// =====================================================================
+// @FT-SR-009 — Seeds populate each fund dimension table on a fresh database
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-SR-009")>]
+let ``Seeds populate each fund dimension table on a fresh database`` () =
+    let (exitCode, _, stderr) = runSeedsDev ()
+    Assert.True((exitCode = 0), sprintf "Seed runner failed: %s" stderr)
+
+    use conn = DataSource.openConnection()
+    use cmd = conn.CreateCommand()
+
+    let assertCount (table: string) (expected: int64) =
+        cmd.CommandText <- sprintf "SELECT COUNT(*) FROM portfolio.%s" table
+        let actual = cmd.ExecuteScalar() :?> int64
+        Assert.True(
+            (actual = expected),
+            sprintf "Expected %d rows in portfolio.%s but got %d" expected table actual)
+
+    assertCount "dim_investment_type" 8L
+    assertCount "dim_market_cap"      4L
+    assertCount "dim_index_type"      3L
+    assertCount "dim_sector"          13L
+    assertCount "dim_region"          5L
+    assertCount "dim_objective"       6L
+
+// =====================================================================
+// @FT-SR-010 — Seeds populate sample funds with valid dimension FK references
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-SR-010")>]
+let ``Seeds populate sample funds with valid dimension FK references`` () =
+    let (exitCode, _, stderr) = runSeedsDev ()
+    Assert.True((exitCode = 0), sprintf "Seed runner failed: %s" stderr)
+
+    use conn = DataSource.openConnection()
+    use cmd = conn.CreateCommand()
+
+    // At least 4 fund rows
+    cmd.CommandText <- "SELECT COUNT(*) FROM portfolio.fund"
+    let fundCount = cmd.ExecuteScalar() :?> int64
+    Assert.True(fundCount >= 4L, sprintf "Expected at least 4 rows in portfolio.fund but got %d" fundCount)
+
+    // Every fund row with a non-null investment_type_id references an existing dim_investment_type
+    use cmd2 = conn.CreateCommand()
+    cmd2.CommandText <-
+        "SELECT f.symbol FROM portfolio.fund f
+         WHERE f.investment_type_id IS NOT NULL
+           AND NOT EXISTS (
+               SELECT 1 FROM portfolio.dim_investment_type d
+               WHERE d.id = f.investment_type_id)"
+    use reader = cmd2.ExecuteReader()
+    Assert.False(reader.HasRows, "Found fund rows with investment_type_id referencing non-existent dim_investment_type")
+
+// =====================================================================
+// @FT-SR-011 — Portfolio seed data survives a second run unchanged
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-SR-011")>]
+let ``Portfolio seed data survives a second run unchanged`` () =
+    // First run
+    let (exit1, _, stderr1) = runSeedsDev ()
+    Assert.True((exit1 = 0), sprintf "First seed run failed: %s" stderr1)
+
+    // Second run
+    let (exit2, _, stderr2) = runSeedsDev ()
+    Assert.True((exit2 = 0), sprintf "Second seed run failed: %s" stderr2)
+
+    use conn = DataSource.openConnection()
+    use cmd = conn.CreateCommand()
+    cmd.CommandText <- "SELECT COUNT(*) FROM portfolio.tax_bucket"
+    let count = cmd.ExecuteScalar() :?> int64
+    Assert.Equal(5L, count)
+
+    Assert.True(
+        String.IsNullOrWhiteSpace(stderr2),
+        sprintf "Second run had stderr output: %s" stderr2)

@@ -60,3 +60,41 @@ Feature: Seed Runner
         Given a fresh database with migrations applied
         When I run the seed runner for the dev environment
         Then 010-fiscal-periods.sql executes before 020-chart-of-accounts.sql
+
+    # --- Portfolio reference data ---
+
+    @FT-SR-008
+    Scenario: Seeds populate the 5 tax buckets on a fresh database
+        Given a fresh database with migrations applied
+        When I run the seed runner for the dev environment
+        Then the database contains 5 portfolio.tax_bucket rows
+
+    @FT-SR-009
+    Scenario Outline: Seeds populate each fund dimension table on a fresh database
+        Given a fresh database with migrations applied
+        When I run the seed runner for the dev environment
+        Then portfolio.<table> contains <count> rows
+
+        Examples:
+            | table                | count |
+            | dim_investment_type  | 8     |
+            | dim_market_cap       | 4     |
+            | dim_index_type       | 3     |
+            | dim_sector           | 13    |
+            | dim_region           | 5     |
+            | dim_objective        | 6     |
+
+    @FT-SR-010
+    Scenario: Seeds populate sample funds with valid dimension FK references
+        Given a fresh database with migrations applied
+        When I run the seed runner for the dev environment
+        Then portfolio.fund contains at least 4 rows
+        And every fund row with a dim_investment_type_id references an existing dim_investment_type
+
+    @FT-SR-011
+    Scenario: Portfolio seed data survives a second run unchanged
+        Given a fresh database with migrations applied
+        And I run the seed runner for the dev environment
+        When I run the seed runner for the dev environment again
+        Then the portfolio.tax_bucket row count is 5
+        And no errors are reported

@@ -44,6 +44,7 @@
     <Compile Include="ObligationCommandsTests.fs" />
     <Compile Include="OrphanedPostingDetectionTests.fs" />
     <Compile Include="BalanceProjectionTests.fs" />
+    <Compile Include="PortfolioStructuralConstraintsTests.fs" />
     <Compile Include="SeedRunnerTests.fs" />
   </ItemGroup>
 
