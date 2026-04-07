@@ -18,6 +18,7 @@
     <Compile Include="PeriodCommands.fs" />
     <Compile Include="ObligationCommands.fs" />
     <Compile Include="DiagnosticCommands.fs" />
+    <Compile Include="PortfolioCommands.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -27,6 +28,7 @@
     <ProjectReference Include="..\LeoBloom.Reporting\LeoBloom.Reporting.fsproj" />
     <ProjectReference Include="..\LeoBloom.Ops\LeoBloom.Ops.fsproj" />
     <ProjectReference Include="..\LeoBloom.Utilities\LeoBloom.Utilities.fsproj" />
+    <ProjectReference Include="..\LeoBloom.Portfolio\LeoBloom.Portfolio.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

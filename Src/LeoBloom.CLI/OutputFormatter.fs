@@ -5,6 +5,7 @@ open System.Text.Json
 open System.Text.Json.Serialization
 open LeoBloom.Domain.Ledger
 open LeoBloom.Domain.Ops
+open LeoBloom.Domain.Portfolio
 open LeoBloom.Reporting.ReportingTypes
 
 // --- JSON serialization options ---
@@ -531,6 +532,84 @@ let private formatBalanceProjection (p: BalanceProjection) : string =
                 lines.Add(itemStr)
     String.Join(Environment.NewLine, lines)
 
+// --- Portfolio formatting ---
+
+let formatInvestmentAccount (a: InvestmentAccount) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Investment Account #%d — %s" a.id a.name)
+    lines.Add(sprintf "  Tax Bucket ID:    %d" a.taxBucketId)
+    lines.Add(sprintf "  Account Group ID: %d" a.accountGroupId)
+    String.Join(Environment.NewLine, lines)
+
+let private formatInvestmentAccountList (accounts: InvestmentAccount list) : string =
+    if accounts.IsEmpty then "(no investment accounts found)"
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "  %-6s  %-35s  %-12s  %-15s" "ID" "Name" "TaxBucketId" "AccountGroupId")
+        lines.Add(sprintf "  %s  %s  %s  %s"
+            (String.replicate 6 "-") (String.replicate 35 "-")
+            (String.replicate 12 "-") (String.replicate 15 "-"))
+        for a in accounts do
+            let name = if a.name.Length > 35 then a.name.Substring(0, 32) + "..." else a.name
+            lines.Add(sprintf "  %-6d  %-35s  %-12d  %-15d" a.id name a.taxBucketId a.accountGroupId)
+        String.Join(Environment.NewLine, lines)
+
+let formatFund (f: Fund) : string =
+    let optStr o = o |> Option.map string |> Option.defaultValue "(none)"
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Fund %s — %s" f.symbol f.name)
+    lines.Add(sprintf "  Investment Type ID: %s" (optStr f.investmentTypeId))
+    lines.Add(sprintf "  Market Cap ID:      %s" (optStr f.marketCapId))
+    lines.Add(sprintf "  Index Type ID:      %s" (optStr f.indexTypeId))
+    lines.Add(sprintf "  Sector ID:          %s" (optStr f.sectorId))
+    lines.Add(sprintf "  Region ID:          %s" (optStr f.regionId))
+    lines.Add(sprintf "  Objective ID:       %s" (optStr f.objectiveId))
+    String.Join(Environment.NewLine, lines)
+
+let private formatFundList (funds: Fund list) : string =
+    if funds.IsEmpty then "(no funds found)"
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "  %-10s  %-40s  %-15s  %-12s" "Symbol" "Name" "InvTypeId" "MarketCapId")
+        lines.Add(sprintf "  %s  %s  %s  %s"
+            (String.replicate 10 "-") (String.replicate 40 "-")
+            (String.replicate 15 "-") (String.replicate 12 "-"))
+        for f in funds do
+            let name = if f.name.Length > 40 then f.name.Substring(0, 37) + "..." else f.name
+            let invType = f.investmentTypeId |> Option.map string |> Option.defaultValue ""
+            let mktCap  = f.marketCapId      |> Option.map string |> Option.defaultValue ""
+            lines.Add(sprintf "  %-10s  %-40s  %-15s  %-12s" f.symbol name invType mktCap)
+        String.Join(Environment.NewLine, lines)
+
+let formatPosition (p: Position) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Position #%d" p.id)
+    lines.Add(sprintf "  Account ID:   %d" p.investmentAccountId)
+    lines.Add(sprintf "  Symbol:       %s" p.symbol)
+    lines.Add(sprintf "  Date:         %s" (p.positionDate.ToString("yyyy-MM-dd")))
+    lines.Add(sprintf "  Price:        %M" p.price)
+    lines.Add(sprintf "  Quantity:     %M" p.quantity)
+    lines.Add(sprintf "  Value:        %M" p.currentValue)
+    lines.Add(sprintf "  Cost Basis:   %M" p.costBasis)
+    String.Join(Environment.NewLine, lines)
+
+let private formatPositionList (positions: Position list) : string =
+    if positions.IsEmpty then "(no positions found)"
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "  %-6s  %-9s  %-10s  %-12s  %12s  %12s  %12s  %12s"
+            "ID" "AccountId" "Symbol" "Date" "Price" "Qty" "Value" "CostBasis")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s  %s  %s  %s"
+            (String.replicate 6 "-") (String.replicate 9 "-") (String.replicate 10 "-")
+            (String.replicate 12 "-") (String.replicate 12 "-") (String.replicate 12 "-")
+            (String.replicate 12 "-") (String.replicate 12 "-"))
+        for p in positions do
+            lines.Add(sprintf "  %-6d  %-9d  %-10s  %-12s  %12M  %12M  %12M  %12M"
+                p.id p.investmentAccountId p.symbol
+                (p.positionDate.ToString("yyyy-MM-dd"))
+                p.price p.quantity p.currentValue p.costBasis)
+        String.Join(Environment.NewLine, lines)
+
 // --- Dispatch formatting based on type ---
 
 let formatHuman (value: obj) : string =
@@ -552,6 +631,9 @@ let formatHuman (value: obj) : string =
     | :? FiscalPeriod as fp -> formatFiscalPeriod fp
     | :? ObligationAgreement as a -> formatObligationAgreement a
     | :? ObligationInstance as i -> formatObligationInstance i
+    | :? InvestmentAccount as a -> formatInvestmentAccount a
+    | :? Fund as f -> formatFund f
+    | :? Position as p -> formatPosition p
     | _ -> sprintf "%A" value
 
 let formatJson (value: obj) : string =
@@ -719,5 +801,29 @@ let writeOrphanedPostings (isJson: bool) (result: OrphanedPostingResult) : int =
 /// Dedicated write function for BalanceProjection (human-only — no --json support).
 let writeBalanceProjection (projection: BalanceProjection) : int =
     Console.Out.WriteLine(formatBalanceProjection projection)
+    ExitCodes.success
+
+/// Dedicated write function for InvestmentAccount list to avoid F# type erasure issues.
+let writeInvestmentAccountList (isJson: bool) (accounts: InvestmentAccount list) : int =
+    if isJson then
+        Console.Out.WriteLine(formatJson accounts)
+    else
+        Console.Out.WriteLine(formatInvestmentAccountList accounts)
+    ExitCodes.success
+
+/// Dedicated write function for Fund list to avoid F# type erasure issues.
+let writeFundList (isJson: bool) (funds: Fund list) : int =
+    if isJson then
+        Console.Out.WriteLine(formatJson funds)
+    else
+        Console.Out.WriteLine(formatFundList funds)
+    ExitCodes.success
+
+/// Dedicated write function for Position list to avoid F# type erasure issues.
+let writePositionList (isJson: bool) (positions: Position list) : int =
+    if isJson then
+        Console.Out.WriteLine(formatJson positions)
+    else
+        Console.Out.WriteLine(formatPositionList positions)
     ExitCodes.success
 

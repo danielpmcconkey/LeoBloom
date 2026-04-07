@@ -50,6 +50,7 @@
     <Compile Include="FundTests.fs" />
     <Compile Include="PositionTests.fs" />
     <Compile Include="SeedRunnerTests.fs" />
+    <Compile Include="PortfolioCommandsTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
