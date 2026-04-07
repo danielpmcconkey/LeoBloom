@@ -11,6 +11,7 @@
     <Compile Include="OutputFormatter.fs" />
     <Compile Include="ErrorHandler.fs" />
     <Compile Include="LedgerCommands.fs" />
+    <Compile Include="PortfolioReportCommands.fs" />
     <Compile Include="ReportCommands.fs" />
     <Compile Include="InvoiceCommands.fs" />
     <Compile Include="TransferCommands.fs" />

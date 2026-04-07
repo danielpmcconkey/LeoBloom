@@ -5,6 +5,7 @@ open Argu
 open LeoBloom.Reporting
 open LeoBloom.Ledger
 open LeoBloom.Ops
+open LeoBloom.Portfolio
 open LeoBloom.CLI.OutputFormatter
 
 // --- Argu DU definitions for report subcommands ---
@@ -114,6 +115,10 @@ type ReportArgs =
     | [<CliPrefix(CliPrefix.None)>] Pnl_Subtree of ParseResults<PnlSubtreeArgs>
     | [<CliPrefix(CliPrefix.None)>] Account_Balance of ParseResults<AccountBalanceArgs>
     | [<CliPrefix(CliPrefix.None)>] Projection of ParseResults<ProjectionArgs>
+    | [<CliPrefix(CliPrefix.None)>] Allocation of ParseResults<PortfolioReportCommands.AllocationArgs>
+    | [<CliPrefix(CliPrefix.None)>] Portfolio_Summary of ParseResults<PortfolioReportCommands.PortfolioSummaryArgs>
+    | [<CliPrefix(CliPrefix.None)>] Portfolio_History of ParseResults<PortfolioReportCommands.PortfolioHistoryArgs>
+    | [<CliPrefix(CliPrefix.None)>] Gains of ParseResults<PortfolioReportCommands.GainsArgs>
     interface IArgParserTemplate with
         member this.Usage =
             match this with
@@ -127,6 +132,10 @@ type ReportArgs =
             | Pnl_Subtree _ -> "P&L subtree for an account and period"
             | Account_Balance _ -> "Account balance as of a date"
             | Projection _ -> "Balance projection through a future date"
+            | Allocation _        -> "Allocation breakdown by dimension"
+            | Portfolio_Summary _ -> "Portfolio value and gain/loss summary"
+            | Portfolio_History _ -> "Historical portfolio value time-series"
+            | Gains _             -> "Per-fund unrealized gain/loss report"
 
 // --- Date parsing helper ---
 
@@ -280,6 +289,10 @@ let dispatch (args: ParseResults<ReportArgs>) : int =
     | Some (Pnl_Subtree plArgs) -> handlePnlSubtree plArgs
     | Some (Account_Balance abArgs) -> handleAccountBalance abArgs
     | Some (Projection projArgs) -> handleProjection projArgs
+    | Some (Allocation allocArgs)         -> PortfolioReportCommands.handleAllocation allocArgs
+    | Some (Portfolio_Summary psArgs)     -> PortfolioReportCommands.handlePortfolioSummary psArgs
+    | Some (Portfolio_History phArgs)     -> PortfolioReportCommands.handlePortfolioHistory phArgs
+    | Some (Gains gainsArgs)              -> PortfolioReportCommands.handleGains gainsArgs
     | None ->
         Console.Error.WriteLine(args.Parser.PrintUsage())
         ExitCodes.systemError

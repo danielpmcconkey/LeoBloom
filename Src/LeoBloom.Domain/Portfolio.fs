@@ -55,3 +55,54 @@ module Portfolio =
         | BySector of int
         | ByRegion of int
         | ByObjective of int
+
+    // Report result types
+
+    /// A single row in an allocation or summary breakdown.
+    type AllocationRow =
+        { category: string
+          currentValue: decimal
+          percentage: decimal }
+
+    /// Full allocation report result.
+    type AllocationReport =
+        { dimension: string
+          rows: AllocationRow list
+          total: decimal }
+
+    /// Portfolio summary report.
+    type PortfolioSummary =
+        { totalValue: decimal
+          totalCostBasis: decimal
+          unrealizedGainLoss: decimal
+          unrealizedGainLossPct: decimal
+          taxBucketBreakdown: AllocationRow list
+          topHoldings: AllocationRow list }
+
+    /// A single row in the history time-series.
+    type HistoryRow =
+        { positionDate: DateOnly
+          categories: (string * decimal) list
+          total: decimal }
+
+    /// Full history report result.
+    type PortfolioHistoryReport =
+        { dimension: string
+          rows: HistoryRow list }
+
+    /// Per-fund gain/loss row.
+    type GainLossRow =
+        { symbol: string
+          fundName: string
+          costBasis: decimal
+          currentValue: decimal
+          gainLoss: decimal
+          gainLossPct: decimal }
+
+    /// Full gains report.
+    type GainsReport =
+        { rows: GainLossRow list
+          totalCostBasis: decimal
+          totalCurrentValue: decimal
+          totalGainLoss: decimal
+          totalGainLossPct: decimal }

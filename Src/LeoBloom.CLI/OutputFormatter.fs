@@ -827,3 +827,151 @@ let writePositionList (isJson: bool) (positions: Position list) : int =
         Console.Out.WriteLine(formatPositionList positions)
     ExitCodes.success
 
+// --- Portfolio Report formatting ---
+
+let private formatAllocationReport (report: AllocationReport) : string =
+    if report.rows.IsEmpty then
+        sprintf "Allocation by %s\n  (no positions found)" report.dimension
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "Allocation by %s" report.dimension)
+        lines.Add("")
+        lines.Add(sprintf "  %-35s  %14s  %8s" "Category" "Value" "Pct")
+        lines.Add(sprintf "  %s  %s  %s" (String.replicate 35 "-") (String.replicate 14 "-") (String.replicate 8 "-"))
+        for r in report.rows do
+            let cat = if r.category.Length > 35 then r.category.Substring(0, 32) + "..." else r.category
+            lines.Add(sprintf "  %-35s  %14M  %7.1f%%" cat r.currentValue r.percentage)
+        lines.Add(sprintf "  %s  %s  %s" (String.replicate 35 "-") (String.replicate 14 "-") (String.replicate 8 "-"))
+        lines.Add(sprintf "  %-35s  %14M  %7.1f%%" "Total" report.total 100.0)
+        String.Join(Environment.NewLine, lines)
+
+let private formatPortfolioSummary (summary: PortfolioSummary) : string =
+    if summary.totalValue = 0m && summary.taxBucketBreakdown.IsEmpty then
+        "Portfolio Summary\n  (no positions found)"
+    else
+        let lines = ResizeArray<string>()
+        let glSign = if summary.unrealizedGainLoss >= 0m then "+" else ""
+        lines.Add("Portfolio Summary")
+        lines.Add("")
+        lines.Add(sprintf "  Total Value:          %14M" summary.totalValue)
+        lines.Add(sprintf "  Total Cost Basis:     %14M" summary.totalCostBasis)
+        lines.Add(sprintf "  Unrealized Gain/Loss: %s%M  (%s%.2f%%)"
+            glSign summary.unrealizedGainLoss glSign summary.unrealizedGainLossPct)
+        lines.Add("")
+        lines.Add("  Tax Bucket Breakdown")
+        if summary.taxBucketBreakdown.IsEmpty then
+            lines.Add("    (none)")
+        else
+            lines.Add(sprintf "    %-30s  %14s  %8s" "Bucket" "Value" "Pct")
+            lines.Add(sprintf "    %s  %s  %s" (String.replicate 30 "-") (String.replicate 14 "-") (String.replicate 8 "-"))
+            for r in summary.taxBucketBreakdown do
+                let cat = if r.category.Length > 30 then r.category.Substring(0, 27) + "..." else r.category
+                lines.Add(sprintf "    %-30s  %14M  %7.1f%%" cat r.currentValue r.percentage)
+        lines.Add("")
+        lines.Add("  Top 5 Holdings")
+        if summary.topHoldings.IsEmpty then
+            lines.Add("    (none)")
+        else
+            lines.Add(sprintf "    %-40s  %14s  %8s" "Fund" "Value" "Pct")
+            lines.Add(sprintf "    %s  %s  %s" (String.replicate 40 "-") (String.replicate 14 "-") (String.replicate 8 "-"))
+            for r in summary.topHoldings do
+                let cat = if r.category.Length > 40 then r.category.Substring(0, 37) + "..." else r.category
+                lines.Add(sprintf "    %-40s  %14M  %7.1f%%" cat r.currentValue r.percentage)
+        String.Join(Environment.NewLine, lines)
+
+let private formatPortfolioHistoryReport (report: PortfolioHistoryReport) : string =
+    if report.rows.IsEmpty then
+        sprintf "Portfolio History by %s\n  (no positions found)" report.dimension
+    else
+        // Collect all distinct categories in order of first appearance
+        let allCats =
+            report.rows
+            |> List.collect (fun r -> r.categories |> List.map fst)
+            |> List.distinct
+        let colWidth = 14
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "Portfolio History by %s" report.dimension)
+        lines.Add("")
+        let headerCats = allCats |> List.map (fun c -> if c.Length > colWidth then c.Substring(0, colWidth - 3) + "..." else c)
+        let header = sprintf "  %-12s  %s  %s" "Date" (headerCats |> List.map (sprintf "%*s" colWidth) |> String.concat "  ") (sprintf "%*s" colWidth "Total")
+        lines.Add(header)
+        let sep = sprintf "  %s  %s  %s" (String.replicate 12 "-") (allCats |> List.map (fun _ -> String.replicate colWidth "-") |> String.concat "  ") (String.replicate colWidth "-")
+        lines.Add(sep)
+        for row in report.rows do
+            let catMap = row.categories |> Map.ofList
+            let catCols = allCats |> List.map (fun cat ->
+                let v = catMap |> Map.tryFind cat |> Option.defaultValue 0m
+                sprintf "%*M" colWidth v)
+            lines.Add(sprintf "  %-12s  %s  %*M"
+                (row.positionDate.ToString("yyyy-MM-dd"))
+                (catCols |> String.concat "  ")
+                colWidth row.total)
+        String.Join(Environment.NewLine, lines)
+
+let private formatGainsReport (report: GainsReport) : string =
+    if report.rows.IsEmpty then
+        "Gains Report\n  (no positions found)"
+    else
+        let lines = ResizeArray<string>()
+        lines.Add("Gains Report")
+        lines.Add("")
+        lines.Add(sprintf "  %-10s  %-35s  %14s  %14s  %14s  %8s"
+            "Symbol" "Fund" "Cost Basis" "Value" "Gain/Loss" "Pct")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s  %s"
+            (String.replicate 10 "-") (String.replicate 35 "-")
+            (String.replicate 14 "-") (String.replicate 14 "-")
+            (String.replicate 14 "-") (String.replicate 8 "-"))
+        for r in report.rows do
+            let name = if r.fundName.Length > 35 then r.fundName.Substring(0, 32) + "..." else r.fundName
+            let glSign = if r.gainLoss >= 0m then "+" else ""
+            lines.Add(sprintf "  %-10s  %-35s  %14M  %14M  %s%13M  %+7.2f%%"
+                r.symbol name r.costBasis r.currentValue glSign r.gainLoss r.gainLossPct)
+        lines.Add(sprintf "  %s  %s  %s  %s  %s  %s"
+            (String.replicate 10 "-") (String.replicate 35 "-")
+            (String.replicate 14 "-") (String.replicate 14 "-")
+            (String.replicate 14 "-") (String.replicate 8 "-"))
+        let totalGlSign = if report.totalGainLoss >= 0m then "+" else ""
+        lines.Add(sprintf "  %-10s  %-35s  %14M  %14M  %s%13M  %+7.2f%%"
+            "" "Total" report.totalCostBasis report.totalCurrentValue
+            totalGlSign report.totalGainLoss report.totalGainLossPct)
+        String.Join(Environment.NewLine, lines)
+
+/// Dedicated write function for AllocationReport.
+let writeAllocationReport (isJson: bool) (result: Result<AllocationReport, string list>) : int =
+    match result with
+    | Ok report ->
+        if isJson then Console.Out.WriteLine(formatJson report)
+        else Console.Out.WriteLine(formatAllocationReport report)
+        ExitCodes.success
+    | Error errors ->
+        writeHumanErrors errors
+
+/// Dedicated write function for PortfolioSummary.
+let writePortfolioSummary (isJson: bool) (result: Result<PortfolioSummary, string list>) : int =
+    match result with
+    | Ok summary ->
+        if isJson then Console.Out.WriteLine(formatJson summary)
+        else Console.Out.WriteLine(formatPortfolioSummary summary)
+        ExitCodes.success
+    | Error errors ->
+        writeHumanErrors errors
+
+/// Dedicated write function for PortfolioHistoryReport.
+let writePortfolioHistoryReport (isJson: bool) (result: Result<PortfolioHistoryReport, string list>) : int =
+    match result with
+    | Ok report ->
+        if isJson then Console.Out.WriteLine(formatJson report)
+        else Console.Out.WriteLine(formatPortfolioHistoryReport report)
+        ExitCodes.success
+    | Error errors ->
+        writeHumanErrors errors
+
+/// Dedicated write function for GainsReport.
+let writeGainsReport (isJson: bool) (result: Result<GainsReport, string list>) : int =
+    match result with
+    | Ok report ->
+        if isJson then Console.Out.WriteLine(formatJson report)
+        else Console.Out.WriteLine(formatGainsReport report)
+        ExitCodes.success
+    | Error errors ->
+        writeHumanErrors errors

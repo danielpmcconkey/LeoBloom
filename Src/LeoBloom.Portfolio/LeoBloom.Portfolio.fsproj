@@ -9,9 +9,11 @@
     <Compile Include="InvestmentAccountRepository.fs" />
     <Compile Include="FundRepository.fs" />
     <Compile Include="PositionRepository.fs" />
+    <Compile Include="PortfolioReportRepository.fs" />
     <Compile Include="InvestmentAccountService.fs" />
     <Compile Include="FundService.fs" />
     <Compile Include="PositionService.fs" />
+    <Compile Include="PortfolioReportService.fs" />
   </ItemGroup>
 
   <ItemGroup>
