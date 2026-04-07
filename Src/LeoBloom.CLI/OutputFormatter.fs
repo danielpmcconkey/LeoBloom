@@ -391,6 +391,109 @@ let private formatTransferList (transfers: Transfer list) : string =
                 (sprintf "%M" t.amount) (t.initiatedDate.ToString("yyyy-MM-dd")))
         String.Join(Environment.NewLine, lines)
 
+// --- Obligation Agreement formatting ---
+
+let private formatObligationAgreement (a: ObligationAgreement) : string =
+    let activeStr = if a.isActive then "Yes" else "No"
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Obligation Agreement #%d — %s" a.id a.name)
+    lines.Add(sprintf "  Type:           %s" (ObligationDirection.toString a.obligationType))
+    lines.Add(sprintf "  Cadence:        %s" (RecurrenceCadence.toString a.cadence))
+    lines.Add(sprintf "  Counterparty:   %s" (a.counterparty |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Amount:         %s" (a.amount |> Option.map (sprintf "%M") |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Expected Day:   %s" (a.expectedDay |> Option.map string |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Payment Method: %s" (a.paymentMethod |> Option.map PaymentMethodType.toString |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Source Account: %s" (a.sourceAccountId |> Option.map string |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Dest Account:   %s" (a.destAccountId |> Option.map string |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Active:         %s" activeStr)
+    lines.Add(sprintf "  Notes:          %s" (a.notes |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Created:        %s" (a.createdAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    lines.Add(sprintf "  Modified:       %s" (a.modifiedAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    String.Join(Environment.NewLine, lines)
+
+let private formatObligationAgreementList (agreements: ObligationAgreement list) : string =
+    if agreements.IsEmpty then "(no agreements found)"
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "  %-6s  %-35s  %-12s  %-10s  %-6s" "ID" "Name" "Type" "Cadence" "Active")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s"
+            (String.replicate 6 "-") (String.replicate 35 "-")
+            (String.replicate 12 "-") (String.replicate 10 "-") (String.replicate 6 "-"))
+        for a in agreements do
+            let name = if a.name.Length > 35 then a.name.Substring(0, 32) + "..." else a.name
+            let active = if a.isActive then "Yes" else "No"
+            lines.Add(sprintf "  %-6d  %-35s  %-12s  %-10s  %-6s"
+                a.id name
+                (ObligationDirection.toString a.obligationType)
+                (RecurrenceCadence.toString a.cadence)
+                active)
+        String.Join(Environment.NewLine, lines)
+
+// --- Obligation Instance formatting ---
+
+let private formatObligationInstance (i: ObligationInstance) : string =
+    let activeStr = if i.isActive then "Yes" else "No"
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Obligation Instance #%d — %s" i.id i.name)
+    lines.Add(sprintf "  Agreement ID:   %d" i.obligationAgreementId)
+    lines.Add(sprintf "  Status:         %s" (InstanceStatus.toString i.status))
+    lines.Add(sprintf "  Amount:         %s" (i.amount |> Option.map (sprintf "%M") |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Expected Date:  %s" (i.expectedDate.ToString("yyyy-MM-dd")))
+    lines.Add(sprintf "  Confirmed Date: %s" (i.confirmedDate |> Option.map (fun d -> d.ToString("yyyy-MM-dd")) |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Due Date:       %s" (i.dueDate |> Option.map (fun d -> d.ToString("yyyy-MM-dd")) |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Journal Entry:  %s" (i.journalEntryId |> Option.map string |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Document Path:  %s" (i.documentPath |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Notes:          %s" (i.notes |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Active:         %s" activeStr)
+    lines.Add(sprintf "  Created:        %s" (i.createdAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    lines.Add(sprintf "  Modified:       %s" (i.modifiedAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    String.Join(Environment.NewLine, lines)
+
+let private formatObligationInstanceList (instances: ObligationInstance list) : string =
+    if instances.IsEmpty then "(no instances found)"
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "  %-6s  %-6s  %-25s  %-10s  %-12s  %-10s" "ID" "AgrID" "Name" "Status" "Expected" "Amount")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s  %s"
+            (String.replicate 6 "-") (String.replicate 6 "-") (String.replicate 25 "-")
+            (String.replicate 10 "-") (String.replicate 12 "-") (String.replicate 10 "-"))
+        for i in instances do
+            let name = if i.name.Length > 25 then i.name.Substring(0, 22) + "..." else i.name
+            let amount = i.amount |> Option.map (sprintf "%M") |> Option.defaultValue "(none)"
+            lines.Add(sprintf "  %-6d  %-6d  %-25s  %-10s  %-12s  %-10s"
+                i.id i.obligationAgreementId name
+                (InstanceStatus.toString i.status)
+                (i.expectedDate.ToString("yyyy-MM-dd"))
+                amount)
+        String.Join(Environment.NewLine, lines)
+
+// --- Obligation result formatting ---
+
+let private formatOverdueResult (r: OverdueDetectionResult) : string =
+    let lines = ResizeArray<string>()
+    if r.queryFailed then
+        lines.Add("Overdue detection failed (query error).")
+    else
+        lines.Add(sprintf "Overdue detection complete.")
+        lines.Add(sprintf "  Transitioned: %d" r.transitioned)
+        lines.Add(sprintf "  Errors:       %d" r.errors.Length)
+        if not r.errors.IsEmpty then
+            lines.Add("  Error details:")
+            for (instanceId, msg) in r.errors do
+                lines.Add(sprintf "    Instance %d: %s" instanceId msg)
+    String.Join(Environment.NewLine, lines)
+
+let private formatSpawnResult (r: SpawnResult) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Spawned %d instance(s), %d skipped." r.created.Length r.skippedCount)
+    if not r.created.IsEmpty then
+        lines.Add("")
+        lines.Add(formatObligationInstanceList r.created)
+    String.Join(Environment.NewLine, lines)
+
+let private formatPostToLedgerResult (r: PostToLedgerResult) : string =
+    sprintf "Posted instance %d to journal entry %d." r.instanceId r.journalEntryId
+
 // --- Dispatch formatting based on type ---
 
 let formatHuman (value: obj) : string =
@@ -410,6 +513,8 @@ let formatHuman (value: obj) : string =
     | :? AccountBalance as b -> formatAccountBalance b
     | :? Account as a -> formatAccount a
     | :? FiscalPeriod as fp -> formatFiscalPeriod fp
+    | :? ObligationAgreement as a -> formatObligationAgreement a
+    | :? ObligationInstance as i -> formatObligationInstance i
     | _ -> sprintf "%A" value
 
 let formatJson (value: obj) : string =
@@ -494,3 +599,43 @@ let writeHumanErrors (errors: string list) : int =
     for err in errors do
         Console.Error.WriteLine(sprintf "Error: %s" err)
     ExitCodes.businessError
+
+/// Dedicated write function for ObligationAgreement list to avoid F# type erasure issues.
+let writeAgreementList (isJson: bool) (agreements: ObligationAgreement list) : int =
+    if isJson then
+        Console.Out.WriteLine(formatJson agreements)
+    else
+        Console.Out.WriteLine(formatObligationAgreementList agreements)
+    ExitCodes.success
+
+/// Dedicated write function for ObligationInstance list to avoid F# type erasure issues.
+let writeInstanceList (isJson: bool) (instances: ObligationInstance list) : int =
+    if isJson then
+        Console.Out.WriteLine(formatJson instances)
+    else
+        Console.Out.WriteLine(formatObligationInstanceList instances)
+    ExitCodes.success
+
+/// Dedicated write function for OverdueDetectionResult.
+let writeOverdueResult (isJson: bool) (result: OverdueDetectionResult) : int =
+    if isJson then
+        Console.Out.WriteLine(formatJson result)
+    else
+        Console.Out.WriteLine(formatOverdueResult result)
+    ExitCodes.success
+
+/// Dedicated write function for SpawnResult.
+let writeSpawnResult (isJson: bool) (result: SpawnResult) : int =
+    if isJson then
+        Console.Out.WriteLine(formatJson result)
+    else
+        Console.Out.WriteLine(formatSpawnResult result)
+    ExitCodes.success
+
+/// Dedicated write function for PostToLedgerResult.
+let writePostResult (isJson: bool) (result: PostToLedgerResult) : int =
+    if isJson then
+        Console.Out.WriteLine(formatJson result)
+    else
+        Console.Out.WriteLine(formatPostToLedgerResult result)
+    ExitCodes.success

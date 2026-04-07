@@ -19,6 +19,33 @@ module ObligationInstanceService =
         reader.Close()
         exists
 
+    let list (filter: ListInstancesFilter) : ObligationInstance list =
+        Log.info "Listing obligation instances" [||]
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = ObligationInstanceRepository.list txn filter
+            txn.Commit()
+            result
+        with ex ->
+            Log.errorExn ex "Failed to list obligation instances" [||]
+            try txn.Rollback() with _ -> ()
+            []
+
+    let findUpcoming (today: DateOnly) (days: int) : ObligationInstance list =
+        Log.info "Finding upcoming obligation instances within {Days} days" [| days :> obj |]
+        let horizon = today.AddDays(days)
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = ObligationInstanceRepository.findUpcoming txn today horizon
+            txn.Commit()
+            result
+        with ex ->
+            Log.errorExn ex "Failed to find upcoming obligation instances" [||]
+            try txn.Rollback() with _ -> ()
+            []
+
     let transition (cmd: TransitionCommand) : Result<ObligationInstance, string list> =
         Log.info "Transitioning instance {InstanceId} to {TargetStatus}"
             [| cmd.instanceId :> obj; InstanceStatus.toString cmd.targetStatus :> obj |]

@@ -8,6 +8,7 @@ open LeoBloom.CLI.InvoiceCommands
 open LeoBloom.CLI.TransferCommands
 open LeoBloom.CLI.AccountCommands
 open LeoBloom.CLI.PeriodCommands
+open LeoBloom.CLI.ObligationCommands
 open LeoBloom.CLI.ErrorHandler
 open LeoBloom.Utilities
 
@@ -20,6 +21,7 @@ type LeoBloomArgs =
     | [<CliPrefix(CliPrefix.None)>] Transfer of ParseResults<TransferArgs>
     | [<CliPrefix(CliPrefix.None)>] Account of ParseResults<AccountArgs>
     | [<CliPrefix(CliPrefix.None)>] Period of ParseResults<PeriodArgs>
+    | [<CliPrefix(CliPrefix.None)>] Obligation of ParseResults<ObligationArgs>
     | Json
     interface IArgParserTemplate with
         member this.Usage =
@@ -30,6 +32,7 @@ type LeoBloomArgs =
             | Transfer _ -> "Transfer commands (initiate, confirm, show, list)"
             | Account _ -> "Account commands (list, show, balance)"
             | Period _ -> "Period commands (list, close, reopen, create)"
+            | Obligation _ -> "Obligation commands (agreement, instance, overdue, upcoming)"
             | Json -> "Output in JSON format"
 
 [<EntryPoint>]
@@ -57,6 +60,8 @@ let main (argv: string array) =
                 AccountCommands.dispatch isJson accountResults
             | Some (Period periodResults) ->
                 PeriodCommands.dispatch isJson periodResults
+            | Some (Obligation obligationResults) ->
+                ObligationCommands.dispatch isJson obligationResults
             | _ ->
                 Console.Error.WriteLine(parser.PrintUsage())
                 ExitCodes.systemError

@@ -6,6 +6,11 @@ open NpgsqlTypes
 open LeoBloom.Domain.Ops
 open LeoBloom.Utilities
 
+type ListInstancesFilter =
+    { status: InstanceStatus option
+      dueBefore: DateOnly option
+      dueAfter: DateOnly option }
+
 /// Raw SQL persistence for obligation instances. All operations run within
 /// a caller-provided NpgsqlTransaction for atomicity.
 module ObligationInstanceRepository =
@@ -138,6 +143,66 @@ module ObligationInstanceRepository =
              ORDER BY expected_date",
             txn.Connection, txn)
         sql.Parameters.AddWithValue("@ref_date", referenceDate) |> ignore
+        use reader = sql.ExecuteReader()
+        let mutable results = []
+        while reader.Read() do
+            results <- (mapReader reader) :: results
+        reader.Close()
+        results |> List.rev
+
+    let list (txn: NpgsqlTransaction) (filter: ListInstancesFilter) : ObligationInstance list =
+        let mutable clauses = [ "is_active = true" ]
+        let mutable paramList : (string * obj) list = []
+
+        match filter.status with
+        | Some s ->
+            clauses <- clauses @ [ "status = @status" ]
+            paramList <- paramList @ [ ("@status", InstanceStatus.toString s :> obj) ]
+        | None -> ()
+
+        match filter.dueBefore with
+        | Some d ->
+            clauses <- clauses @ [ "expected_date <= @due_before" ]
+            paramList <- paramList @ [ ("@due_before", d :> obj) ]
+        | None -> ()
+
+        match filter.dueAfter with
+        | Some d ->
+            clauses <- clauses @ [ "expected_date >= @due_after" ]
+            paramList <- paramList @ [ ("@due_after", d :> obj) ]
+        | None -> ()
+
+        let whereClause = " WHERE " + (clauses |> String.concat " AND ")
+
+        use sql = new NpgsqlCommand(
+            $"SELECT {selectColumns} FROM ops.obligation_instance{whereClause} ORDER BY expected_date",
+            txn.Connection, txn)
+
+        for (name, value) in paramList do
+            sql.Parameters.AddWithValue(name, value) |> ignore
+
+        use reader = sql.ExecuteReader()
+        let mutable results = []
+        while reader.Read() do
+            results <- (mapReader reader) :: results
+        reader.Close()
+        results |> List.rev
+
+    let findUpcoming
+        (txn: NpgsqlTransaction)
+        (today: DateOnly)
+        (horizon: DateOnly)
+        : ObligationInstance list =
+        use sql = new NpgsqlCommand(
+            $"SELECT {selectColumns} FROM ops.obligation_instance \
+             WHERE status IN ('expected', 'in_flight') \
+               AND is_active = true \
+               AND expected_date >= @today \
+               AND expected_date <= @horizon \
+             ORDER BY expected_date",
+            txn.Connection, txn)
+        sql.Parameters.AddWithValue("@today", today) |> ignore
+        sql.Parameters.AddWithValue("@horizon", horizon) |> ignore
         use reader = sql.ExecuteReader()
         let mutable results = []
         while reader.Read() do

@@ -41,6 +41,7 @@
     <Compile Include="TransferCommandsTests.fs" />
     <Compile Include="AccountCommandsTests.fs" />
     <Compile Include="PeriodCommandsTests.fs" />
+    <Compile Include="ObligationCommandsTests.fs" />
     <Compile Include="SeedRunnerTests.fs" />
   </ItemGroup>
 

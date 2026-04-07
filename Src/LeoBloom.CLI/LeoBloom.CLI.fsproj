@@ -16,6 +16,7 @@
     <Compile Include="TransferCommands.fs" />
     <Compile Include="AccountCommands.fs" />
     <Compile Include="PeriodCommands.fs" />
+    <Compile Include="ObligationCommands.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
