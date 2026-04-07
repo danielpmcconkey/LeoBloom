@@ -639,3 +639,42 @@ let writePostResult (isJson: bool) (result: PostToLedgerResult) : int =
     else
         Console.Out.WriteLine(formatPostToLedgerResult result)
     ExitCodes.success
+
+// --- Orphaned Posting formatting ---
+
+let private formatOrphanCondition (c: OrphanCondition) : string =
+    match c with
+    | OrphanCondition.DanglingStatus     -> "Dangling status"
+    | OrphanCondition.MissingSource      -> "Missing source"
+    | OrphanCondition.VoidedBackingEntry -> "Voided backing JE"
+    | OrphanCondition.InvalidReference   -> "Invalid reference"
+
+let private formatOrphanedPostings (result: OrphanedPostingResult) : string =
+    if result.orphans.IsEmpty then
+        "No orphaned postings found."
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "%d orphaned posting(s) found." result.orphans.Length)
+        lines.Add("")
+        lines.Add(sprintf "  %-12s  %-10s  %-8s  %-20s  %s"
+            "Source Type" "Source ID" "JE ID" "Condition" "Reference")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s"
+            (String.replicate 12 "-") (String.replicate 10 "-")
+            (String.replicate 8 "-") (String.replicate 20 "-") (String.replicate 20 "-"))
+        for o in result.orphans do
+            let sourceIdStr =
+                match o.sourceRecordId with
+                | Some id -> string id
+                | None    -> "\u2014"  // em dash
+            lines.Add(sprintf "  %-12s  %-10s  %-8d  %-20s  %s"
+                o.sourceType sourceIdStr o.journalEntryId
+                (formatOrphanCondition o.condition) o.referenceValue)
+        String.Join(Environment.NewLine, lines)
+
+/// Dedicated write function for OrphanedPostingResult.
+let writeOrphanedPostings (isJson: bool) (result: OrphanedPostingResult) : int =
+    if isJson then
+        Console.Out.WriteLine(formatJson result)
+    else
+        Console.Out.WriteLine(formatOrphanedPostings result)
+    ExitCodes.success
