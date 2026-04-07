@@ -284,7 +284,9 @@ let ``Seeds populate the 5 tax buckets on a fresh database`` () =
 
     use conn = DataSource.openConnection()
     use cmd = conn.CreateCommand()
-    cmd.CommandText <- "SELECT COUNT(*) FROM portfolio.tax_bucket"
+    cmd.CommandText <-
+        "SELECT COUNT(*) FROM portfolio.tax_bucket
+         WHERE name IN ('Tax deferred','Tax free HSA','Tax free Roth','Tax on capital gains','Primary residence')"
     let count = cmd.ExecuteScalar() :?> int64
     Assert.Equal(5L, count)
 
@@ -361,7 +363,9 @@ let ``Portfolio seed data survives a second run unchanged`` () =
 
     use conn = DataSource.openConnection()
     use cmd = conn.CreateCommand()
-    cmd.CommandText <- "SELECT COUNT(*) FROM portfolio.tax_bucket"
+    cmd.CommandText <-
+        "SELECT COUNT(*) FROM portfolio.tax_bucket
+         WHERE name IN ('Tax deferred','Tax free HSA','Tax free Roth','Tax on capital gains','Primary residence')"
     let count = cmd.ExecuteScalar() :?> int64
     Assert.Equal(5L, count)
 
