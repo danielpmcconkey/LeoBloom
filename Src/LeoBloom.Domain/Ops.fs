@@ -425,3 +425,21 @@ module Ops =
                   validateFiscalPeriodId cmd.fiscalPeriodId ]
                 |> List.collect (function Error errs -> errs | Ok _ -> [])
             if allErrors.IsEmpty then Ok () else Error allErrors
+
+    // --- Orphaned Posting Diagnostic Types ---
+
+    type OrphanCondition =
+        | DanglingStatus      // JE reference exists; source record's journal_entry_id is NULL
+        | MissingSource       // JE reference points to a source record ID that does not exist
+        | VoidedBackingEntry  // Source record is posted/confirmed but its backing JE is voided
+        | InvalidReference    // reference_value is non-numeric for obligation/transfer type
+
+    type OrphanedPosting =
+        { sourceType: string         // "obligation" or "transfer"
+          sourceRecordId: int option  // None when source is missing or reference is invalid
+          journalEntryId: int
+          condition: OrphanCondition
+          referenceValue: string }    // raw value from journal_entry_reference (or source ID for VoidedBackingEntry)
+
+    type OrphanedPostingResult =
+        { orphans: OrphanedPosting list }
