@@ -124,6 +124,15 @@ Feature: Account CLI Commands
         Then stderr contains an error message
         And the exit code is 2
 
+    @FT-ACT-026
+    Scenario: Show an account with a parent displays Parent ID field
+        Given a CLI-testable account environment with seeded data
+        And account 1110 has a parent account
+        When I run the CLI with "account show 1110"
+        Then stdout contains "Parent ID:"
+        And stdout does not contain "Parent Code:"
+        And the exit code is 0
+
     # ===================================================================
     # account balance
     # ===================================================================

@@ -267,7 +267,7 @@ let private formatAccount (a: Account) : string =
     lines.Add(sprintf "  ID:            %d" a.id)
     lines.Add(sprintf "  Type ID:       %d" a.accountTypeId)
     lines.Add(sprintf "  Sub-Type:      %s" subTypeStr)
-    lines.Add(sprintf "  Parent Code:   %s" (a.parentCode |> Option.defaultValue "(none)"))
+    lines.Add(sprintf "  Parent ID:     %s" (a.parentId |> Option.map string |> Option.defaultValue "(none)"))
     lines.Add(sprintf "  Status:        %s" activeStr)
     lines.Add(sprintf "  Created:       %s" (a.createdAt.ToString("yyyy-MM-dd HH:mm:ss")))
     lines.Add(sprintf "  Modified:      %s" (a.modifiedAt.ToString("yyyy-MM-dd HH:mm:ss")))

@@ -25,25 +25,24 @@ let ``cannot delete account_type with dependent account`` () =
     finally TestCleanup.deleteAll tracker
 
 // =====================================================================
-// account → child account (parent_code)
+// account → child account (parent_id)
 // =====================================================================
 
 [<Fact>]
 [<Trait("GherkinId", "FT-DR-002")>]
-let ``cannot delete account with dependent child account via parent_code`` () =
+let ``cannot delete account with dependent child account via parent_id`` () =
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
         let prefix = TestData.uniquePrefix()
         let atId = InsertHelpers.insertAccountType conn tracker $"{prefix}_type" "debit"
-        let parentCode = $"{prefix}_P"
-        let parentId = InsertHelpers.insertAccount conn tracker parentCode "Parent" atId true
-        // Insert child with parent_code FK
+        let parentId = InsertHelpers.insertAccount conn tracker $"{prefix}_P" "Parent" atId true
+        // Insert child with parent_id FK
         use cmd = new NpgsqlCommand(
-            "INSERT INTO ledger.account (code, name, account_type_id, parent_code) VALUES (@c, 'Child', @at, @pc) RETURNING id", conn)
+            "INSERT INTO ledger.account (code, name, account_type_id, parent_id) VALUES (@c, 'Child', @at, @pi) RETURNING id", conn)
         cmd.Parameters.AddWithValue("@c", $"{prefix}_C") |> ignore
         cmd.Parameters.AddWithValue("@at", atId) |> ignore
-        cmd.Parameters.AddWithValue("@pc", parentCode) |> ignore
+        cmd.Parameters.AddWithValue("@pi", parentId) |> ignore
         let childId = cmd.ExecuteScalar() :?> int
         TestCleanup.trackAccount childId tracker
         let ex = ConstraintAssert.tryExec conn

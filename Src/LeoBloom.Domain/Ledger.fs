@@ -74,7 +74,7 @@ module Ledger =
           code: string
           name: string
           accountTypeId: int
-          parentCode: string option
+          parentId: int option
           subType: AccountSubType option
           isActive: bool
           createdAt: DateTimeOffset

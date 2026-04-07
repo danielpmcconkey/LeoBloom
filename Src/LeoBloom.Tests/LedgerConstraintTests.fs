@@ -116,22 +116,22 @@ let ``account account_type_id must reference a valid account_type`` () =
 
 [<Fact>]
 [<Trait("GherkinId", "FT-LSC-009")>]
-let ``account parent_code must reference a valid account code`` () =
+let ``account parent_id must reference a valid account id`` () =
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try
         let atId = InsertHelpers.insertAccountType conn tracker "lsc009_type" "debit"
         let ex = ConstraintAssert.tryExec conn
-                    "INSERT INTO ledger.account (code, name, account_type_id, parent_code) VALUES ('ZZZZ', 'Test', @at, @pc)"
+                    "INSERT INTO ledger.account (code, name, account_type_id, parent_id) VALUES ('ZZZZ', 'Test', @at, @pi)"
                     (fun cmd ->
                         cmd.Parameters.AddWithValue("@at", atId) |> ignore
-                        cmd.Parameters.AddWithValue("@pc", "XXXX") |> ignore)
+                        cmd.Parameters.AddWithValue("@pi", -999999) |> ignore)
         ConstraintAssert.assertFk ex "Expected FK violation"
     finally TestCleanup.deleteAll tracker
 
 [<Fact>]
 [<Trait("GherkinId", "FT-LSC-010")>]
-let ``account parent_code is nullable`` () =
+let ``account parent_id is nullable`` () =
     use conn = DataSource.openConnection()
     let tracker = TestCleanup.create conn
     try

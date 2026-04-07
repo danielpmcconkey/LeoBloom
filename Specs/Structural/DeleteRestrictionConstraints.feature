@@ -19,7 +19,7 @@ Feature: ON DELETE RESTRICT constraints
   # --- ledger.account as parent ---
 
   @FT-DR-002
-  Scenario: cannot delete account with dependent child account via parent_code
+  Scenario: cannot delete account with dependent child account via parent_id
     Given an account with a dependent child account exists
     When I delete the parent record
     Then the delete is rejected with a FK violation

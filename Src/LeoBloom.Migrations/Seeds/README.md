@@ -73,7 +73,7 @@ rows that the code depends on) belongs in a migration.
 - **Transaction wrapping**: Each seed file is wrapped in `BEGIN`/`COMMIT`
   for atomicity. If any row fails, the whole script rolls back.
 - **Parent-first ordering**: The chart of accounts seed inserts parent
-  accounts before children to satisfy the `parent_code` foreign key.
+  accounts before children to satisfy the `parent_id` foreign key.
 
 ## Prod
 

@@ -141,14 +141,14 @@ module InsertHelpers =
         TestCleanup.trackAccount id tracker
         id
 
-    let insertAccountWithParent (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (code: string) (name: string) (accountTypeId: int) (parentCode: string) (isActive: bool) : int =
+    let insertAccountWithParent (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (code: string) (name: string) (accountTypeId: int) (parentId: int) (isActive: bool) : int =
         use cmd = new NpgsqlCommand(
-            "INSERT INTO ledger.account (code, name, account_type_id, parent_code, is_active) VALUES (@c, @n, @at, @pc, @active) RETURNING id",
+            "INSERT INTO ledger.account (code, name, account_type_id, parent_id, is_active) VALUES (@c, @n, @at, @pi, @active) RETURNING id",
             conn)
         cmd.Parameters.AddWithValue("@c", code) |> ignore
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@at", accountTypeId) |> ignore
-        cmd.Parameters.AddWithValue("@pc", parentCode) |> ignore
+        cmd.Parameters.AddWithValue("@pi", parentId) |> ignore
         cmd.Parameters.AddWithValue("@active", isActive) |> ignore
         let id = cmd.ExecuteScalar() :?> int
         TestCleanup.trackAccount id tracker
@@ -169,14 +169,14 @@ module InsertHelpers =
         TestCleanup.trackAccount id tracker
         id
 
-    let insertAccountWithParentAndSubType (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (code: string) (name: string) (accountTypeId: int) (parentCode: string) (isActive: bool) (subType: string option) : int =
+    let insertAccountWithParentAndSubType (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (code: string) (name: string) (accountTypeId: int) (parentId: int) (isActive: bool) (subType: string option) : int =
         use cmd = new NpgsqlCommand(
-            "INSERT INTO ledger.account (code, name, account_type_id, parent_code, is_active, account_subtype) VALUES (@c, @n, @at, @pc, @active, @st) RETURNING id",
+            "INSERT INTO ledger.account (code, name, account_type_id, parent_id, is_active, account_subtype) VALUES (@c, @n, @at, @pi, @active, @st) RETURNING id",
             conn)
         cmd.Parameters.AddWithValue("@c", code) |> ignore
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@at", accountTypeId) |> ignore
-        cmd.Parameters.AddWithValue("@pc", parentCode) |> ignore
+        cmd.Parameters.AddWithValue("@pi", parentId) |> ignore
         cmd.Parameters.AddWithValue("@active", isActive) |> ignore
         match subType with
         | Some s -> cmd.Parameters.AddWithValue("@st", s) |> ignore
