@@ -692,3 +692,78 @@ let ``Voided prior journal entry does not trigger the idempotency guard`` () =
         Assert.True(dbTransfer.IsSome)
         Assert.Equal("confirmed", dbTransfer.Value.status)
     | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+
+// =====================================================================
+// Confirm: Closed Period — @FT-TRF-017
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "@FT-TRF-017")>]
+let ``Failed confirmation against a closed fiscal period leaves transfer in initiated status with no journal entry`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let (fromId, toId) = setupTwoAssetAccounts txn prefix
+    let fpId = InsertHelpers.insertFiscalPeriod txn $"{prefix}FP" (DateOnly(2092, 2, 1)) (DateOnly(2092, 2, 28)) true
+    let transfer = initiateTransfer txn fromId toId 1000.00m None
+
+    // Close the period after initiation
+    use closeCmd = new NpgsqlCommand(
+        "UPDATE ledger.fiscal_period SET is_open = false WHERE id = @id", txn.Connection)
+    closeCmd.Transaction <- txn
+    closeCmd.Parameters.AddWithValue("@id", fpId) |> ignore
+    closeCmd.ExecuteNonQuery() |> ignore
+
+    let confirmCmd : ConfirmTransferCommand =
+        { transferId = transfer.id
+          confirmedDate = DateOnly(2092, 2, 15) }
+
+    let result = TransferService.confirm txn confirmCmd
+
+    match result with
+    | Error errs ->
+        Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("not open")),
+                    sprintf "Expected error containing 'not open': %A" errs)
+
+        // Transfer should still be in initiated state
+        let dbTransfer = queryTransfer txn transfer.id
+        Assert.True(dbTransfer.IsSome)
+        Assert.Equal("initiated", dbTransfer.Value.status)
+        Assert.True(dbTransfer.Value.journalEntryId.IsNone, "Expected journal_entry_id to be null")
+
+        // No journal entry should have been created
+        use countCmd = new NpgsqlCommand(
+            "SELECT COUNT(*) FROM ledger.journal_entry_reference \
+             WHERE reference_type = 'transfer' AND reference_value = @rv",
+            txn.Connection)
+        countCmd.Transaction <- txn
+        countCmd.Parameters.AddWithValue("@rv", string transfer.id) |> ignore
+        let count = countCmd.ExecuteScalar() :?> int64
+        Assert.Equal(0L, count)
+    | Ok _ -> Assert.Fail("Expected Error for closed fiscal period")
+
+// =====================================================================
+// Confirm: Closed Period (pre-closed) — @FT-TRF-018
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "@FT-TRF-018")>]
+let ``Confirming a transfer against a closed fiscal period is rejected`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let (fromId, toId) = setupTwoAssetAccounts txn prefix
+    let _fpId = InsertHelpers.insertFiscalPeriod txn $"{prefix}FP" (DateOnly(2092, 4, 1)) (DateOnly(2092, 4, 30)) false
+    let transfer = initiateTransfer txn fromId toId 500.00m None
+
+    let confirmCmd : ConfirmTransferCommand =
+        { transferId = transfer.id
+          confirmedDate = DateOnly(2092, 4, 15) }
+
+    let result = TransferService.confirm txn confirmCmd
+
+    match result with
+    | Error errs ->
+        Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("not open")),
+                    sprintf "Expected error containing 'not open': %A" errs)
+    | Ok _ -> Assert.Fail("Expected Error for closed fiscal period")

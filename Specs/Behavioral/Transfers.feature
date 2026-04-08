@@ -151,3 +151,25 @@ Feature: Create and Confirm Transfers
         Then the confirm succeeds
         And a new journal entry was created (not the voided one)
         And the transfer status is "confirmed"
+
+    # --- Confirm: Closed Period ---
+
+    @FT-TRF-017
+    Scenario: Failed confirmation against a closed fiscal period leaves transfer in initiated status with no journal entry
+        Given two active asset accounts "checking" and "savings"
+        And an open fiscal period covering 2026-04-15
+        And an initiated transfer of 1000.00 from "checking" to "savings"
+        And the fiscal period covering 2026-04-15 is now closed
+        When I confirm the transfer on 2026-04-15
+        Then the confirm fails with error containing "not open"
+        And the transfer status is "initiated"
+        And the transfer journal_entry_id is null
+        And no journal entry was created for this transfer
+
+    @FT-TRF-018
+    Scenario: Confirming a transfer against a closed fiscal period is rejected
+        Given two active asset accounts "checking" and "savings"
+        And a closed fiscal period covering 2026-04-15
+        And an initiated transfer of 500.00 from "checking" to "savings"
+        When I confirm the transfer on 2026-04-15
+        Then the confirm fails with error containing "not open"
