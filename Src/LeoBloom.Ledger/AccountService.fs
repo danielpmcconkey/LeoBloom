@@ -75,6 +75,41 @@ module AccountService =
                 Log.errorExn ex "Failed to update account name {AccountId}" [| cmd.accountId :> obj |]
                 Error [ sprintf "Persistence error: %s" ex.Message ]
 
+    /// Update mutable fields on an account. Validates account exists, name (if given) is non-blank,
+    /// and subtype (if given) is valid for the account's type.
+    /// Returns Result<Account * Account, string list> — (before, after) for CLI diff display.
+    let updateAccount (txn: NpgsqlTransaction) (cmd: UpdateAccountCommand) : Result<Account * Account, string list> =
+        Log.info "Updating account {AccountId}" [| cmd.accountId :> obj |]
+        try
+            match AccountRepository.findById txn cmd.accountId with
+            | None ->
+                Error [ sprintf "account with id %d does not exist" cmd.accountId ]
+            | Some before ->
+                let errors = ResizeArray<string>()
+                match cmd.name with
+                | Some n when String.IsNullOrWhiteSpace n ->
+                    errors.Add("Account name cannot be blank")
+                | _ -> ()
+                match cmd.subType with
+                | Some st ->
+                    match AccountRepository.findAccountTypeNameById txn before.accountTypeId with
+                    | None ->
+                        errors.Add(sprintf "account type with id %d does not exist" before.accountTypeId)
+                    | Some typeName ->
+                        if not (AccountSubType.isValidSubType typeName (Some st)) then
+                            let subTypeName = AccountSubType.toDbString st
+                            errors.Add(sprintf "subtype '%s' is not valid for account type '%s'" subTypeName typeName)
+                | None -> ()
+                if errors.Count > 0 then
+                    Error (errors |> Seq.toList)
+                else
+                    let after = AccountRepository.update txn cmd.accountId cmd.name cmd.subType cmd.externalRef
+                    Log.info "Updated account {AccountId}" [| after.id :> obj |]
+                    Ok (before, after)
+        with ex ->
+            Log.errorExn ex "Failed to update account {AccountId}" [| cmd.accountId :> obj |]
+            Error [ sprintf "Persistence error: %s" ex.Message ]
+
     /// Deactivate an account. Validates account exists and is currently active.
     /// Rejects if the account has active child accounts.
     /// Allows even if the account has posted journal entries.

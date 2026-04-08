@@ -693,6 +693,32 @@ let writeTransferList (isJson: bool) (transfers: Transfer list) : int =
             Console.Out.WriteLine(output)
     ExitCodes.success
 
+/// Format a before/after account update diff — only shows changed fields.
+let private formatAccountUpdate (before: Account) (after: Account) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Updated Account %s" after.code)
+    lines.Add(sprintf "  ID: %d" after.id)
+    if before.name <> after.name then
+        lines.Add(sprintf "  name:         %s  →  %s" before.name after.name)
+    let subBefore = before.subType |> Option.map AccountSubType.toDbString |> Option.defaultValue "(none)"
+    let subAfter  = after.subType  |> Option.map AccountSubType.toDbString |> Option.defaultValue "(none)"
+    if before.subType <> after.subType then
+        lines.Add(sprintf "  subtype:      %s  →  %s" subBefore subAfter)
+    let refBefore = before.externalRef |> Option.defaultValue "(none)"
+    let refAfter  = after.externalRef  |> Option.defaultValue "(none)"
+    if before.externalRef <> after.externalRef then
+        lines.Add(sprintf "  external_ref: %s  →  %s" refBefore refAfter)
+    String.Join(Environment.NewLine, lines)
+
+/// Write the result of an account update (before/after diff) to stdout.
+let writeAccountUpdate (isJson: bool) (before: Account) (after: Account) : int =
+    if isJson then
+        let payload = {| before = before; after = after |}
+        Console.Out.WriteLine(formatJson (payload :> obj))
+    else
+        Console.Out.WriteLine(formatAccountUpdate before after)
+    ExitCodes.success
+
 /// Dedicated write function for Account list to avoid F# type erasure
 /// issues with generic list pattern matching in formatHuman.
 let writeAccountList (isJson: bool) (accounts: Account list) : int =

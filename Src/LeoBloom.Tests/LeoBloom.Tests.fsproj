@@ -47,6 +47,7 @@
     <Compile Include="OutputFormatterTests.fs" />
     <Compile Include="CliHelpersTests.fs" />
     <Compile Include="AccountCommandsTests.fs" />
+    <Compile Include="AccountUpdateTests.fs" />
     <Compile Include="PeriodCommandsTests.fs" />
     <Compile Include="ObligationCommandsTests.fs" />
     <Compile Include="OrphanedPostingDetectionTests.fs" />

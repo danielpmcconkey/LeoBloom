@@ -196,6 +196,14 @@ module Ledger =
     type CreateAccountCommand =
         { code: string; name: string; accountTypeId: int; parentId: int option; subType: AccountSubType option; externalRef: string option }
 
+    /// Update mutable fields on an existing account.
+    /// None on each field means "don't change this field."
+    type UpdateAccountCommand =
+        { accountId: int
+          name: string option
+          subType: AccountSubType option
+          externalRef: string option }
+
     type UpdateAccountNameCommand =
         { accountId: int; name: string }
 

@@ -61,11 +61,27 @@ type AccountCreateArgs =
             | External_Ref _ -> "external financial-institution account reference (e.g. Fidelity Z08806967)"
             | Json -> "Output in JSON format"
 
+type AccountUpdateArgs =
+    | [<MainCommand; Mandatory>] Account_Id of int
+    | Name of string
+    | Subtype of string
+    | External_Ref of string
+    | Json
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Account_Id _ -> "Account ID to update"
+            | Name _ -> "New account name"
+            | Subtype _ -> "New account subtype (Cash, FixedAsset, Investment, CurrentLiability, LongTermLiability, OperatingRevenue, OtherRevenue, OperatingExpense, OtherExpense)"
+            | External_Ref _ -> "External reference"
+            | Json -> "Output in JSON format"
+
 type AccountArgs =
     | [<CliPrefix(CliPrefix.None)>] List of ParseResults<AccountListArgs>
     | [<CliPrefix(CliPrefix.None)>] Show of ParseResults<AccountShowArgs>
     | [<CliPrefix(CliPrefix.None)>] Balance of ParseResults<AccountBalanceCmdArgs>
     | [<CliPrefix(CliPrefix.None)>] Create of ParseResults<AccountCreateArgs>
+    | [<CliPrefix(CliPrefix.None)>] Update of ParseResults<AccountUpdateArgs>
     interface IArgParserTemplate with
         member this.Usage =
             match this with
@@ -73,6 +89,7 @@ type AccountArgs =
             | Show _ -> "Show account details"
             | Balance _ -> "Show account balance"
             | Create _ -> "Create a new account"
+            | Update _ -> "Update mutable fields on an existing account"
 
 // --- Helpers ---
 
@@ -194,6 +211,47 @@ let private handleCreate (isJson: bool) (args: ParseResults<AccountCreateArgs>) 
             try txn.Rollback() with _ -> ()
             reraise()
 
+let private handleUpdate (isJson: bool) (args: ParseResults<AccountUpdateArgs>) : int =
+    let isJson = isJson || args.Contains AccountUpdateArgs.Json
+    let accountId = args.GetResult AccountUpdateArgs.Account_Id
+    let nameOpt = args.TryGetResult AccountUpdateArgs.Name
+    let subtypeRaw = args.TryGetResult AccountUpdateArgs.Subtype
+    let externalRefOpt = args.TryGetResult AccountUpdateArgs.External_Ref
+
+    // At least one mutable flag required
+    if nameOpt.IsNone && subtypeRaw.IsNone && externalRefOpt.IsNone then
+        Console.Error.WriteLine("Error: at least one of --name, --subtype, or --external-ref must be provided")
+        ExitCodes.businessError
+    else
+        let subtypeResult =
+            match subtypeRaw with
+            | None -> Ok None
+            | Some s ->
+                match AccountSubType.fromDbString s with
+                | Ok st -> Ok (Some st)
+                | Error _ ->
+                    Error (sprintf "Invalid subtype '%s'. Valid values: Cash, FixedAsset, Investment, CurrentLiability, LongTermLiability, OperatingRevenue, OtherRevenue, OperatingExpense, OtherExpense" s)
+
+        match subtypeResult with
+        | Error e ->
+            Console.Error.WriteLine(sprintf "Error: %s" e)
+            ExitCodes.businessError
+        | Ok subType ->
+            let cmd = { accountId = accountId; name = nameOpt; subType = subType; externalRef = externalRefOpt }
+            use conn = DataSource.openConnection()
+            use txn = conn.BeginTransaction()
+            try
+                let result = AccountService.updateAccount txn cmd
+                match result with
+                | Ok _ -> txn.Commit()
+                | Error _ -> txn.Rollback()
+                match result with
+                | Ok (before, after) -> writeAccountUpdate isJson before after
+                | Error errs -> writeHumanErrors errs
+            with ex ->
+                try txn.Rollback() with _ -> ()
+                reraise()
+
 // --- Dispatch ---
 
 let dispatch (isJson: bool) (args: ParseResults<AccountArgs>) : int =
@@ -202,6 +260,7 @@ let dispatch (isJson: bool) (args: ParseResults<AccountArgs>) : int =
     | Some (Show showArgs) -> handleShow isJson showArgs
     | Some (Balance balanceArgs) -> handleBalance isJson balanceArgs
     | Some (Create createArgs) -> handleCreate isJson createArgs
+    | Some (Update updateArgs) -> handleUpdate isJson updateArgs
     | None ->
         Console.Error.WriteLine(args.Parser.PrintUsage())
         ExitCodes.systemError

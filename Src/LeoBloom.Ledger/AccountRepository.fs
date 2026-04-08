@@ -168,6 +168,43 @@ module AccountRepository =
         reader.Close()
         acct
 
+    /// Update mutable fields (name, account_subtype, external_ref) on an account.
+    /// Only fields with Some values are updated. Always updates modified_at.
+    /// Returns the updated record.
+    let update
+        (txn: NpgsqlTransaction)
+        (accountId: int)
+        (name: string option)
+        (subType: AccountSubType option)
+        (externalRef: string option)
+        : Account =
+        let setClauses = System.Collections.Generic.List<string>()
+        setClauses.Add("modified_at = now()")
+        if name.IsSome     then setClauses.Add("name = @name")
+        if subType.IsSome  then setClauses.Add("account_subtype = @subType")
+        if externalRef.IsSome then setClauses.Add("external_ref = @externalRef")
+        let setList = String.concat ", " setClauses
+        let returning =
+            "RETURNING id, code, name, account_type_id, parent_id, account_subtype,
+                       external_ref, is_active, created_at, modified_at"
+        let sql = sprintf "UPDATE ledger.account SET %s WHERE id = @id %s" setList returning
+        use cmd = new NpgsqlCommand(sql, txn.Connection, txn)
+        cmd.Parameters.AddWithValue("@id", accountId) |> ignore
+        match name with
+        | Some n -> cmd.Parameters.AddWithValue("@name", n) |> ignore
+        | None -> ()
+        match subType with
+        | Some st -> cmd.Parameters.AddWithValue("@subType", AccountSubType.toDbString st) |> ignore
+        | None -> ()
+        match externalRef with
+        | Some ref -> cmd.Parameters.AddWithValue("@externalRef", ref) |> ignore
+        | None -> ()
+        use reader = cmd.ExecuteReader()
+        reader.Read() |> ignore
+        let acct = readAccount reader
+        reader.Close()
+        acct
+
     /// Set is_active = false on an account. Returns the updated record.
     let deactivate (txn: NpgsqlTransaction) (accountId: int) : Account =
         use sql = new NpgsqlCommand(
