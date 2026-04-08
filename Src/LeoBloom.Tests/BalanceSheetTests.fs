@@ -316,6 +316,86 @@ let ``inactive accounts with cumulative balances still appear`` () =
         Assert.True(report.isBalanced)
     | Error err -> Assert.Fail(sprintf "Expected Ok: %s" err)
 
+[<Fact>]
+[<Trait("GherkinId", "FT-BS-012")>]
+let ``accounting equation holds with positive retained earnings`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let assetAcct = InsertHelpers.insertAccount txn (prefix + "AS") "Asset" assetTypeId true
+    let liabAcct = InsertHelpers.insertAccount txn (prefix + "LI") "Liability" liabilityTypeId true
+    let eqAcct = InsertHelpers.insertAccount txn (prefix + "EQ") "Equity" equityTypeId true
+    let revAcct = InsertHelpers.insertAccount txn (prefix + "RV") "Revenue" revenueTypeId true
+    let expAcct = InsertHelpers.insertAccount txn (prefix + "EX") "Expense" expenseTypeId true
+    // Use far-past year 1953 to avoid retained earnings pollution from parallel tests
+    let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(1953, 1, 1)) (DateOnly(1953, 1, 31)) true
+    postEntry txn assetAcct eqAcct fpId (DateOnly(1953, 1, 5)) "Owner investment" 10000m |> ignore
+    postEntry txn assetAcct liabAcct fpId (DateOnly(1953, 1, 10)) "Bank loan" 3000m |> ignore
+    postEntry txn assetAcct revAcct fpId (DateOnly(1953, 1, 15)) "Service revenue" 2000m |> ignore
+    postEntry txn expAcct assetAcct fpId (DateOnly(1953, 1, 20)) "Operating expense" 500m |> ignore
+    let result = BalanceSheetService.getAsOfDate txn (DateOnly(1953, 1, 31))
+    match result with
+    | Ok report ->
+        Assert.Equal(14500m, report.assets.sectionTotal)
+        Assert.Equal(3000m, report.liabilities.sectionTotal)
+        Assert.Equal(10000m, report.equity.sectionTotal)
+        Assert.Equal(1500m, report.retainedEarnings)
+        // AC-1/AC-2: verify equation directly from section totals — never references isBalanced
+        Assert.Equal(report.assets.sectionTotal, report.liabilities.sectionTotal + report.equity.sectionTotal + report.retainedEarnings)
+    | Error err -> Assert.Fail(sprintf "Expected Ok: %s" err)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-BS-013")>]
+let ``accounting equation holds with negative retained earnings`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let assetAcct = InsertHelpers.insertAccount txn (prefix + "AS") "Asset" assetTypeId true
+    let liabAcct = InsertHelpers.insertAccount txn (prefix + "LI") "Liability" liabilityTypeId true
+    let eqAcct = InsertHelpers.insertAccount txn (prefix + "EQ") "Equity" equityTypeId true
+    let revAcct = InsertHelpers.insertAccount txn (prefix + "RV") "Revenue" revenueTypeId true
+    let expAcct = InsertHelpers.insertAccount txn (prefix + "EX") "Expense" expenseTypeId true
+    // Use far-past year 1954 to avoid retained earnings pollution from parallel tests
+    let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(1954, 1, 1)) (DateOnly(1954, 1, 31)) true
+    postEntry txn assetAcct eqAcct fpId (DateOnly(1954, 1, 5)) "Owner investment" 5000m |> ignore
+    postEntry txn assetAcct liabAcct fpId (DateOnly(1954, 1, 10)) "Bank loan" 4000m |> ignore
+    postEntry txn assetAcct revAcct fpId (DateOnly(1954, 1, 15)) "Small revenue" 300m |> ignore
+    postEntry txn expAcct assetAcct fpId (DateOnly(1954, 1, 20)) "Large expense" 1200m |> ignore
+    let result = BalanceSheetService.getAsOfDate txn (DateOnly(1954, 1, 31))
+    match result with
+    | Ok report ->
+        Assert.Equal(8100m, report.assets.sectionTotal)
+        Assert.Equal(4000m, report.liabilities.sectionTotal)
+        Assert.Equal(5000m, report.equity.sectionTotal)
+        Assert.Equal(-900m, report.retainedEarnings)
+        // AC-1/AC-2: verify equation directly from section totals — never references isBalanced
+        Assert.Equal(report.assets.sectionTotal, report.liabilities.sectionTotal + report.equity.sectionTotal + report.retainedEarnings)
+    | Error err -> Assert.Fail(sprintf "Expected Ok: %s" err)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-BS-014")>]
+let ``accounting equation holds with zero equity section`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let assetAcct = InsertHelpers.insertAccount txn (prefix + "AS") "Asset" assetTypeId true
+    let liabAcct = InsertHelpers.insertAccount txn (prefix + "LI") "Liability" liabilityTypeId true
+    let revAcct = InsertHelpers.insertAccount txn (prefix + "RV") "Revenue" revenueTypeId true
+    // Use far-past year 1955 to avoid retained earnings pollution from parallel tests
+    let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(1955, 1, 1)) (DateOnly(1955, 1, 31)) true
+    postEntry txn assetAcct liabAcct fpId (DateOnly(1955, 1, 5)) "Loan to fund operations" 6000m |> ignore
+    postEntry txn assetAcct revAcct fpId (DateOnly(1955, 1, 15)) "Service revenue" 1000m |> ignore
+    let result = BalanceSheetService.getAsOfDate txn (DateOnly(1955, 1, 31))
+    match result with
+    | Ok report ->
+        Assert.Equal(7000m, report.assets.sectionTotal)
+        Assert.Equal(6000m, report.liabilities.sectionTotal)
+        Assert.Equal(0m, report.equity.sectionTotal)
+        Assert.Equal(1000m, report.retainedEarnings)
+        // AC-1/AC-2: verify equation directly from section totals — never references isBalanced
+        Assert.Equal(report.assets.sectionTotal, report.liabilities.sectionTotal + report.equity.sectionTotal + report.retainedEarnings)
+    | Error err -> Assert.Fail(sprintf "Expected Ok: %s" err)
+
 // =====================================================================
 // Structural tests -- acceptance criteria owned by QE
 // =====================================================================

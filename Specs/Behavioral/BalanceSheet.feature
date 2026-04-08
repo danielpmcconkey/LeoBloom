@@ -262,3 +262,91 @@ Feature: Balance Sheet
         When I request the balance sheet as of 2026-03-31
         Then the assets section contains account 1010 with balance 5000.00
         And the balance sheet is balanced
+
+    # --- Accounting Equation: Independent Verification ---
+
+    @FT-BS-012
+    Scenario: Accounting equation holds with positive retained earnings
+        Given the ledger schema exists for balance sheet queries
+        And a balance-sheet-test open fiscal period "1953-01" from 1953-01-01 to 1953-01-31
+        And a balance-sheet-test active account 1010 of type asset
+        And a balance-sheet-test active account 2010 of type liability
+        And a balance-sheet-test active account 3010 of type equity
+        And a balance-sheet-test active account 4010 of type revenue
+        And a balance-sheet-test active account 5010 of type expense
+        And a balance-sheet-test entry dated 1953-01-05 described as "Owner investment" with lines:
+            | account | amount   | entry_type |
+            | 1010    | 10000.00 | debit      |
+            | 3010    | 10000.00 | credit     |
+        And a balance-sheet-test entry dated 1953-01-10 described as "Bank loan" with lines:
+            | account | amount  | entry_type |
+            | 1010    | 3000.00 | debit      |
+            | 2010    | 3000.00 | credit     |
+        And a balance-sheet-test entry dated 1953-01-15 described as "Service revenue" with lines:
+            | account | amount  | entry_type |
+            | 1010    | 2000.00 | debit      |
+            | 4010    | 2000.00 | credit     |
+        And a balance-sheet-test entry dated 1953-01-20 described as "Operating expense" with lines:
+            | account | amount | entry_type |
+            | 5010    | 500.00 | debit      |
+            | 1010    | 500.00 | credit     |
+        When I request the balance sheet as of 1953-01-31
+        Then the assets section total is 14500.00
+        And the liabilities section total is 3000.00
+        And the equity section total is 10000.00
+        And the retained earnings are 1500.00
+        And the accounting equation is verified independently
+
+    @FT-BS-013
+    Scenario: Accounting equation holds with negative retained earnings
+        Given the ledger schema exists for balance sheet queries
+        And a balance-sheet-test open fiscal period "1954-01" from 1954-01-01 to 1954-01-31
+        And a balance-sheet-test active account 1010 of type asset
+        And a balance-sheet-test active account 2010 of type liability
+        And a balance-sheet-test active account 3010 of type equity
+        And a balance-sheet-test active account 4010 of type revenue
+        And a balance-sheet-test active account 5010 of type expense
+        And a balance-sheet-test entry dated 1954-01-05 described as "Owner investment" with lines:
+            | account | amount  | entry_type |
+            | 1010    | 5000.00 | debit      |
+            | 3010    | 5000.00 | credit     |
+        And a balance-sheet-test entry dated 1954-01-10 described as "Bank loan" with lines:
+            | account | amount  | entry_type |
+            | 1010    | 4000.00 | debit      |
+            | 2010    | 4000.00 | credit     |
+        And a balance-sheet-test entry dated 1954-01-15 described as "Small revenue" with lines:
+            | account | amount | entry_type |
+            | 1010    | 300.00 | debit      |
+            | 4010    | 300.00 | credit     |
+        And a balance-sheet-test entry dated 1954-01-20 described as "Large expense" with lines:
+            | account | amount  | entry_type |
+            | 5010    | 1200.00 | debit      |
+            | 1010    | 1200.00 | credit     |
+        When I request the balance sheet as of 1954-01-31
+        Then the assets section total is 8100.00
+        And the liabilities section total is 4000.00
+        And the equity section total is 5000.00
+        And the retained earnings are -900.00
+        And the accounting equation is verified independently
+
+    @FT-BS-014
+    Scenario: Accounting equation holds with zero equity section
+        Given the ledger schema exists for balance sheet queries
+        And a balance-sheet-test open fiscal period "1955-01" from 1955-01-01 to 1955-01-31
+        And a balance-sheet-test active account 1010 of type asset
+        And a balance-sheet-test active account 2010 of type liability
+        And a balance-sheet-test active account 4010 of type revenue
+        And a balance-sheet-test entry dated 1955-01-05 described as "Loan to fund operations" with lines:
+            | account | amount  | entry_type |
+            | 1010    | 6000.00 | debit      |
+            | 2010    | 6000.00 | credit     |
+        And a balance-sheet-test entry dated 1955-01-15 described as "Service revenue" with lines:
+            | account | amount  | entry_type |
+            | 1010    | 1000.00 | debit      |
+            | 4010    | 1000.00 | credit     |
+        When I request the balance sheet as of 1955-01-31
+        Then the assets section total is 7000.00
+        And the liabilities section total is 6000.00
+        And the equity section total is 0.00
+        And the retained earnings are 1000.00
+        And the accounting equation is verified independently
