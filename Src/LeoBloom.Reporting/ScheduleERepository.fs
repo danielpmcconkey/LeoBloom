@@ -2,6 +2,7 @@ namespace LeoBloom.Reporting
 
 open System
 open Npgsql
+open LeoBloom.Domain.Ledger
 
 /// Queries account balances for property accounts within a calendar year.
 /// All operations run within a caller-provided NpgsqlTransaction.
@@ -65,13 +66,10 @@ module ScheduleERepository =
             use reader = sql.ExecuteReader()
             let mutable results = []
             while reader.Read() do
-                let normalBalance = reader.GetString(2)
+                let nb = match reader.GetString(2) with "credit" -> NormalBalance.Credit | _ -> NormalBalance.Debit
                 let debitTotal = reader.GetDecimal(3)
                 let creditTotal = reader.GetDecimal(4)
-                let netBalance =
-                    match normalBalance with
-                    | "credit" -> creditTotal - debitTotal
-                    | _ -> debitTotal - creditTotal
+                let netBalance = resolveBalance nb debitTotal creditTotal
                 results <-
                     { accountCode = reader.GetString(0)
                       accountName = reader.GetString(1)

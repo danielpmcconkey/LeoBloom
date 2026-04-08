@@ -118,7 +118,8 @@ module AccountBalanceRepository =
         if reader.Read() then
             let nb = match reader.GetString(3) with "debit" -> NormalBalance.Debit | _ -> NormalBalance.Credit
             let rawBalance = reader.GetDecimal(4)
-            let balance = match nb with NormalBalance.Debit -> rawBalance | NormalBalance.Credit -> -rawBalance
+            // SQL pre-computes raw_balance = debits - credits; resolveBalance(nb, raw, 0) is algebraically equivalent
+            let balance = resolveBalance nb rawBalance 0m
             let result =
                 Some { accountId = reader.GetInt32(0)
                        accountCode = reader.GetString(1)

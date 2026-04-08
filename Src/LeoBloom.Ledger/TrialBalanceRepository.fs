@@ -32,10 +32,7 @@ module TrialBalanceRepository =
             let nb = match reader.GetString(4) with "debit" -> NormalBalance.Debit | _ -> NormalBalance.Credit
             let debitTotal = reader.GetDecimal(5)
             let creditTotal = reader.GetDecimal(6)
-            let netBalance =
-                match nb with
-                | NormalBalance.Debit -> debitTotal - creditTotal
-                | NormalBalance.Credit -> creditTotal - debitTotal
+            let netBalance = resolveBalance nb debitTotal creditTotal
             results <-
                 { accountId = reader.GetInt32(0)
                   accountCode = reader.GetString(1)

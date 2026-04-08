@@ -10,6 +10,11 @@ module Ledger =
 
     type NormalBalance = Debit | Credit
 
+    let resolveBalance (normalBalance: NormalBalance) (debits: decimal) (credits: decimal) : decimal =
+        match normalBalance with
+        | NormalBalance.Debit  -> debits - credits
+        | NormalBalance.Credit -> credits - debits
+
     type AccountType =
         { id: int
           name: string

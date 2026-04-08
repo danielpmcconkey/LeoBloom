@@ -32,13 +32,10 @@ module BalanceSheetRepository =
         let mutable results = []
         while reader.Read() do
             let accountTypeName = reader.GetString(3)
-            let normalBalance = reader.GetString(4)
+            let nb = match reader.GetString(4) with "credit" -> NormalBalance.Credit | _ -> NormalBalance.Debit
             let debitTotal = reader.GetDecimal(5)
             let creditTotal = reader.GetDecimal(6)
-            let balance =
-                match normalBalance with
-                | "credit" -> creditTotal - debitTotal
-                | _ -> debitTotal - creditTotal
+            let balance = resolveBalance nb debitTotal creditTotal
             let line =
                 { accountId = reader.GetInt32(0)
                   accountCode = reader.GetString(1)
@@ -72,8 +69,8 @@ module BalanceSheetRepository =
             let debitTotal = reader.GetDecimal(1)
             let creditTotal = reader.GetDecimal(2)
             match typeName with
-            | "revenue" -> revenueNet <- creditTotal - debitTotal
-            | "expense" -> expenseNet <- debitTotal - creditTotal
+            | "revenue" -> revenueNet <- resolveBalance NormalBalance.Credit debitTotal creditTotal
+            | "expense" -> expenseNet <- resolveBalance NormalBalance.Debit debitTotal creditTotal
             | _ -> ()
         reader.Close()
         revenueNet - expenseNet

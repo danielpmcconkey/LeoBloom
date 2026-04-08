@@ -2,6 +2,7 @@ namespace LeoBloom.Reporting
 
 open System
 open Npgsql
+open LeoBloom.Domain.Ledger
 open LeoBloom.Utilities
 open LeoBloom.Reporting.ReportingTypes
 
@@ -31,6 +32,7 @@ module GeneralLedgerReportService =
                 | None ->
                     Error [ sprintf "Account with code '%s' does not exist" accountCode ]
                 | Some (accountId, accountName, normalBalance) ->
+                    let nb = match normalBalance with "credit" -> NormalBalance.Credit | _ -> NormalBalance.Debit
                     let rows = GeneralLedgerRepository.getEntriesForAccount txn accountId fromDate toDate
 
                     // Compute running balance respecting normal balance direction
@@ -40,10 +42,7 @@ module GeneralLedgerReportService =
                     let entries =
                         rows
                         |> List.map (fun row ->
-                            let delta =
-                                match normalBalance with
-                                | "credit" -> row.creditAmount - row.debitAmount
-                                | _ -> row.debitAmount - row.creditAmount
+                            let delta = resolveBalance nb row.debitAmount row.creditAmount
                             runningBalance <- runningBalance + delta
                             { date = row.date
                               journalEntryId = row.journalEntryId
