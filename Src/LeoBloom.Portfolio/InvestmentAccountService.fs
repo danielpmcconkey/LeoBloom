@@ -40,3 +40,33 @@ module InvestmentAccountService =
         with ex ->
             Log.errorExn ex "Failed to list investment accounts" [||]
             Error [ sprintf "Persistence error: %s" ex.Message ]
+
+    /// Get a single investment account by ID. Returns None if not found.
+    let getAccount (txn: NpgsqlTransaction) (accountId: int) : Result<InvestmentAccount option, string list> =
+        Log.info "Getting investment account {Id}" [| accountId :> obj |]
+        try
+            let result = InvestmentAccountRepository.findById txn accountId
+            Ok result
+        with ex ->
+            Log.errorExn ex "Failed to get investment account {Id}" [| accountId :> obj |]
+            Error [ sprintf "Persistence error: %s" ex.Message ]
+
+    /// List investment accounts filtered by account group name.
+    let listAccountsByGroup (txn: NpgsqlTransaction) (groupName: string) : Result<InvestmentAccount list, string list> =
+        Log.info "Listing investment accounts by group {Name}" [| groupName :> obj |]
+        try
+            let result = InvestmentAccountRepository.listByGroup txn groupName
+            Ok result
+        with ex ->
+            Log.errorExn ex "Failed to list investment accounts by group {Name}" [| groupName :> obj |]
+            Error [ sprintf "Persistence error: %s" ex.Message ]
+
+    /// List investment accounts filtered by tax bucket name.
+    let listAccountsByTaxBucket (txn: NpgsqlTransaction) (bucketName: string) : Result<InvestmentAccount list, string list> =
+        Log.info "Listing investment accounts by tax bucket {Name}" [| bucketName :> obj |]
+        try
+            let result = InvestmentAccountRepository.listByTaxBucket txn bucketName
+            Ok result
+        with ex ->
+            Log.errorExn ex "Failed to list investment accounts by tax bucket {Name}" [| bucketName :> obj |]
+            Error [ sprintf "Persistence error: %s" ex.Message ]

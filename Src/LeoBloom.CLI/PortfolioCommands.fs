@@ -23,20 +23,35 @@ type PortfolioAccountCreateArgs =
             | Json             -> "Output in JSON format"
 
 type PortfolioAccountListArgs =
+    | [<CustomAppSettings "group">] Group of string
+    | [<CustomAppSettings "tax-bucket">] Tax_Bucket of string
     | Json
     interface IArgParserTemplate with
         member this.Usage =
             match this with
+            | Group _      -> "Filter by account group name"
+            | Tax_Bucket _ -> "Filter by tax bucket name"
+            | Json         -> "Output in JSON format"
+
+type PortfolioAccountShowArgs =
+    | [<MainCommand; Mandatory>] Id of int
+    | Json
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Id _ -> "Investment account ID"
             | Json -> "Output in JSON format"
 
 type PortfolioAccountArgs =
     | [<CliPrefix(CliPrefix.None)>] Create of ParseResults<PortfolioAccountCreateArgs>
     | [<CliPrefix(CliPrefix.None)>] List   of ParseResults<PortfolioAccountListArgs>
+    | [<CliPrefix(CliPrefix.None)>] Show   of ParseResults<PortfolioAccountShowArgs>
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | Create _ -> "Create a new investment account"
             | List _   -> "List all investment accounts"
+            | Show _   -> "Show account detail by ID"
 
 // --- PortfolioFundArgs ---
 
@@ -158,18 +173,29 @@ type PortfolioPositionArgs =
             | List _   -> "List positions with optional filters"
             | Latest _ -> "Show latest position per symbol (optionally filtered by account)"
 
-// --- Top-level PortfolioArgs ---
+// --- PortfolioDimensionsArgs ---
 
-type PortfolioArgs =
-    | [<CliPrefix(CliPrefix.None)>] Account  of ParseResults<PortfolioAccountArgs>
-    | [<CliPrefix(CliPrefix.None)>] Fund     of ParseResults<PortfolioFundArgs>
-    | [<CliPrefix(CliPrefix.None)>] Position of ParseResults<PortfolioPositionArgs>
+type PortfolioDimensionsArgs =
+    | Json
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | Account _  -> "Investment account commands (create, list)"
-            | Fund _     -> "Fund commands (create, list, show)"
-            | Position _ -> "Position commands (record, list, latest)"
+            | Json -> "Output in JSON format"
+
+// --- Top-level PortfolioArgs ---
+
+type PortfolioArgs =
+    | [<CliPrefix(CliPrefix.None)>] Account    of ParseResults<PortfolioAccountArgs>
+    | [<CliPrefix(CliPrefix.None)>] Fund       of ParseResults<PortfolioFundArgs>
+    | [<CliPrefix(CliPrefix.None)>] Position   of ParseResults<PortfolioPositionArgs>
+    | [<CliPrefix(CliPrefix.None)>] Dimensions of ParseResults<PortfolioDimensionsArgs>
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Account _    -> "Investment account commands (create, list, show)"
+            | Fund _       -> "Fund commands (create, list, show)"
+            | Position _   -> "Position commands (record, list, latest)"
+            | Dimensions _ -> "List all portfolio dimension tables"
 
 // --- Helpers ---
 
@@ -199,12 +225,45 @@ let private handleAccountCreate (isJson: bool) (args: ParseResults<PortfolioAcco
         try txn.Rollback() with _ -> ()
         reraise()
 
-let private handleAccountList (isJson: bool) (args: ParseResults<PortfolioAccountListArgs>) : int =
-    let isJson = isJson || args.Contains PortfolioAccountListArgs.Json
+let private handleAccountShow (isJson: bool) (args: ParseResults<PortfolioAccountShowArgs>) : int =
+    let isJson    = isJson || args.Contains PortfolioAccountShowArgs.Json
+    let accountId = args.GetResult PortfolioAccountShowArgs.Id
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
     try
-        let result = InvestmentAccountService.listAccounts txn
+        let accountResult = InvestmentAccountService.getAccount txn accountId
+        match accountResult with
+        | Error es ->
+            txn.Rollback()
+            write isJson (Error es)
+        | Ok None ->
+            txn.Rollback()
+            write isJson (Error [sprintf "Account %d not found" accountId])
+        | Ok (Some acct) ->
+            let posResult = PositionService.latestPositionsByAccount txn acct.id
+            match posResult with
+            | Error es ->
+                txn.Rollback()
+                write isJson (Error es)
+            | Ok positions ->
+                txn.Commit()
+                writeAccountDetail isJson acct positions
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
+
+let private handleAccountList (isJson: bool) (args: ParseResults<PortfolioAccountListArgs>) : int =
+    let isJson    = isJson || args.Contains PortfolioAccountListArgs.Json
+    let groupName = args.TryGetResult PortfolioAccountListArgs.Group
+    let bucketName = args.TryGetResult PortfolioAccountListArgs.Tax_Bucket
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result =
+            match groupName, bucketName with
+            | Some g, _    -> InvestmentAccountService.listAccountsByGroup      txn g
+            | _, Some b    -> InvestmentAccountService.listAccountsByTaxBucket  txn b
+            | None, None   -> InvestmentAccountService.listAccounts              txn
         match result with
         | Ok _ -> txn.Commit()
         | Error _ -> txn.Rollback()
@@ -219,6 +278,7 @@ let private dispatchAccount (isJson: bool) (args: ParseResults<PortfolioAccountA
     match args.TryGetSubCommand() with
     | Some (PortfolioAccountArgs.Create createArgs) -> handleAccountCreate isJson createArgs
     | Some (PortfolioAccountArgs.List   listArgs)   -> handleAccountList   isJson listArgs
+    | Some (PortfolioAccountArgs.Show   showArgs)   -> handleAccountShow   isJson showArgs
     | None ->
         Console.Error.WriteLine(args.Parser.PrintUsage())
         ExitCodes.systemError
@@ -398,13 +458,32 @@ let private dispatchPosition (isJson: bool) (args: ParseResults<PortfolioPositio
         Console.Error.WriteLine(args.Parser.PrintUsage())
         ExitCodes.systemError
 
+// --- Dimensions handler ---
+
+let private handleDimensions (isJson: bool) (args: ParseResults<PortfolioDimensionsArgs>) : int =
+    let isJson = isJson || args.Contains PortfolioDimensionsArgs.Json
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = DimensionService.listAllDimensions txn
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        match result with
+        | Ok dims  -> writeDimensions isJson dims
+        | Error es -> write isJson (Error es)
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
+
 // --- Top-level dispatch ---
 
 let dispatch (isJson: bool) (args: ParseResults<PortfolioArgs>) : int =
     match args.TryGetSubCommand() with
-    | Some (Account  accountArgs)  -> dispatchAccount  isJson accountArgs
-    | Some (Fund     fundArgs)     -> dispatchFund     isJson fundArgs
-    | Some (Position positionArgs) -> dispatchPosition isJson positionArgs
+    | Some (Account    accountArgs)    -> dispatchAccount  isJson accountArgs
+    | Some (Fund       fundArgs)       -> dispatchFund     isJson fundArgs
+    | Some (Position   positionArgs)   -> dispatchPosition isJson positionArgs
+    | Some (Dimensions dimensionsArgs) -> handleDimensions isJson dimensionsArgs
     | None ->
         Console.Error.WriteLine(args.Parser.PrintUsage())
         ExitCodes.systemError

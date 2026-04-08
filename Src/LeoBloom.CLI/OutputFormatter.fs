@@ -975,3 +975,55 @@ let writeGainsReport (isJson: bool) (result: Result<GainsReport, string list>) :
         ExitCodes.success
     | Error errors ->
         writeHumanErrors errors
+
+// --- Account detail formatting ---
+
+let private formatAccountDetail (acct: InvestmentAccount) (positions: Position list) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(formatInvestmentAccount acct)
+    lines.Add("")
+    lines.Add("  Latest Positions:")
+    if positions.IsEmpty then
+        lines.Add("    (no positions recorded)")
+    else
+        lines.Add(sprintf "  %-10s  %-12s  %-12s  %-12s  %-12s" "Symbol" "Price" "Quantity" "Value" "Cost Basis")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s"
+            (String.replicate 10 "-") (String.replicate 12 "-") (String.replicate 12 "-")
+            (String.replicate 12 "-") (String.replicate 12 "-"))
+        for p in positions do
+            lines.Add(sprintf "  %-10s  %-12M  %-12M  %-12M  %-12M" p.symbol p.price p.quantity p.currentValue p.costBasis)
+    String.Join(Environment.NewLine, lines)
+
+/// Write account detail (account info + latest positions) to stdout.
+let writeAccountDetail (isJson: bool) (acct: InvestmentAccount) (positions: Position list) : int =
+    if isJson then
+        let payload = {| account = acct; latestPositions = positions |}
+        Console.Out.WriteLine(formatJson (payload :> obj))
+    else
+        Console.Out.WriteLine(formatAccountDetail acct positions)
+    ExitCodes.success
+
+// --- Dimensions formatting ---
+
+let private formatDimensionTable (dt: DimensionTable) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "%s:" dt.tableName)
+    if dt.values.IsEmpty then
+        lines.Add("  (empty)")
+    else
+        for (id, name) in dt.values do
+            lines.Add(sprintf "  %d  %s" id name)
+    String.Join(Environment.NewLine, lines)
+
+let private formatAllDimensions (dims: AllDimensions) : string =
+    dims.tables
+    |> List.map formatDimensionTable
+    |> String.concat (Environment.NewLine + Environment.NewLine)
+
+/// Write all dimension tables to stdout.
+let writeDimensions (isJson: bool) (dims: AllDimensions) : int =
+    if isJson then
+        Console.Out.WriteLine(formatJson (dims :> obj))
+    else
+        Console.Out.WriteLine(formatAllDimensions dims)
+    ExitCodes.success

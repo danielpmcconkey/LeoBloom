@@ -62,3 +62,37 @@ module InvestmentAccountRepository =
             results.Add(readAccount reader)
         reader.Close()
         results |> Seq.toList
+
+    /// List investment accounts filtered by account group name (JOIN).
+    let listByGroup (txn: NpgsqlTransaction) (groupName: string) : InvestmentAccount list =
+        use sql = new NpgsqlCommand(
+            "SELECT ia.id, ia.name, ia.tax_bucket_id, ia.account_group_id
+             FROM portfolio.investment_account ia
+             JOIN portfolio.account_group ag ON ia.account_group_id = ag.id
+             WHERE ag.name = @name
+             ORDER BY ia.id",
+            txn.Connection, txn)
+        sql.Parameters.AddWithValue("@name", groupName) |> ignore
+        use reader = sql.ExecuteReader()
+        let results = ResizeArray<InvestmentAccount>()
+        while reader.Read() do
+            results.Add(readAccount reader)
+        reader.Close()
+        results |> Seq.toList
+
+    /// List investment accounts filtered by tax bucket name (JOIN).
+    let listByTaxBucket (txn: NpgsqlTransaction) (bucketName: string) : InvestmentAccount list =
+        use sql = new NpgsqlCommand(
+            "SELECT ia.id, ia.name, ia.tax_bucket_id, ia.account_group_id
+             FROM portfolio.investment_account ia
+             JOIN portfolio.tax_bucket tb ON ia.tax_bucket_id = tb.id
+             WHERE tb.name = @name
+             ORDER BY ia.id",
+            txn.Connection, txn)
+        sql.Parameters.AddWithValue("@name", bucketName) |> ignore
+        use reader = sql.ExecuteReader()
+        let results = ResizeArray<InvestmentAccount>()
+        while reader.Read() do
+            results.Add(readAccount reader)
+        reader.Close()
+        results |> Seq.toList

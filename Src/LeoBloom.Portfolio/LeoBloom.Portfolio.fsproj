@@ -10,6 +10,8 @@
     <Compile Include="FundRepository.fs" />
     <Compile Include="PositionRepository.fs" />
     <Compile Include="PortfolioReportRepository.fs" />
+    <Compile Include="DimensionRepository.fs" />
+    <Compile Include="DimensionService.fs" />
     <Compile Include="InvestmentAccountService.fs" />
     <Compile Include="FundService.fs" />
     <Compile Include="PositionService.fs" />

@@ -106,3 +106,9 @@ module Portfolio =
           totalCurrentValue: decimal
           totalGainLoss: decimal
           totalGainLossPct: decimal }
+
+    /// A single dimension table with its id/name values.
+    type DimensionTable = { tableName: string; values: (int * string) list }
+
+    /// All 8 dimension tables aggregated.
+    type AllDimensions = { tables: DimensionTable list }
