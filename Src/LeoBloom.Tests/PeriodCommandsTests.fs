@@ -433,9 +433,11 @@ let ``createPeriod returns friendly error on duplicate key`` () =
         txn.Commit()
         id
     try
-        // Try to create another via the service with the same key
+        // Try to create another via the service with the same key but non-overlapping dates.
+        // Using a different date range ensures findOverlapping passes and the unique key
+        // constraint fires, which is what this test is verifying.
         use txn2 = conn.BeginTransaction()
-        let result = FiscalPeriodService.createPeriod txn2 key (DateOnly(2093, 9, 1)) (DateOnly(2093, 9, 30))
+        let result = FiscalPeriodService.createPeriod txn2 key (DateOnly(2093, 10, 1)) (DateOnly(2093, 10, 31))
         match result with
         | Error errs ->
             let hasExpectedMsg = errs |> List.exists (fun e -> e.Contains("already exists"))

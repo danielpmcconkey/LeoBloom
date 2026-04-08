@@ -96,6 +96,26 @@ module FiscalPeriodRepository =
             reader.Close()
             None
 
+    /// Find any existing fiscal period whose date range overlaps the proposed range.
+    /// Returns None if no overlap exists, Some period if a conflict is found.
+    let findOverlapping (txn: NpgsqlTransaction) (proposedStart: DateOnly) (proposedEnd: DateOnly) : FiscalPeriod option =
+        use sql = new NpgsqlCommand(
+            "SELECT id, period_key, start_date, end_date, is_open, created_at
+             FROM ledger.fiscal_period
+             WHERE start_date <= @proposedEnd AND end_date >= @proposedStart
+             LIMIT 1",
+            txn.Connection, txn)
+        sql.Parameters.AddWithValue("@proposedStart", proposedStart) |> ignore
+        sql.Parameters.AddWithValue("@proposedEnd", proposedEnd) |> ignore
+        use reader = sql.ExecuteReader()
+        if reader.Read() then
+            let period = readPeriod reader
+            reader.Close()
+            Some period
+        else
+            reader.Close()
+            None
+
     /// Insert a new fiscal period. Returns the created record.
     let create
         (txn: NpgsqlTransaction)

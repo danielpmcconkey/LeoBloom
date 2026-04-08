@@ -22,6 +22,7 @@
     <Compile Include="SubtreePLTests.fs" />
     <Compile Include="OpeningBalanceTests.fs" />
     <Compile Include="FiscalPeriodTests.fs" />
+    <Compile Include="FiscalPeriodManagementTests.fs" />
     <Compile Include="DataSourceEncapsulationTests.fs" />
     <Compile Include="LogModuleStructureTests.fs" />
     <Compile Include="ObligationAgreementTests.fs" />

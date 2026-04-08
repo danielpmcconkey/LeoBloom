@@ -18,8 +18,8 @@ module FiscalPeriodService =
             Log.errorExn ex "Failed to list fiscal periods" [||]
             Error [ sprintf "Persistence error: %s" ex.Message ]
 
-    /// Create a new fiscal period. Validates key/dates are non-empty,
-    /// start <= end. Does NOT check for date overlaps (see F3 resolution).
+    /// Create a new fiscal period. Validates key/dates are non-empty, start <= end,
+    /// and that the proposed date range does not overlap any existing period.
     let createPeriod
         (txn: NpgsqlTransaction)
         (periodKey: string)
@@ -36,9 +36,16 @@ module FiscalPeriodService =
         else
             Log.info "Creating fiscal period {PeriodKey}" [| periodKey :> obj |]
             try
-                let period = FiscalPeriodRepository.create txn periodKey startDate endDate
-                Log.info "Created fiscal period {PeriodId}" [| period.id :> obj |]
-                Ok period
+                match FiscalPeriodRepository.findOverlapping txn startDate endDate with
+                | Some conflict ->
+                    Error [ sprintf "Date range overlaps existing period '%s' (%s to %s)"
+                                conflict.periodKey
+                                (conflict.startDate.ToString("yyyy-MM-dd"))
+                                (conflict.endDate.ToString("yyyy-MM-dd")) ]
+                | None ->
+                    let period = FiscalPeriodRepository.create txn periodKey startDate endDate
+                    Log.info "Created fiscal period {PeriodId}" [| period.id :> obj |]
+                    Ok period
             with
             | :? PostgresException as ex when ex.SqlState = "23505" ->
                 Error [ sprintf "A fiscal period with key '%s' already exists" periodKey ]
