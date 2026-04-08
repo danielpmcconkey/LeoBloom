@@ -1,6 +1,7 @@
 namespace LeoBloom.Utilities
 
 open System
+open System.IO
 open Serilog
 open Microsoft.Extensions.Configuration
 
@@ -34,9 +35,10 @@ module Log =
         let baseDir =
             config["Logging:FileBasePath"]
             |> Option.ofObj
-            |> Option.defaultValue "/workspace/application_logs/leobloom"
+            |> Option.defaultValue (Path.Combine(AppContext.BaseDirectory, "logs"))
 
-        let logPath = System.IO.Path.Combine(baseDir, $"leobloom-{timestamp}.log")
+        Directory.CreateDirectory(baseDir) |> ignore
+        let logPath = Path.Combine(baseDir, $"leobloom-{timestamp}.log")
 
         Serilog.Log.Logger <-
             LoggerConfiguration()

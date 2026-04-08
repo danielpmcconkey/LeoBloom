@@ -347,7 +347,7 @@ let private formatInvoice (inv: Invoice) : string =
     String.Join(Environment.NewLine, lines)
 
 let private formatInvoiceList (invoices: Invoice list) : string =
-    if invoices.IsEmpty then ""
+    if invoices.IsEmpty then "(no invoices found)"
     else
         let lines = ResizeArray<string>()
         lines.Add(sprintf "  %-6s  %-15s  %-8s  %12s  %12s  %12s" "ID" "Tenant" "Period" "Rent" "Utility" "Total")
@@ -379,7 +379,7 @@ let private formatTransfer (t: Transfer) : string =
     String.Join(Environment.NewLine, lines)
 
 let private formatTransferList (transfers: Transfer list) : string =
-    if transfers.IsEmpty then ""
+    if transfers.IsEmpty then "(no transfers found)"
     else
         let lines = ResizeArray<string>()
         lines.Add(sprintf "  %-6s  %-10s  %-8s  %-8s  %12s  %-12s" "ID" "Status" "From" "To" "Amount" "Initiated")

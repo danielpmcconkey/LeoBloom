@@ -224,8 +224,8 @@ let private handleCashDisbursements (args: ParseResults<CashDisbursementsArgs>) 
 
 // --- New accounting report handlers ---
 
-let private handleTrialBalance (args: ParseResults<TrialBalanceArgs>) : int =
-    let isJson = args.Contains TrialBalanceArgs.Json
+let private handleTrialBalance (isJson: bool) (args: ParseResults<TrialBalanceArgs>) : int =
+    let isJson = isJson || args.Contains TrialBalanceArgs.Json
     let periodRaw = args.GetResult TrialBalanceArgs.Period
 
     use conn = DataSource.openConnection()
@@ -243,8 +243,8 @@ let private handleTrialBalance (args: ParseResults<TrialBalanceArgs>) : int =
         try txn.Rollback() with _ -> ()
         reraise()
 
-let private handleBalanceSheet (args: ParseResults<BalanceSheetArgs>) : int =
-    let isJson = args.Contains BalanceSheetArgs.Json
+let private handleBalanceSheet (isJson: bool) (args: ParseResults<BalanceSheetArgs>) : int =
+    let isJson = isJson || args.Contains BalanceSheetArgs.Json
     let asOfRaw = args.GetResult BalanceSheetArgs.As_Of
 
     match parseDate asOfRaw with
@@ -263,8 +263,8 @@ let private handleBalanceSheet (args: ParseResults<BalanceSheetArgs>) : int =
             try txn.Rollback() with _ -> ()
             reraise()
 
-let private handleIncomeStatement (args: ParseResults<IncomeStatementArgs>) : int =
-    let isJson = args.Contains IncomeStatementArgs.Json
+let private handleIncomeStatement (isJson: bool) (args: ParseResults<IncomeStatementArgs>) : int =
+    let isJson = isJson || args.Contains IncomeStatementArgs.Json
     let periodRaw = args.GetResult IncomeStatementArgs.Period
 
     use conn = DataSource.openConnection()
@@ -282,8 +282,8 @@ let private handleIncomeStatement (args: ParseResults<IncomeStatementArgs>) : in
         try txn.Rollback() with _ -> ()
         reraise()
 
-let private handlePnlSubtree (args: ParseResults<PnlSubtreeArgs>) : int =
-    let isJson = args.Contains PnlSubtreeArgs.Json
+let private handlePnlSubtree (isJson: bool) (args: ParseResults<PnlSubtreeArgs>) : int =
+    let isJson = isJson || args.Contains PnlSubtreeArgs.Json
     let account = args.GetResult PnlSubtreeArgs.Account
     let periodRaw = args.GetResult PnlSubtreeArgs.Period
 
@@ -324,8 +324,8 @@ let private handleProjection (args: ParseResults<ProjectionArgs>) : int =
             try txn.Rollback() with _ -> ()
             reraise()
 
-let private handleAccountBalance (args: ParseResults<AccountBalanceArgs>) : int =
-    let isJson = args.Contains AccountBalanceArgs.Json
+let private handleAccountBalance (isJson: bool) (args: ParseResults<AccountBalanceArgs>) : int =
+    let isJson = isJson || args.Contains AccountBalanceArgs.Json
     let account = args.GetResult AccountBalanceArgs.Account
     let asOfRaw = args.TryGetResult AccountBalanceArgs.As_Of
 
@@ -352,17 +352,17 @@ let private handleAccountBalance (args: ParseResults<AccountBalanceArgs>) : int 
 
 // --- Dispatch ---
 
-let dispatch (args: ParseResults<ReportArgs>) : int =
+let dispatch (isJson: bool) (args: ParseResults<ReportArgs>) : int =
     match args.TryGetSubCommand() with
     | Some (Schedule_E scheduleEArgs) -> handleScheduleE scheduleEArgs
     | Some (General_Ledger glArgs) -> handleGeneralLedger glArgs
     | Some (Cash_Receipts crArgs) -> handleCashReceipts crArgs
     | Some (Cash_Disbursements cdArgs) -> handleCashDisbursements cdArgs
-    | Some (Trial_Balance tbArgs) -> handleTrialBalance tbArgs
-    | Some (Balance_Sheet bsArgs) -> handleBalanceSheet bsArgs
-    | Some (Income_Statement isArgs) -> handleIncomeStatement isArgs
-    | Some (Pnl_Subtree plArgs) -> handlePnlSubtree plArgs
-    | Some (Account_Balance abArgs) -> handleAccountBalance abArgs
+    | Some (Trial_Balance tbArgs) -> handleTrialBalance isJson tbArgs
+    | Some (Balance_Sheet bsArgs) -> handleBalanceSheet isJson bsArgs
+    | Some (Income_Statement isArgs) -> handleIncomeStatement isJson isArgs
+    | Some (Pnl_Subtree plArgs) -> handlePnlSubtree isJson plArgs
+    | Some (Account_Balance abArgs) -> handleAccountBalance isJson abArgs
     | Some (Projection projArgs) -> handleProjection projArgs
     | Some (Allocation allocArgs)         -> PortfolioReportCommands.handleAllocation allocArgs
     | Some (Portfolio_Summary psArgs)     -> PortfolioReportCommands.handlePortfolioSummary psArgs

@@ -9,6 +9,17 @@ open LeoBloom.Utilities
 /// a caller-provided NpgsqlTransaction for atomicity.
 module JournalEntryRepository =
 
+    let private readEntry (reader: System.Data.Common.DbDataReader) : JournalEntry =
+        { id = reader.GetInt32(0)
+          entryDate = reader.GetFieldValue<DateOnly>(1)
+          description = reader.GetString(2)
+          source = if reader.IsDBNull(3) then None else Some (reader.GetString(3))
+          fiscalPeriodId = reader.GetInt32(4)
+          voidedAt = if reader.IsDBNull(5) then None else Some (reader.GetFieldValue<DateTimeOffset>(5))
+          voidReason = if reader.IsDBNull(6) then None else Some (reader.GetString(6))
+          createdAt = reader.GetFieldValue<DateTimeOffset>(7)
+          modifiedAt = reader.GetFieldValue<DateTimeOffset>(8) }
+
     let insertEntry (txn: NpgsqlTransaction) (cmd: PostJournalEntryCommand) : JournalEntry =
         use sql = new NpgsqlCommand(
             "INSERT INTO ledger.journal_entry (entry_date, description, source, fiscal_period_id)
@@ -23,16 +34,7 @@ module JournalEntryRepository =
 
         use reader = sql.ExecuteReader()
         reader.Read() |> ignore
-        let entry =
-            { id = reader.GetInt32(0)
-              entryDate = reader.GetFieldValue<DateOnly>(1)
-              description = reader.GetString(2)
-              source = if reader.IsDBNull(3) then None else Some (reader.GetString(3))
-              fiscalPeriodId = reader.GetInt32(4)
-              voidedAt = if reader.IsDBNull(5) then None else Some (reader.GetFieldValue<DateTimeOffset>(5))
-              voidReason = if reader.IsDBNull(6) then None else Some (reader.GetString(6))
-              createdAt = reader.GetFieldValue<DateTimeOffset>(7)
-              modifiedAt = reader.GetFieldValue<DateTimeOffset>(8) }
+        let entry = readEntry reader
         reader.Close()
         entry
 
@@ -86,16 +88,7 @@ module JournalEntryRepository =
         sel.Parameters.AddWithValue("@id", entryId) |> ignore
         use reader = sel.ExecuteReader()
         if reader.Read() then
-            let entry =
-                { id = reader.GetInt32(0)
-                  entryDate = reader.GetFieldValue<DateOnly>(1)
-                  description = reader.GetString(2)
-                  source = if reader.IsDBNull(3) then None else Some (reader.GetString(3))
-                  fiscalPeriodId = reader.GetInt32(4)
-                  voidedAt = if reader.IsDBNull(5) then None else Some (reader.GetFieldValue<DateTimeOffset>(5))
-                  voidReason = if reader.IsDBNull(6) then None else Some (reader.GetString(6))
-                  createdAt = reader.GetFieldValue<DateTimeOffset>(7)
-                  modifiedAt = reader.GetFieldValue<DateTimeOffset>(8) }
+            let entry = readEntry reader
             reader.Close()
             Some entry
         else
@@ -138,16 +131,7 @@ module JournalEntryRepository =
             entryReader.Close()
             None
         else
-            let entry =
-                { id = entryReader.GetInt32(0)
-                  entryDate = entryReader.GetFieldValue<DateOnly>(1)
-                  description = entryReader.GetString(2)
-                  source = if entryReader.IsDBNull(3) then None else Some (entryReader.GetString(3))
-                  fiscalPeriodId = entryReader.GetInt32(4)
-                  voidedAt = if entryReader.IsDBNull(5) then None else Some (entryReader.GetFieldValue<DateTimeOffset>(5))
-                  voidReason = if entryReader.IsDBNull(6) then None else Some (entryReader.GetString(6))
-                  createdAt = entryReader.GetFieldValue<DateTimeOffset>(7)
-                  modifiedAt = entryReader.GetFieldValue<DateTimeOffset>(8) }
+            let entry = readEntry entryReader
             entryReader.Close()
 
             // Fetch lines

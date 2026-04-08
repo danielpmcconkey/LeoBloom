@@ -3,6 +3,7 @@ namespace LeoBloom.Portfolio
 open System
 open Npgsql
 open LeoBloom.Domain.Portfolio
+open LeoBloom.Utilities
 
 /// Raw SQL persistence for fund operations.
 module FundRepository =
@@ -47,18 +48,14 @@ module FundRepository =
              RETURNING symbol, name, investment_type_id, market_cap_id,
                        index_type_id, sector_id, region_id, objective_id",
             txn.Connection, txn)
-        let addOpt (param: string) (v: int option) =
-            match v with
-            | Some i -> sql.Parameters.AddWithValue(param, i) |> ignore
-            | None   -> sql.Parameters.AddWithValue(param, DBNull.Value) |> ignore
         sql.Parameters.AddWithValue("@symbol", fund.symbol) |> ignore
         sql.Parameters.AddWithValue("@name",   fund.name)   |> ignore
-        addOpt "@it"  fund.investmentTypeId
-        addOpt "@mc"  fund.marketCapId
-        addOpt "@idx" fund.indexTypeId
-        addOpt "@sec" fund.sectorId
-        addOpt "@reg" fund.regionId
-        addOpt "@obj" fund.objectiveId
+        DataHelpers.optParam "@it"  (fund.investmentTypeId |> Option.map box) sql
+        DataHelpers.optParam "@mc"  (fund.marketCapId      |> Option.map box) sql
+        DataHelpers.optParam "@idx" (fund.indexTypeId      |> Option.map box) sql
+        DataHelpers.optParam "@sec" (fund.sectorId         |> Option.map box) sql
+        DataHelpers.optParam "@reg" (fund.regionId         |> Option.map box) sql
+        DataHelpers.optParam "@obj" (fund.objectiveId      |> Option.map box) sql
         use reader = sql.ExecuteReader()
         reader.Read() |> ignore
         let f = readFund reader

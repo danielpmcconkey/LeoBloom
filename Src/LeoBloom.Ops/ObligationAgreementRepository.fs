@@ -14,7 +14,7 @@ type ListAgreementsFilter =
 /// a caller-provided NpgsqlTransaction for atomicity.
 module ObligationAgreementRepository =
 
-    let private mapReader (reader: System.Data.Common.DbDataReader) : ObligationAgreement =
+    let private readAgreement (reader: System.Data.Common.DbDataReader) : ObligationAgreement =
         let obligationType =
             match ObligationDirection.fromString (reader.GetString(2)) with
             | Ok v -> v
@@ -71,7 +71,7 @@ module ObligationAgreementRepository =
 
         use reader = sql.ExecuteReader()
         reader.Read() |> ignore
-        let result = mapReader reader
+        let result = readAgreement reader
         reader.Close()
         result
 
@@ -82,7 +82,7 @@ module ObligationAgreementRepository =
         sql.Parameters.AddWithValue("@id", id) |> ignore
         use reader = sql.ExecuteReader()
         if reader.Read() then
-            let result = mapReader reader
+            let result = readAgreement reader
             reader.Close()
             Some result
         else
@@ -125,7 +125,7 @@ module ObligationAgreementRepository =
         use reader = sql.ExecuteReader()
         let mutable results = []
         while reader.Read() do
-            results <- mapReader reader :: results
+            results <- readAgreement reader :: results
         reader.Close()
         results |> List.rev
 
@@ -162,7 +162,7 @@ module ObligationAgreementRepository =
 
         use reader = sql.ExecuteReader()
         if reader.Read() then
-            let result = mapReader reader
+            let result = readAgreement reader
             reader.Close()
             Some result
         else
@@ -178,7 +178,7 @@ module ObligationAgreementRepository =
         sql.Parameters.AddWithValue("@id", id) |> ignore
         use reader = sql.ExecuteReader()
         if reader.Read() then
-            let result = mapReader reader
+            let result = readAgreement reader
             reader.Close()
             Some result
         else

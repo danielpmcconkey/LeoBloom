@@ -57,7 +57,7 @@ let main (argv: string array) =
             | Some (Ledger ledgerResults) ->
                 LedgerCommands.dispatch isJson ledgerResults
             | Some (Report reportResults) ->
-                ReportCommands.dispatch reportResults
+                ReportCommands.dispatch isJson reportResults
             | Some (Invoice invoiceResults) ->
                 InvoiceCommands.dispatch isJson invoiceResults
             | Some (Transfer transferResults) ->

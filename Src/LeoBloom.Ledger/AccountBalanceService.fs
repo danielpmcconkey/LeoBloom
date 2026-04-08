@@ -31,7 +31,7 @@ module AccountBalanceService =
             | None -> Error (sprintf "Account with id %d does not exist" accountId)
         with ex ->
             Log.errorExn ex "Failed to show account {AccountId}" [| accountId :> obj |]
-            Error (sprintf "Query error: %s" ex.Message)
+            Error (sprintf "Persistence error: %s" ex.Message)
 
     /// Show a single account by code.
     let showAccountByCode (txn: NpgsqlTransaction) (code: string) : Result<Account, string> =
@@ -42,7 +42,7 @@ module AccountBalanceService =
             | None -> Error (sprintf "Account with code '%s' does not exist" code)
         with ex ->
             Log.errorExn ex "Failed to show account code {AccountCode}" [| code :> obj |]
-            Error (sprintf "Query error: %s" ex.Message)
+            Error (sprintf "Persistence error: %s" ex.Message)
 
     let getBalanceById (txn: NpgsqlTransaction) (accountId: int) (asOfDate: DateOnly) : Result<AccountBalance, string> =
         Log.info "Getting balance for account {AccountId} as of {AsOfDate}" [| accountId :> obj; asOfDate :> obj |]
@@ -52,7 +52,7 @@ module AccountBalanceService =
             | None -> Error (sprintf "Account with id %d does not exist" accountId)
         with ex ->
             Log.errorExn ex "Failed to get balance for account {AccountId}" [| accountId :> obj |]
-            Error (sprintf "Query error: %s" ex.Message)
+            Error (sprintf "Persistence error: %s" ex.Message)
 
     let getBalanceByCode (txn: NpgsqlTransaction) (code: string) (asOfDate: DateOnly) : Result<AccountBalance, string> =
         Log.info "Getting balance for account code {AccountCode} as of {AsOfDate}" [| code :> obj; asOfDate :> obj |]
@@ -65,4 +65,4 @@ module AccountBalanceService =
                 | None -> Error (sprintf "Account with id %d does not exist" accountId)
         with ex ->
             Log.errorExn ex "Failed to get balance for account code {AccountCode}" [| code :> obj |]
-            Error (sprintf "Query error: %s" ex.Message)
+            Error (sprintf "Persistence error: %s" ex.Message)
