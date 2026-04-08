@@ -82,7 +82,7 @@
 | 075 | External account reference on ledger.account | Not started |
 | 076 | Account update CLI command | Not started |
 | **077** | **Account create CLI command** | **Not started** |
-| **078** | **Transaction import stage schema** | **Not started** |
+| 078 | Transaction import stage schema | Not started (Hobson, not Nightshift) |
 
 ---
 

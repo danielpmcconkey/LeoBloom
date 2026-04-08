@@ -193,7 +193,7 @@ module Ledger =
           description: string option }
 
     type CreateAccountCommand =
-        { code: string; name: string; accountTypeId: int; parentId: int option }
+        { code: string; name: string; accountTypeId: int; parentId: int option; subType: AccountSubType option }
 
     type UpdateAccountNameCommand =
         { accountId: int; name: string }

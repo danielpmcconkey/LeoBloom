@@ -2,8 +2,9 @@
 
 **Epic:** Infrastructure
 **Depends On:** None
-**Status:** Not started
+**Status:** Not started (Hobson, not Nightshift)
 **Priority:** High
+**Owner:** Hobson — BD has no access to prod. Hobson owns the `stage` schema and all data ingestion.
 
 ---
 

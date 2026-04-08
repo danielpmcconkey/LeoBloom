@@ -3,6 +3,7 @@ module LeoBloom.CLI.AccountCommands
 open System
 open Argu
 open Npgsql
+open LeoBloom.Domain.Ledger
 open LeoBloom.Ledger
 open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
@@ -41,16 +42,35 @@ type AccountBalanceCmdArgs =
             | As_Of _ -> "As-of date (yyyy-MM-dd, defaults to today)"
             | Json -> "Output in JSON format"
 
+type AccountCreateArgs =
+    | [<Mandatory>] Code of string
+    | [<Mandatory>] Name of string
+    | [<Mandatory>] Type of int
+    | Parent of int
+    | Subtype of string
+    | Json
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Code _ -> "account code (e.g. 1010)"
+            | Name _ -> "account name (e.g. 'Cash on Hand')"
+            | Type _ -> "account type id (1=Asset, 2=Liability, 3=Equity, 4=Revenue, 5=Expense)"
+            | Parent _ -> "parent account id (omit for top-level)"
+            | Subtype _ -> "account subtype (Cash, FixedAsset, Investment, CurrentLiability, LongTermLiability, OperatingRevenue, OtherRevenue, OperatingExpense, OtherExpense)"
+            | Json -> "Output in JSON format"
+
 type AccountArgs =
     | [<CliPrefix(CliPrefix.None)>] List of ParseResults<AccountListArgs>
     | [<CliPrefix(CliPrefix.None)>] Show of ParseResults<AccountShowArgs>
     | [<CliPrefix(CliPrefix.None)>] Balance of ParseResults<AccountBalanceCmdArgs>
+    | [<CliPrefix(CliPrefix.None)>] Create of ParseResults<AccountCreateArgs>
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | List _ -> "List accounts with optional filters"
             | Show _ -> "Show account details"
             | Balance _ -> "Show account balance"
+            | Create _ -> "Create a new account"
 
 // --- Helpers ---
 
@@ -138,6 +158,39 @@ let private handleBalance (isJson: bool) (args: ParseResults<AccountBalanceCmdAr
             try txn.Rollback() with _ -> ()
             reraise()
 
+let private handleCreate (isJson: bool) (args: ParseResults<AccountCreateArgs>) : int =
+    let isJson = isJson || args.Contains AccountCreateArgs.Json
+    let code = args.GetResult AccountCreateArgs.Code
+    let name = args.GetResult AccountCreateArgs.Name
+    let typeId = args.GetResult AccountCreateArgs.Type
+    let parentId = args.TryGetResult AccountCreateArgs.Parent
+    let subtypeRaw = args.TryGetResult AccountCreateArgs.Subtype
+
+    let subtypeResult =
+        match subtypeRaw with
+        | None -> Ok None
+        | Some s ->
+            match AccountSubType.fromDbString s with
+            | Ok st -> Ok (Some st)
+            | Error _ ->
+                Error (sprintf "Invalid subtype '%s'. Valid values: Cash, FixedAsset, Investment, CurrentLiability, LongTermLiability, OperatingRevenue, OtherRevenue, OperatingExpense, OtherExpense" s)
+
+    match subtypeResult with
+    | Error e -> write isJson (Error [e])
+    | Ok subType ->
+        let cmd = { code = code; name = name; accountTypeId = typeId; parentId = parentId; subType = subType }
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = AccountService.createAccount txn cmd
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun acct -> acct :> obj))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
+
 // --- Dispatch ---
 
 let dispatch (isJson: bool) (args: ParseResults<AccountArgs>) : int =
@@ -145,6 +198,7 @@ let dispatch (isJson: bool) (args: ParseResults<AccountArgs>) : int =
     | Some (List listArgs) -> handleList isJson listArgs
     | Some (Show showArgs) -> handleShow isJson showArgs
     | Some (Balance balanceArgs) -> handleBalance isJson balanceArgs
+    | Some (Create createArgs) -> handleCreate isJson createArgs
     | None ->
         Console.Error.WriteLine(args.Parser.PrintUsage())
         ExitCodes.systemError

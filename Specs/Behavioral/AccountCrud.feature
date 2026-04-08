@@ -71,3 +71,15 @@ Feature: Account CRUD
         And a journal entry posted to accounts "crud-5010" and "crud-5011"
         When I deactivate account "crud-5010"
         Then account "crud-5010" is_active is false
+
+    # --- Create with SubType ---
+
+    @FT-AC-010
+    Scenario: Creating an account with a valid subtype succeeds and persists the subtype
+        When I create an account with code "crud-6010", name "Cash Account", type asset, and subtype "Cash"
+        Then the account is created with subtype Cash
+
+    @FT-AC-011
+    Scenario: Creating an account with an invalid subtype for its type is rejected
+        When I create an account with code "crud-6020", name "Bad Subtype Account", type expense, and subtype "Cash"
+        Then the account creation fails with error containing "subtype"

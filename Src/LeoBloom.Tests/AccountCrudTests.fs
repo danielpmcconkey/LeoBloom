@@ -34,7 +34,7 @@ let ``creating an account with valid data returns ok with correct fields`` () =
     // When I create an account with code "crud-1010", name "Test Cash", and type asset
     let result =
         AccountService.createAccount txn
-            { code = "crud-1010"; name = "Test Cash"; accountTypeId = assetTypeId; parentId = None }
+            { code = "crud-1010"; name = "Test Cash"; accountTypeId = assetTypeId; parentId = None; subType = None }
     // Then the account is created with a valid id, is_active true, and the given code and name
     match result with
     | Error errs -> Assert.Fail(sprintf "Expected Ok, got Error: %A" errs)
@@ -57,7 +57,7 @@ let ``creating an account with an invalid account type is rejected`` () =
     // When I create an account with code "crud-1020", name "Bad Type Account", and type_id 99999
     let result =
         AccountService.createAccount txn
-            { code = "crud-1020"; name = "Bad Type Account"; accountTypeId = 99999; parentId = None }
+            { code = "crud-1020"; name = "Bad Type Account"; accountTypeId = 99999; parentId = None; subType = None }
     // Then the account creation fails with error containing "account type"
     match result with
     | Ok _ -> Assert.Fail("Expected Error for invalid account type, got Ok")
@@ -77,13 +77,13 @@ let ``creating an account with a duplicate code is rejected`` () =
     use txn = conn.BeginTransaction()
     // Given a crud-test active account with code "crud-1030" and name "Original"
     match AccountService.createAccount txn
-            { code = "crud-1030"; name = "Original"; accountTypeId = assetTypeId; parentId = None } with
+            { code = "crud-1030"; name = "Original"; accountTypeId = assetTypeId; parentId = None; subType = None } with
     | Error errs -> Assert.Fail(sprintf "Setup: failed to create original account: %A" errs)
     | Ok _ -> ()
     // When I create an account with code "crud-1030", name "Duplicate", and type asset
     let result =
         AccountService.createAccount txn
-            { code = "crud-1030"; name = "Duplicate"; accountTypeId = assetTypeId; parentId = None }
+            { code = "crud-1030"; name = "Duplicate"; accountTypeId = assetTypeId; parentId = None; subType = None }
     // Then the account creation fails with error containing "crud-1030"
     match result with
     | Ok _ -> Assert.Fail("Expected Error for duplicate code, got Ok")
@@ -104,7 +104,7 @@ let ``creating an account with an invalid parent_id is rejected`` () =
     // When I create an account with code "crud-1040", name "Orphan Account", type asset, and parent_id 99999
     let result =
         AccountService.createAccount txn
-            { code = "crud-1040"; name = "Orphan Account"; accountTypeId = assetTypeId; parentId = Some 99999 }
+            { code = "crud-1040"; name = "Orphan Account"; accountTypeId = assetTypeId; parentId = Some 99999; subType = None }
     // Then the account creation fails with error containing "parent"
     match result with
     | Ok _ -> Assert.Fail("Expected Error for invalid parent_id, got Ok")
@@ -128,7 +128,7 @@ let ``creating an account under an inactive parent is rejected`` () =
     // When I create an account with code "crud-1051" under parent "crud-1050"
     let result =
         AccountService.createAccount txn
-            { code = "crud-1051"; name = "Child Of Inactive"; accountTypeId = assetTypeId; parentId = Some parentId }
+            { code = "crud-1051"; name = "Child Of Inactive"; accountTypeId = assetTypeId; parentId = Some parentId; subType = None }
     // Then the account creation fails with error containing "inactive"
     match result with
     | Ok _ -> Assert.Fail("Expected Error for inactive parent, got Ok")
