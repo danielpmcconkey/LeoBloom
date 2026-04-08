@@ -34,7 +34,7 @@ let ``creating an asset account with Cash subtype succeeds and persists subtype`
     let result =
         AccountService.createAccount txn
             { code = prefix + "CA10"; name = "Cash Account"; accountTypeId = assetTypeId
-              parentId = None; subType = Some Cash }
+              parentId = None; subType = Some Cash; externalRef = None }
     match result with
     | Error errs -> Assert.Fail(sprintf "Expected Ok, got Error: %A" errs)
     | Ok acct ->
@@ -55,7 +55,7 @@ let ``creating an account without subtype succeeds and subtype is None`` () =
     let result =
         AccountService.createAccount txn
             { code = prefix + "CA11"; name = "No Subtype Account"; accountTypeId = assetTypeId
-              parentId = None; subType = None }
+              parentId = None; subType = None; externalRef = None }
     match result with
     | Error errs -> Assert.Fail(sprintf "Expected Ok, got Error: %A" errs)
     | Ok acct ->
@@ -74,7 +74,7 @@ let ``creating an expense account with Cash subtype is rejected with subtype err
     let result =
         AccountService.createAccount txn
             { code = prefix + "CA12"; name = "Bad Subtype Account"; accountTypeId = expenseTypeId
-              parentId = None; subType = Some Cash }
+              parentId = None; subType = Some Cash; externalRef = None }
     match result with
     | Ok _ -> Assert.Fail("Expected Error for invalid subtype, got Ok")
     | Error errs ->
@@ -95,13 +95,13 @@ let ``creating account with duplicate code is rejected`` () =
     let code = prefix + "DUP"
     match AccountService.createAccount txn
             { code = code; name = "Original"; accountTypeId = assetTypeId
-              parentId = None; subType = None } with
+              parentId = None; subType = None; externalRef = None } with
     | Error errs -> Assert.Fail(sprintf "Setup: %A" errs)
     | Ok _ -> ()
     let result =
         AccountService.createAccount txn
             { code = code; name = "Duplicate"; accountTypeId = assetTypeId
-              parentId = None; subType = None }
+              parentId = None; subType = None; externalRef = None }
     match result with
     | Ok _ -> Assert.Fail("Expected Error for duplicate code, got Ok")
     | Error errs ->
@@ -122,10 +122,48 @@ let ``creating account with nonexistent parent is rejected`` () =
     let result =
         AccountService.createAccount txn
             { code = prefix + "NPR"; name = "No Parent Account"; accountTypeId = assetTypeId
-              parentId = Some 99999; subType = None }
+              parentId = Some 99999; subType = None; externalRef = None }
     match result with
     | Ok _ -> Assert.Fail("Expected Error for invalid parent, got Ok")
     | Error errs ->
         Assert.True(
             errs |> List.exists (fun e -> e.Contains("does not exist")),
             sprintf "Expected 'does not exist' in error: %A" errs)
+
+// =====================================================================
+// @FT-AC-012 — Create with external_ref persists the value
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-AC-012")>]
+let ``creating an account with external_ref persists the value`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let result =
+        AccountService.createAccount txn
+            { code = prefix + "ER1"; name = "FI Account"; accountTypeId = assetTypeId
+              parentId = None; subType = None; externalRef = Some "Fidelity-Z08806967" }
+    match result with
+    | Error errs -> Assert.Fail(sprintf "Expected Ok, got Error: %A" errs)
+    | Ok acct ->
+        Assert.Equal(Some "Fidelity-Z08806967", acct.externalRef)
+
+// =====================================================================
+// @FT-AC-013 — Create without external_ref leaves it absent
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-AC-013")>]
+let ``creating an account without external_ref leaves it None`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let result =
+        AccountService.createAccount txn
+            { code = prefix + "ER2"; name = "No Ref Account"; accountTypeId = assetTypeId
+              parentId = None; subType = None; externalRef = None }
+    match result with
+    | Error errs -> Assert.Fail(sprintf "Expected Ok, got Error: %A" errs)
+    | Ok acct ->
+        Assert.Equal(None, acct.externalRef)

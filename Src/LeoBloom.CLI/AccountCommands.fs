@@ -48,6 +48,7 @@ type AccountCreateArgs =
     | [<Mandatory>] Type of int
     | Parent of int
     | Subtype of string
+    | External_Ref of string
     | Json
     interface IArgParserTemplate with
         member this.Usage =
@@ -57,6 +58,7 @@ type AccountCreateArgs =
             | Type _ -> "account type id (1=Asset, 2=Liability, 3=Equity, 4=Revenue, 5=Expense)"
             | Parent _ -> "parent account id (omit for top-level)"
             | Subtype _ -> "account subtype (Cash, FixedAsset, Investment, CurrentLiability, LongTermLiability, OperatingRevenue, OtherRevenue, OperatingExpense, OtherExpense)"
+            | External_Ref _ -> "external financial-institution account reference (e.g. Fidelity Z08806967)"
             | Json -> "Output in JSON format"
 
 type AccountArgs =
@@ -165,6 +167,7 @@ let private handleCreate (isJson: bool) (args: ParseResults<AccountCreateArgs>) 
     let typeId = args.GetResult AccountCreateArgs.Type
     let parentId = args.TryGetResult AccountCreateArgs.Parent
     let subtypeRaw = args.TryGetResult AccountCreateArgs.Subtype
+    let externalRef = args.TryGetResult AccountCreateArgs.External_Ref
 
     let subtypeResult =
         match subtypeRaw with
@@ -178,7 +181,7 @@ let private handleCreate (isJson: bool) (args: ParseResults<AccountCreateArgs>) 
     match subtypeResult with
     | Error e -> write isJson (Error [e])
     | Ok subType ->
-        let cmd = { code = code; name = name; accountTypeId = typeId; parentId = parentId; subType = subType }
+        let cmd = { code = code; name = name; accountTypeId = typeId; parentId = parentId; subType = subType; externalRef = externalRef }
         use conn = DataSource.openConnection()
         use txn = conn.BeginTransaction()
         try

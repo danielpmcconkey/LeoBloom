@@ -39,7 +39,7 @@ module AccountService =
                                 Error [ sprintf "parent account with id %d is inactive" pid ]
                             | Some _ ->
                                 try
-                                    let acct = AccountRepository.create txn cmd.code cmd.name cmd.accountTypeId cmd.parentId cmd.subType
+                                    let acct = AccountRepository.create txn cmd.code cmd.name cmd.accountTypeId cmd.parentId cmd.subType cmd.externalRef
                                     Log.info "Created account {AccountId}" [| acct.id :> obj |]
                                     Ok acct
                                 with
@@ -47,7 +47,7 @@ module AccountService =
                                     Error [ sprintf "account with code '%s' already exists" cmd.code ]
                         | None ->
                             try
-                                let acct = AccountRepository.create txn cmd.code cmd.name cmd.accountTypeId cmd.parentId cmd.subType
+                                let acct = AccountRepository.create txn cmd.code cmd.name cmd.accountTypeId cmd.parentId cmd.subType cmd.externalRef
                                 Log.info "Created account {AccountId}" [| acct.id :> obj |]
                                 Ok acct
                             with

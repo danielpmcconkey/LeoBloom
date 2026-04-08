@@ -81,6 +81,7 @@ module Ledger =
           accountTypeId: int
           parentId: int option
           subType: AccountSubType option
+          externalRef: string option
           isActive: bool
           createdAt: DateTimeOffset
           modifiedAt: DateTimeOffset }
@@ -193,7 +194,7 @@ module Ledger =
           description: string option }
 
     type CreateAccountCommand =
-        { code: string; name: string; accountTypeId: int; parentId: int option; subType: AccountSubType option }
+        { code: string; name: string; accountTypeId: int; parentId: int option; subType: AccountSubType option; externalRef: string option }
 
     type UpdateAccountNameCommand =
         { accountId: int; name: string }

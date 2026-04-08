@@ -19,13 +19,14 @@ module AccountRepository =
                              match AccountSubType.fromDbString (reader.GetString(5)) with
                              | Ok st -> Some st
                              | Error _ -> None
-          isActive     = reader.GetBoolean(6)
-          createdAt    = reader.GetFieldValue<DateTimeOffset>(7)
-          modifiedAt   = reader.GetFieldValue<DateTimeOffset>(8) }
+          externalRef  = if reader.IsDBNull(6) then None else Some (reader.GetString(6))
+          isActive     = reader.GetBoolean(7)
+          createdAt    = reader.GetFieldValue<DateTimeOffset>(8)
+          modifiedAt   = reader.GetFieldValue<DateTimeOffset>(9) }
 
     let private accountSelectSql =
         "SELECT id, code, name, account_type_id, parent_id, account_subtype,
-                is_active, created_at, modified_at
+                external_ref, is_active, created_at, modified_at
          FROM ledger.account"
 
     /// Look up an account by ID. Returns None if not found.
@@ -115,29 +116,23 @@ module AccountRepository =
         (accountTypeId: int)
         (parentId: int option)
         (subType: AccountSubType option)
+        (externalRef: string option)
         : Account =
-        let sql =
-            match parentId, subType with
-            | None, None ->
-                "INSERT INTO ledger.account (code, name, account_type_id)
-                 VALUES (@code, @name, @typeId)
-                 RETURNING id, code, name, account_type_id, parent_id, account_subtype,
-                           is_active, created_at, modified_at"
-            | None, Some _ ->
-                "INSERT INTO ledger.account (code, name, account_type_id, account_subtype)
-                 VALUES (@code, @name, @typeId, @subType)
-                 RETURNING id, code, name, account_type_id, parent_id, account_subtype,
-                           is_active, created_at, modified_at"
-            | Some _, None ->
-                "INSERT INTO ledger.account (code, name, account_type_id, parent_id)
-                 VALUES (@code, @name, @typeId, @parentId)
-                 RETURNING id, code, name, account_type_id, parent_id, account_subtype,
-                           is_active, created_at, modified_at"
-            | Some _, Some _ ->
-                "INSERT INTO ledger.account (code, name, account_type_id, parent_id, account_subtype)
-                 VALUES (@code, @name, @typeId, @parentId, @subType)
-                 RETURNING id, code, name, account_type_id, parent_id, account_subtype,
-                           is_active, created_at, modified_at"
+        // Build column/value lists dynamically to avoid combinatorial match explosion.
+        let columns = System.Collections.Generic.List<string>()
+        let placeholders = System.Collections.Generic.List<string>()
+        columns.Add("code");        placeholders.Add("@code")
+        columns.Add("name");        placeholders.Add("@name")
+        columns.Add("account_type_id"); placeholders.Add("@typeId")
+        if parentId.IsSome  then columns.Add("parent_id");       placeholders.Add("@parentId")
+        if subType.IsSome   then columns.Add("account_subtype"); placeholders.Add("@subType")
+        if externalRef.IsSome then columns.Add("external_ref"); placeholders.Add("@externalRef")
+        let colList = String.concat ", " columns
+        let valList = String.concat ", " placeholders
+        let returning =
+            "RETURNING id, code, name, account_type_id, parent_id, account_subtype,
+                       external_ref, is_active, created_at, modified_at"
+        let sql = sprintf "INSERT INTO ledger.account (%s) VALUES (%s) %s" colList valList returning
         use cmd = new NpgsqlCommand(sql, txn.Connection, txn)
         cmd.Parameters.AddWithValue("@code", code) |> ignore
         cmd.Parameters.AddWithValue("@name", name) |> ignore
@@ -147,6 +142,9 @@ module AccountRepository =
         | None -> ()
         match subType with
         | Some st -> cmd.Parameters.AddWithValue("@subType", AccountSubType.toDbString st) |> ignore
+        | None -> ()
+        match externalRef with
+        | Some ref -> cmd.Parameters.AddWithValue("@externalRef", ref) |> ignore
         | None -> ()
         use reader = cmd.ExecuteReader()
         reader.Read() |> ignore
@@ -160,7 +158,7 @@ module AccountRepository =
             "UPDATE ledger.account SET name = @name, modified_at = now()
              WHERE id = @id
              RETURNING id, code, name, account_type_id, parent_id, account_subtype,
-                       is_active, created_at, modified_at",
+                       external_ref, is_active, created_at, modified_at",
             txn.Connection, txn)
         sql.Parameters.AddWithValue("@name", name) |> ignore
         sql.Parameters.AddWithValue("@id", accountId) |> ignore
@@ -176,7 +174,7 @@ module AccountRepository =
             "UPDATE ledger.account SET is_active = false, modified_at = now()
              WHERE id = @id
              RETURNING id, code, name, account_type_id, parent_id, account_subtype,
-                       is_active, created_at, modified_at",
+                       external_ref, is_active, created_at, modified_at",
             txn.Connection, txn)
         sql.Parameters.AddWithValue("@id", accountId) |> ignore
         use reader = sql.ExecuteReader()

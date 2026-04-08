@@ -261,3 +261,10 @@ Feature: Account CLI Commands
         When I run the CLI with "account create --code crud-cli-dup --name Duplicate --type 1"
         Then stderr contains an error message
         And the exit code is 1
+
+    @FT-ACT-066
+    Scenario: Create with --external-ref flag stores the reference
+        Given a CLI-testable account environment with seeded data
+        When I run the CLI with "account create --code crud-cli-010 --name Ally Savings --type 1 --external-ref x0412"
+        Then stdout contains the account details
+        And the exit code is 0

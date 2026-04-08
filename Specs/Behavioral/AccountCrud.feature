@@ -83,3 +83,15 @@ Feature: Account CRUD
     Scenario: Creating an account with an invalid subtype for its type is rejected
         When I create an account with code "crud-6020", name "Bad Subtype Account", type expense, and subtype "Cash"
         Then the account creation fails with error containing "subtype"
+
+    # --- Create with External Reference ---
+
+    @FT-AC-012
+    Scenario: Creating an account with an external reference persists the value
+        When I create an account with code "crud-7010", name "FI Account", type asset, and external_ref "Fidelity-Z08806967"
+        Then the account is created with external_ref "Fidelity-Z08806967"
+
+    @FT-AC-013
+    Scenario: Creating an account without an external reference leaves it absent
+        When I create an account with code "crud-7020", name "No Ref Account", and type asset
+        Then the account is created with no external_ref

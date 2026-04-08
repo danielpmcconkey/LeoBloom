@@ -441,3 +441,24 @@ let ``create account with duplicate code returns exit 1 and stderr error`` () =
         cmd.Parameters.AddWithValue("@c", code) |> ignore
         cmd.ExecuteNonQuery() |> ignore
         conn.Dispose()
+
+// =====================================================================
+// account create -- External Reference
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-ACT-066")>]
+let ``create account with --external-ref flag returns exit 0 and displays details`` () =
+    let prefix = TestData.uniquePrefix()
+    let code = prefix + "EXT"
+    let conn = DataSource.openConnection()
+    try
+        let result = CliRunner.run (sprintf "account create --code %s --name \"Ally Savings\" --type 1 --external-ref x0412" code)
+        Assert.Equal(0, result.ExitCode)
+        let stdout = CliRunner.stripLogLines result.Stdout
+        Assert.Contains(code, stdout)
+    finally
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.account WHERE code = @c", conn)
+        cmd.Parameters.AddWithValue("@c", code) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
+        conn.Dispose()

@@ -24,9 +24,10 @@ module AccountBalanceRepository =
           parentId =
               if reader.IsDBNull(4) then None else Some (reader.GetInt32(4))
           subType = subType
-          isActive = reader.GetBoolean(6)
-          createdAt = reader.GetFieldValue<DateTimeOffset>(7)
-          modifiedAt = reader.GetFieldValue<DateTimeOffset>(8) }
+          externalRef = if reader.IsDBNull(6) then None else Some (reader.GetString(6))
+          isActive = reader.GetBoolean(7)
+          createdAt = reader.GetFieldValue<DateTimeOffset>(8)
+          modifiedAt = reader.GetFieldValue<DateTimeOffset>(9) }
 
     /// List accounts with optional type filter and inactive toggle.
     /// When includeInactive=false, only is_active=true rows are returned.
@@ -38,7 +39,7 @@ module AccountBalanceRepository =
         : Account list =
         let baseSql =
             "SELECT a.id, a.code, a.name, a.account_type_id, a.parent_id,
-                    a.account_subtype, a.is_active, a.created_at, a.modified_at
+                    a.account_subtype, a.external_ref, a.is_active, a.created_at, a.modified_at
              FROM ledger.account a
              JOIN ledger.account_type at ON a.account_type_id = at.id
              WHERE 1=1"
@@ -64,7 +65,7 @@ module AccountBalanceRepository =
     let findAccountById (txn: NpgsqlTransaction) (accountId: int) : Account option =
         use cmd = new NpgsqlCommand(
             "SELECT a.id, a.code, a.name, a.account_type_id, a.parent_id,
-                    a.account_subtype, a.is_active, a.created_at, a.modified_at
+                    a.account_subtype, a.external_ref, a.is_active, a.created_at, a.modified_at
              FROM ledger.account a
              WHERE a.id = @id",
             txn.Connection, txn)
@@ -82,7 +83,7 @@ module AccountBalanceRepository =
     let findAccountByCode (txn: NpgsqlTransaction) (code: string) : Account option =
         use cmd = new NpgsqlCommand(
             "SELECT a.id, a.code, a.name, a.account_type_id, a.parent_id,
-                    a.account_subtype, a.is_active, a.created_at, a.modified_at
+                    a.account_subtype, a.external_ref, a.is_active, a.created_at, a.modified_at
              FROM ledger.account a
              WHERE a.code = @code",
             txn.Connection, txn)
