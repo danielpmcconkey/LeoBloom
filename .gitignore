@@ -33,3 +33,4 @@ Thumbs.db
 
 # Seed data (real financial data stays out of git)
 **/seed-prod/
+.serena/cache/bash/document_symbols_cache_v23-06-25.pkl
