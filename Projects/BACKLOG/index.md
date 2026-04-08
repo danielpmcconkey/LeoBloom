@@ -77,6 +77,12 @@
 | **070** | **Missing portfolio CLI commands** | **Not started** |
 | **071** | **Consolidate CLI parseDate + fix TransferCommands** | **Not started** |
 | **072** | **Housekeeping batch (audit cleanup)** | **Not started** |
+| 073 | Connection injection + test isolation | Done |
+| 074 | Npgsql version alignment | Not started |
+| 075 | External account reference on ledger.account | Not started |
+| 076 | Account update CLI command | Not started |
+| **077** | **Account create CLI command** | **Not started** |
+| **078** | **Transaction import stage schema** | **Not started** |
 
 ---
 
@@ -104,6 +110,11 @@
 | 070 | `070-missing-portfolio-cli-commands.md` | Not started |
 | 071 | `071-cli-parsedate-consolidation.md` | Not started |
 | 072 | `072-housekeeping-batch.md` | Not started |
+| 074 | `074-npgsql-version-alignment.md` | Not started |
+| 075 | `075-external-account-reference.md` | Not started |
+| 076 | `076-account-update-cli.md` | Not started |
+| 077 | `077-account-create-cli.md` | Not started |
+| 078 | `078-stage-schema.md` | Not started |
 
 P028 (write-level ledger validation) has no spec file — it exists only in
 this index (status: Done, covered by 005/006).
@@ -229,6 +240,23 @@ Source: Nine-agent GAAP assessment, 2026-04-07. Reports in
 **Note:** Test harness structural issues (connection/transaction architecture)
 are being handled separately by BD as an architectural change. Cards 062-072
 are independent of that work and can proceed in parallel.
+
+### Transaction Import Pipeline (075-078)
+
+Hobson's import pipeline needs CLI and schema support from BD.
+
+**Sequencing:**
+- **077 (account create CLI)** — No dependencies. Needed first so Hobson can
+  expand the COA (~17 new accounts) before importing transactions.
+- **075 (external account reference)** — No dependencies. Adds `external_ref`
+  to `ledger.account` for FI account number mapping.
+- **076 (account update CLI)** — Soft dependency on 075. Hobson needs this to
+  populate `external_ref` and correct subtypes/names via CLI.
+- **078 (stage schema)** — No dependencies on 075-077. Can be built in parallel.
+  Creates the `stage` schema with per-FI staging tables and merchant rules.
+
+**Tonight's priority:** 077 first (unblocks COA expansion), then 078, then
+075 → 076. All four are independent enough to build in a single nightshift.
 
 ---
 
