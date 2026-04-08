@@ -4,6 +4,7 @@ open System
 open Argu
 open LeoBloom.Domain.Portfolio
 open LeoBloom.Portfolio
+open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 
 // --- PortfolioAccountArgs ---
@@ -184,15 +185,35 @@ let private handleAccountCreate (isJson: bool) (args: ParseResults<PortfolioAcco
     let name      = args.GetResult PortfolioAccountCreateArgs.Name
     let tbId      = args.GetResult PortfolioAccountCreateArgs.Tax_Bucket_Id
     let agId      = args.GetResult PortfolioAccountCreateArgs.Account_Group_Id
-    match InvestmentAccountService.createAccount name tbId agId with
-    | Ok acct  -> write isJson (Ok (acct :> obj))
-    | Error es -> write isJson (Error es)
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = InvestmentAccountService.createAccount txn name tbId agId
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        match result with
+        | Ok acct  -> write isJson (Ok (acct :> obj))
+        | Error es -> write isJson (Error es)
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleAccountList (isJson: bool) (args: ParseResults<PortfolioAccountListArgs>) : int =
     let isJson = isJson || args.Contains PortfolioAccountListArgs.Json
-    match InvestmentAccountService.listAccounts() with
-    | Ok accounts -> writeInvestmentAccountList isJson accounts
-    | Error es    -> write isJson (Error es)
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = InvestmentAccountService.listAccounts txn
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        match result with
+        | Ok accounts -> writeInvestmentAccountList isJson accounts
+        | Error es    -> write isJson (Error es)
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private dispatchAccount (isJson: bool) (args: ParseResults<PortfolioAccountArgs>) : int =
     match args.TryGetSubCommand() with
@@ -215,9 +236,19 @@ let private handleFundCreate (isJson: bool) (args: ParseResults<PortfolioFundCre
           sectorId         = args.TryGetResult PortfolioFundCreateArgs.Sector_Id
           regionId         = args.TryGetResult PortfolioFundCreateArgs.Region_Id
           objectiveId      = args.TryGetResult PortfolioFundCreateArgs.Objective_Id }
-    match FundService.createFund fund with
-    | Ok f     -> write isJson (Ok (f :> obj))
-    | Error es -> write isJson (Error es)
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = FundService.createFund txn fund
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        match result with
+        | Ok f     -> write isJson (Ok (f :> obj))
+        | Error es -> write isJson (Error es)
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleFundList (isJson: bool) (args: ParseResults<PortfolioFundListArgs>) : int =
     let isJson = isJson || args.Contains PortfolioFundListArgs.Json
@@ -231,22 +262,42 @@ let private handleFundList (isJson: bool) (args: ParseResults<PortfolioFundListA
     args.TryGetResult PortfolioFundListArgs.Objective_Id       |> Option.iter (fun id -> filters.Add(ByObjective id))
     if filters.Count > 1 then
         write isJson (Error ["Only one dimension filter may be specified at a time"])
-    elif filters.Count = 1 then
-        match FundService.listFundsByDimension filters.[0] with
-        | Ok funds -> writeFundList isJson funds
-        | Error es -> write isJson (Error es)
     else
-        match FundService.listFunds() with
-        | Ok funds -> writeFundList isJson funds
-        | Error es -> write isJson (Error es)
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result =
+                if filters.Count = 1 then
+                    FundService.listFundsByDimension txn filters.[0]
+                else
+                    FundService.listFunds txn
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            match result with
+            | Ok funds -> writeFundList isJson funds
+            | Error es -> write isJson (Error es)
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleFundShow (isJson: bool) (args: ParseResults<PortfolioFundShowArgs>) : int =
     let isJson = isJson || args.Contains PortfolioFundShowArgs.Json
     let symbol = args.GetResult PortfolioFundShowArgs.Symbol
-    match FundService.findFundBySymbol symbol with
-    | Ok (Some f) -> write isJson (Ok (f :> obj))
-    | Ok None     -> write isJson (Error [sprintf "Fund '%s' not found" symbol])
-    | Error es    -> write isJson (Error es)
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = FundService.findFundBySymbol txn symbol
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        match result with
+        | Ok (Some f) -> write isJson (Ok (f :> obj))
+        | Ok None     -> write isJson (Error [sprintf "Fund '%s' not found" symbol])
+        | Error es    -> write isJson (Error es)
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private dispatchFund (isJson: bool) (args: ParseResults<PortfolioFundArgs>) : int =
     match args.TryGetSubCommand() with
@@ -271,9 +322,19 @@ let private handlePositionRecord (isJson: bool) (args: ParseResults<PortfolioPos
     match parseDate dateRaw with
     | Error e -> write isJson (Error [e])
     | Ok date ->
-        match PositionService.recordPosition accountId symbol date price quantity value costBasis with
-        | Ok pos   -> write isJson (Ok (pos :> obj))
-        | Error es -> write isJson (Error es)
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = PositionService.recordPosition txn accountId symbol date price quantity value costBasis
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            match result with
+            | Ok pos   -> write isJson (Ok (pos :> obj))
+            | Error es -> write isJson (Error es)
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handlePositionList (isJson: bool) (args: ParseResults<PortfolioPositionListArgs>) : int =
     let isJson = isJson || args.Contains PortfolioPositionListArgs.Json
@@ -293,23 +354,40 @@ let private handlePositionList (isJson: bool) (args: ParseResults<PortfolioPosit
     if not dateErrors.IsEmpty then
         write isJson (Error dateErrors)
     else
-        let filter = { investmentAccountId = accountId; startDate = startDate; endDate = endDate }
-        match PositionService.listPositions filter with
-        | Ok positions -> writePositionList isJson positions
-        | Error es     -> write isJson (Error es)
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let filter = { investmentAccountId = accountId; startDate = startDate; endDate = endDate }
+            let result = PositionService.listPositions txn filter
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            match result with
+            | Ok positions -> writePositionList isJson positions
+            | Error es     -> write isJson (Error es)
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handlePositionLatest (isJson: bool) (args: ParseResults<PortfolioPositionLatestArgs>) : int =
     let isJson    = isJson || args.Contains PortfolioPositionLatestArgs.Json
     let accountId = args.TryGetResult PortfolioPositionLatestArgs.Account_Id
-    match accountId with
-    | Some id ->
-        match PositionService.latestPositionsByAccount id with
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result =
+            match accountId with
+            | Some id -> PositionService.latestPositionsByAccount txn id
+            | None    -> PositionService.latestPositionsAll txn
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        match result with
         | Ok positions -> writePositionList isJson positions
         | Error es     -> write isJson (Error es)
-    | None ->
-        match PositionService.latestPositionsAll() with
-        | Ok positions -> writePositionList isJson positions
-        | Error es     -> write isJson (Error es)
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private dispatchPosition (isJson: bool) (args: ParseResults<PortfolioPositionArgs>) : int =
     match args.TryGetSubCommand() with

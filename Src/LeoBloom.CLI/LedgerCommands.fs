@@ -2,8 +2,10 @@ module LeoBloom.CLI.LedgerCommands
 
 open System
 open Argu
+open Npgsql
 open LeoBloom.Domain.Ledger
 open LeoBloom.Ledger
+open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 
 // --- Argu DU definitions for ledger subcommands ---
@@ -126,28 +128,37 @@ let private handlePost (isJson: bool) (args: ParseResults<LedgerPostArgs>) : int
     if not errors.IsEmpty then
         write isJson (Error errors)
     else
-        let debitLines =
-            debitParsed |> List.map (fun r ->
-                let (acctId, amt) = Result.defaultValue (0, 0m) r
-                { accountId = acctId; amount = amt; entryType = EntryType.Debit; memo = None })
-        let creditLines =
-            creditParsed |> List.map (fun r ->
-                let (acctId, amt) = Result.defaultValue (0, 0m) r
-                { accountId = acctId; amount = amt; entryType = EntryType.Credit; memo = None })
-        let entryDate = match dateParsed with Ok d -> d | _ -> DateOnly.MinValue
-        let refs =
-            refsParsed |> List.map (fun r -> Result.defaultValue { referenceType = ""; referenceValue = "" } r)
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let debitLines =
+                debitParsed |> List.map (fun r ->
+                    let (acctId, amt) = Result.defaultValue (0, 0m) r
+                    { accountId = acctId; amount = amt; entryType = EntryType.Debit; memo = None })
+            let creditLines =
+                creditParsed |> List.map (fun r ->
+                    let (acctId, amt) = Result.defaultValue (0, 0m) r
+                    { accountId = acctId; amount = amt; entryType = EntryType.Credit; memo = None })
+            let entryDate = match dateParsed with Ok d -> d | _ -> DateOnly.MinValue
+            let refs =
+                refsParsed |> List.map (fun r -> Result.defaultValue { referenceType = ""; referenceValue = "" } r)
 
-        let cmd : PostJournalEntryCommand =
-            { entryDate = entryDate
-              description = description
-              source = source
-              fiscalPeriodId = fpId
-              lines = debitLines @ creditLines
-              references = refs }
+            let cmd : PostJournalEntryCommand =
+                { entryDate = entryDate
+                  description = description
+                  source = source
+                  fiscalPeriodId = fpId
+                  lines = debitLines @ creditLines
+                  references = refs }
 
-        let result = JournalEntryService.post cmd
-        write isJson (result |> Result.map (fun v -> v :> obj))
+            let result = JournalEntryService.post txn cmd
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleVoid (isJson: bool) (args: ParseResults<LedgerVoidArgs>) : int =
     let isJson = isJson || args.Contains LedgerVoidArgs.Json
@@ -158,15 +169,33 @@ let private handleVoid (isJson: bool) (args: ParseResults<LedgerVoidArgs>) : int
         { journalEntryId = entryId
           voidReason = reason }
 
-    let result = JournalEntryService.voidEntry cmd
-    write isJson (result |> Result.map (fun v -> v :> obj))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = JournalEntryService.voidEntry txn cmd
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        write isJson (result |> Result.map (fun v -> v :> obj))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleShow (isJson: bool) (args: ParseResults<LedgerShowArgs>) : int =
     let isJson = isJson || args.Contains LedgerShowArgs.Json
     let entryId = args.GetResult LedgerShowArgs.Entry_Id
 
-    let result = JournalEntryService.getEntry entryId
-    write isJson (result |> Result.map (fun v -> v :> obj))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = JournalEntryService.getEntry txn entryId
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        write isJson (result |> Result.map (fun v -> v :> obj))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 // --- Dispatch ---
 

@@ -2,6 +2,7 @@ module LeoBloom.Tests.LedgerCommandsTests
 
 open System
 open System.Text.Json
+open Npgsql
 open Xunit
 open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
@@ -16,26 +17,74 @@ module CliTestEnv =
     type Env =
         { DebitAccountId: int
           CreditAccountId: int
+          DebitAccountTypeId: int
+          CreditAccountTypeId: int
           FiscalPeriodId: int
-          Tracker: TestCleanup.Tracker }
+          Connection: NpgsqlConnection
+          mutable TrackedJournalEntryIds: int list }
 
     let create () =
         let conn = DataSource.openConnection()
-        let tracker = TestCleanup.create conn
         let prefix = TestData.uniquePrefix()
-        let atDebit = InsertHelpers.insertAccountType conn tracker (prefix + "_db") "debit"
-        let atCredit = InsertHelpers.insertAccountType conn tracker (prefix + "_cr") "credit"
-        let acctDebit = InsertHelpers.insertAccount conn tracker (prefix + "D1") "DebitAcct" atDebit true
-        let acctCredit = InsertHelpers.insertAccount conn tracker (prefix + "C1") "CreditAcct" atCredit true
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
+        let (atDebit, atCredit, acctDebit, acctCredit, fpId) =
+            use txn = conn.BeginTransaction()
+            let atDb = InsertHelpers.insertAccountType txn (prefix + "_db") "debit"
+            let atCr = InsertHelpers.insertAccountType txn (prefix + "_cr") "credit"
+            let aDb  = InsertHelpers.insertAccount txn (prefix + "D1") "DebitAcct" atDb true
+            let aCr  = InsertHelpers.insertAccount txn (prefix + "C1") "CreditAcct" atCr true
+            let fp   = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
+            txn.Commit()
+            (atDb, atCr, aDb, aCr, fp)
         { DebitAccountId = acctDebit
           CreditAccountId = acctCredit
+          DebitAccountTypeId = atDebit
+          CreditAccountTypeId = atCredit
           FiscalPeriodId = fpId
-          Tracker = tracker }
+          Connection = conn
+          TrackedJournalEntryIds = [] }
 
     let cleanup (env: Env) =
-        TestCleanup.deleteAll env.Tracker
-        env.Tracker.Connection.Dispose()
+        // Delete journal entry lines and entries for any tracked JEs
+        for jeId in env.TrackedJournalEntryIds do
+            use cmd0 = new NpgsqlCommand("DELETE FROM ledger.journal_entry_reference WHERE journal_entry_id = @id", env.Connection)
+            cmd0.Parameters.AddWithValue("@id", jeId) |> ignore
+            cmd0.ExecuteNonQuery() |> ignore
+            use cmd1 = new NpgsqlCommand("DELETE FROM ledger.journal_entry_line WHERE journal_entry_id = @id", env.Connection)
+            cmd1.Parameters.AddWithValue("@id", jeId) |> ignore
+            cmd1.ExecuteNonQuery() |> ignore
+            use cmd2 = new NpgsqlCommand("DELETE FROM ledger.journal_entry WHERE id = @id", env.Connection)
+            cmd2.Parameters.AddWithValue("@id", jeId) |> ignore
+            cmd2.ExecuteNonQuery() |> ignore
+        // Also catch any un-tracked JEs for our fiscal period
+        use cmdRef = new NpgsqlCommand(
+            "DELETE FROM ledger.journal_entry_reference WHERE journal_entry_id IN \
+             (SELECT id FROM ledger.journal_entry WHERE fiscal_period_id = @fp)", env.Connection)
+        cmdRef.Parameters.AddWithValue("@fp", env.FiscalPeriodId) |> ignore
+        cmdRef.ExecuteNonQuery() |> ignore
+        use cmd3 = new NpgsqlCommand(
+            "DELETE FROM ledger.journal_entry_line WHERE journal_entry_id IN \
+             (SELECT id FROM ledger.journal_entry WHERE fiscal_period_id = @fp)", env.Connection)
+        cmd3.Parameters.AddWithValue("@fp", env.FiscalPeriodId) |> ignore
+        cmd3.ExecuteNonQuery() |> ignore
+        use cmd4 = new NpgsqlCommand("DELETE FROM ledger.journal_entry WHERE fiscal_period_id = @fp", env.Connection)
+        cmd4.Parameters.AddWithValue("@fp", env.FiscalPeriodId) |> ignore
+        cmd4.ExecuteNonQuery() |> ignore
+        use cmd5 = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", env.Connection)
+        cmd5.Parameters.AddWithValue("@id", env.FiscalPeriodId) |> ignore
+        cmd5.ExecuteNonQuery() |> ignore
+        use cmd6 = new NpgsqlCommand("DELETE FROM ledger.account WHERE id = @id", env.Connection)
+        cmd6.Parameters.AddWithValue("@id", env.DebitAccountId) |> ignore
+        cmd6.ExecuteNonQuery() |> ignore
+        use cmd7 = new NpgsqlCommand("DELETE FROM ledger.account WHERE id = @id", env.Connection)
+        cmd7.Parameters.AddWithValue("@id", env.CreditAccountId) |> ignore
+        cmd7.ExecuteNonQuery() |> ignore
+        use cmd8 = new NpgsqlCommand("DELETE FROM ledger.account_type WHERE id = @id", env.Connection)
+        cmd8.Parameters.AddWithValue("@id", env.DebitAccountTypeId) |> ignore
+        cmd8.ExecuteNonQuery() |> ignore
+        use cmd9 = new NpgsqlCommand("DELETE FROM ledger.account_type WHERE id = @id", env.Connection)
+        cmd9.Parameters.AddWithValue("@id", env.CreditAccountTypeId) |> ignore
+        cmd9.ExecuteNonQuery() |> ignore
+        env.Connection.Dispose()
 
     /// Post an entry via CLI and return the entry ID parsed from stdout.
     /// Used to set up "a posted journal entry with known ID" for void/show tests.
@@ -52,7 +101,7 @@ module CliTestEnv =
         let spaceIdx = line.IndexOf(' ', hashIdx)
         let idStr = line.Substring(hashIdx + 1, spaceIdx - hashIdx - 1)
         let entryId = Int32.Parse(idStr)
-        TestCleanup.trackJournalEntry entryId env.Tracker
+        env.TrackedJournalEntryIds <- entryId :: env.TrackedJournalEntryIds
         entryId
 
     /// Post an entry via CLI and return the entry ID, using --json for more reliable parsing.
@@ -66,7 +115,7 @@ module CliTestEnv =
         let cleanStdout = CliRunner.stripLogLines result.Stdout
         let doc = JsonDocument.Parse(cleanStdout)
         let entryId = doc.RootElement.GetProperty("entry").GetProperty("id").GetInt32()
-        TestCleanup.trackJournalEntry entryId env.Tracker
+        env.TrackedJournalEntryIds <- entryId :: env.TrackedJournalEntryIds
         entryId
 
 
@@ -92,7 +141,7 @@ let ``post a valid journal entry via CLI`` () =
             let hashIdx = line.IndexOf('#')
             let spaceIdx = line.IndexOf(' ', hashIdx)
             let idStr = line.Substring(hashIdx + 1, spaceIdx - hashIdx - 1)
-            TestCleanup.trackJournalEntry (Int32.Parse(idStr)) env.Tracker
+            env.TrackedJournalEntryIds <- Int32.Parse(idStr) :: env.TrackedJournalEntryIds
     finally CliTestEnv.cleanup env
 
 [<Fact>]
@@ -111,7 +160,7 @@ let ``post with --json flag outputs JSON to stdout`` () =
         Assert.NotNull(doc)
         // Track for cleanup
         let entryId = doc.RootElement.GetProperty("entry").GetProperty("id").GetInt32()
-        TestCleanup.trackJournalEntry entryId env.Tracker
+        env.TrackedJournalEntryIds <- entryId :: env.TrackedJournalEntryIds
     finally CliTestEnv.cleanup env
 
 [<Fact>]
@@ -131,7 +180,7 @@ let ``post with optional --source flag includes source in output`` () =
             let hashIdx = line.IndexOf('#')
             let spaceIdx = line.IndexOf(' ', hashIdx)
             let idStr = line.Substring(hashIdx + 1, spaceIdx - hashIdx - 1)
-            TestCleanup.trackJournalEntry (Int32.Parse(idStr)) env.Tracker
+            env.TrackedJournalEntryIds <- Int32.Parse(idStr) :: env.TrackedJournalEntryIds
     finally CliTestEnv.cleanup env
 
 [<Fact>]
@@ -152,7 +201,7 @@ let ``post with --ref flag includes references in output`` () =
             let hashIdx = line.IndexOf('#')
             let spaceIdx = line.IndexOf(' ', hashIdx)
             let idStr = line.Substring(hashIdx + 1, spaceIdx - hashIdx - 1)
-            TestCleanup.trackJournalEntry (Int32.Parse(idStr)) env.Tracker
+            env.TrackedJournalEntryIds <- Int32.Parse(idStr) :: env.TrackedJournalEntryIds
     finally CliTestEnv.cleanup env
 
 // --- Missing Required Args ---

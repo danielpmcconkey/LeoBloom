@@ -16,8 +16,8 @@ let private revenueTypeId = 4
 let private expenseTypeId = 5
 let private assetTypeId = 1
 
-/// Post a balanced journal entry and track for cleanup.
-let private postEntry conn tracker acct1 acct2 fpId (entryDate: DateOnly) (desc: string) (amount: decimal) =
+/// Post a balanced journal entry within the caller's transaction.
+let private postEntry (txn: NpgsqlTransaction) acct1 acct2 fpId (entryDate: DateOnly) (desc: string) (amount: decimal) =
     let cmd =
         { entryDate = entryDate
           description = desc
@@ -27,60 +27,59 @@ let private postEntry conn tracker acct1 acct2 fpId (entryDate: DateOnly) (desc:
             [ { accountId = acct1; amount = amount; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = amount; entryType = EntryType.Credit; memo = None } ]
           references = [] }
-    match JournalEntryService.post cmd with
-    | Ok posted ->
-        TestCleanup.trackJournalEntry posted.entry.id tracker
-        posted.entry.id
+    match JournalEntryService.post txn cmd with
+    | Ok posted -> posted.entry.id
     | Error errs -> failwith (sprintf "Setup post failed: %A" errs)
 
 /// Create a full reporting test environment with Schedule E accounts.
-/// Returns (tracker, conn, fpId, account map).
+/// Returns (txn, fpId, account map).
 /// Account map keys: "4110", "4120", "5110", "5140", "5150", "5160", "5170", "5180", "5120", "5130", "5200", "5210", "1110"
 type ReportingEnv =
-    { Tracker: TestCleanup.Tracker
+    { Txn: NpgsqlTransaction
       Connection: NpgsqlConnection
       FiscalPeriodId: int
       Accounts: Map<string, int> }
 
 /// Look up a seed account's ID by code.
-let private seedAccountId (conn: NpgsqlConnection) (code: string) : int =
-    use cmd = new NpgsqlCommand("SELECT id FROM ledger.account WHERE code = @c", conn)
+let private seedAccountId (txn: NpgsqlTransaction) (code: string) : int =
+    use cmd = new NpgsqlCommand("SELECT id FROM ledger.account WHERE code = @c", txn.Connection)
+    cmd.Transaction <- txn
     cmd.Parameters.AddWithValue("@c", code) |> ignore
     cmd.ExecuteScalar() :?> int
 
 let private createReportingEnv () =
     let conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
+    let txn = conn.BeginTransaction()
     let prefix = TestData.uniquePrefix()
 
     // Create fiscal period covering 2026
-    let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31)) true
+    let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31)) true
 
     // Use seed accounts — ScheduleE mapping requires these exact codes.
-    // Seed data is populated by migrations; tests only create journal entries (tracked for cleanup).
+    // Seed data is populated by migrations; tests only create journal entries (tracked via txn rollback).
     let accounts =
         Map.ofList
-            [ "4110", seedAccountId conn "4110"
-              "4120", seedAccountId conn "4120"
-              "5110", seedAccountId conn "5110"
-              "5140", seedAccountId conn "5140"
-              "5150", seedAccountId conn "5150"
-              "5160", seedAccountId conn "5160"
-              "5170", seedAccountId conn "5170"
-              "5180", seedAccountId conn "5180"
-              "5120", seedAccountId conn "5120"
-              "5130", seedAccountId conn "5130"
-              "5200", seedAccountId conn "5200"
-              "5210", seedAccountId conn "5210"
-              "1110", seedAccountId conn "1110" ]
+            [ "4110", seedAccountId txn "4110"
+              "4120", seedAccountId txn "4120"
+              "5110", seedAccountId txn "5110"
+              "5140", seedAccountId txn "5140"
+              "5150", seedAccountId txn "5150"
+              "5160", seedAccountId txn "5160"
+              "5170", seedAccountId txn "5170"
+              "5180", seedAccountId txn "5180"
+              "5120", seedAccountId txn "5120"
+              "5130", seedAccountId txn "5130"
+              "5200", seedAccountId txn "5200"
+              "5210", seedAccountId txn "5210"
+              "1110", seedAccountId txn "1110" ]
 
-    { Tracker = tracker
+    { Txn = txn
       Connection = conn
       FiscalPeriodId = fpId
       Accounts = accounts }
 
 let private cleanupEnv (env: ReportingEnv) =
-    TestCleanup.deleteAll env.Tracker
+    env.Txn.Dispose()
     env.Connection.Dispose()
 
 // =====================================================================
@@ -134,18 +133,18 @@ let ``ScheduleE generate with valid year and activity returns correct report`` (
     let env = createReportingEnv()
     try
         // Post rental income: debit cash, credit revenue
-        postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
             (DateOnly(2026, 3, 1)) "March rent Tenant A" 2000m |> ignore
 
         // Post mortgage expense: debit expense, credit cash
-        postEntry env.Connection env.Tracker env.Accounts.["5110"] env.Accounts.["1110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["5110"] env.Accounts.["1110"] env.FiscalPeriodId
             (DateOnly(2026, 3, 5)) "March mortgage" 1200m |> ignore
 
         // Post HOA dues (line 19 sub-detail): debit expense, credit cash
-        postEntry env.Connection env.Tracker env.Accounts.["5160"] env.Accounts.["1110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["5160"] env.Accounts.["1110"] env.FiscalPeriodId
             (DateOnly(2026, 3, 10)) "March HOA" 250m |> ignore
 
-        let result = ScheduleEService.generate 2026
+        let result = ScheduleEService.generate env.Txn 2026
 
         match result with
         | Ok report ->
@@ -182,7 +181,7 @@ let ``ScheduleE generate with valid year and activity returns correct report`` (
 let ``ScheduleE generate with no activity returns zeroed report`` () =
     let env = createReportingEnv()
     try
-        let result = ScheduleEService.generate 2026
+        let result = ScheduleEService.generate env.Txn 2026
         match result with
         | Ok report ->
             Assert.Equal(2026, report.year)
@@ -197,14 +196,14 @@ let ``ScheduleE generate line 19 sub-detail includes multiple Other categories``
     let env = createReportingEnv()
     try
         // Post multiple line 19 expenses
-        postEntry env.Connection env.Tracker env.Accounts.["5160"] env.Accounts.["1110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["5160"] env.Accounts.["1110"] env.FiscalPeriodId
             (DateOnly(2026, 4, 1)) "April HOA" 300m |> ignore
-        postEntry env.Connection env.Tracker env.Accounts.["5120"] env.Accounts.["1110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["5120"] env.Accounts.["1110"] env.FiscalPeriodId
             (DateOnly(2026, 4, 5)) "April utilities" 150m |> ignore
-        postEntry env.Connection env.Tracker env.Accounts.["5200"] env.Accounts.["1110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["5200"] env.Accounts.["1110"] env.FiscalPeriodId
             (DateOnly(2026, 4, 10)) "April lawn" 75m |> ignore
 
-        let result = ScheduleEService.generate 2026
+        let result = ScheduleEService.generate env.Txn 2026
         match result with
         | Ok report ->
             let line19 = report.lineItems |> List.find (fun l -> l.lineNumber = 19)
@@ -219,7 +218,9 @@ let ``ScheduleE generate line 19 sub-detail includes multiple Other categories``
 
 [<Fact>]
 let ``ScheduleE generate rejects negative year`` () =
-    let result = ScheduleEService.generate -1
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = ScheduleEService.generate txn -1
     match result with
     | Error errs ->
         Assert.True(errs.Length > 0)
@@ -228,7 +229,9 @@ let ``ScheduleE generate rejects negative year`` () =
 
 [<Fact>]
 let ``ScheduleE generate rejects year before 1900`` () =
-    let result = ScheduleEService.generate 1800
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = ScheduleEService.generate txn 1800
     match result with
     | Error errs ->
         Assert.True(errs.Length > 0)
@@ -237,7 +240,9 @@ let ``ScheduleE generate rejects year before 1900`` () =
 
 [<Fact>]
 let ``ScheduleE generate rejects year after 2100`` () =
-    let result = ScheduleEService.generate 2200
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = ScheduleEService.generate txn 2200
     match result with
     | Error errs ->
         Assert.True(errs.Length > 0)
@@ -249,19 +254,19 @@ let ``ScheduleE generate excludes voided entries from balances`` () =
     let env = createReportingEnv()
     try
         // Post two rental income entries
-        postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
             (DateOnly(2026, 5, 1)) "May rent" 1500m |> ignore
         let voidableId =
-            postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+            postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
                 (DateOnly(2026, 5, 15)) "Bad rent entry" 500m
 
         // Void the second entry
         let voidCmd = { journalEntryId = voidableId; voidReason = "Posted in error" }
-        match JournalEntryService.voidEntry voidCmd with
+        match JournalEntryService.voidEntry env.Txn voidCmd with
         | Error errs -> failwith (sprintf "Void failed: %A" errs)
         | Ok _ -> ()
 
-        let result = ScheduleEService.generate 2026
+        let result = ScheduleEService.generate env.Txn 2026
         match result with
         | Ok report ->
             let line3 = report.lineItems |> List.find (fun l -> l.lineNumber = 3)
@@ -274,7 +279,7 @@ let ``ScheduleE generate excludes voided entries from balances`` () =
 let ``ScheduleE line items are ordered by line number`` () =
     let env = createReportingEnv()
     try
-        let result = ScheduleEService.generate 2026
+        let result = ScheduleEService.generate env.Txn 2026
         match result with
         | Ok report ->
             let lineNumbers = report.lineItems |> List.map (fun l -> l.lineNumber)
@@ -291,12 +296,12 @@ let ``GeneralLedger generate for valid account with activity returns entries`` (
     let env = createReportingEnv()
     try
         // Post some activity against 1110 (cash account)
-        postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
             (DateOnly(2026, 2, 1)) "Feb rent" 1800m |> ignore
-        postEntry env.Connection env.Tracker env.Accounts.["5110"] env.Accounts.["1110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["5110"] env.Accounts.["1110"] env.FiscalPeriodId
             (DateOnly(2026, 2, 5)) "Feb mortgage" 1200m |> ignore
 
-        let result = GeneralLedgerReportService.generate "1110" (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
+        let result = GeneralLedgerReportService.generate env.Txn "1110" (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
         match result with
         | Ok report ->
             Assert.Equal("1110", report.accountCode)
@@ -324,7 +329,7 @@ let ``GeneralLedger generate for valid account with activity returns entries`` (
 let ``GeneralLedger generate for account with no activity returns empty entries`` () =
     let env = createReportingEnv()
     try
-        let result = GeneralLedgerReportService.generate "4120" (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
+        let result = GeneralLedgerReportService.generate env.Txn "4120" (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
         match result with
         | Ok report ->
             Assert.Equal("4120", report.accountCode)
@@ -335,7 +340,9 @@ let ``GeneralLedger generate for account with no activity returns empty entries`
 
 [<Fact>]
 let ``GeneralLedger generate rejects nonexistent account code`` () =
-    let result = GeneralLedgerReportService.generate "9999" (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = GeneralLedgerReportService.generate txn "9999" (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
     match result with
     | Error errs ->
         Assert.True(errs |> List.exists (fun e -> e.Contains("does not exist")))
@@ -343,7 +350,9 @@ let ``GeneralLedger generate rejects nonexistent account code`` () =
 
 [<Fact>]
 let ``GeneralLedger generate rejects from date after to date`` () =
-    let result = GeneralLedgerReportService.generate "1110" (DateOnly(2026, 12, 31)) (DateOnly(2026, 1, 1))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = GeneralLedgerReportService.generate txn "1110" (DateOnly(2026, 12, 31)) (DateOnly(2026, 1, 1))
     match result with
     | Error errs ->
         Assert.True(errs |> List.exists (fun e -> e.Contains("after")))
@@ -351,7 +360,9 @@ let ``GeneralLedger generate rejects from date after to date`` () =
 
 [<Fact>]
 let ``GeneralLedger generate rejects empty account code`` () =
-    let result = GeneralLedgerReportService.generate "" (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = GeneralLedgerReportService.generate txn "" (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
     match result with
     | Error errs ->
         Assert.True(errs |> List.exists (fun e -> e.Contains("required")))
@@ -361,18 +372,18 @@ let ``GeneralLedger generate rejects empty account code`` () =
 let ``GeneralLedger excludes voided entries`` () =
     let env = createReportingEnv()
     try
-        postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
             (DateOnly(2026, 7, 1)) "Good entry" 1000m |> ignore
         let voidableId =
-            postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+            postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
                 (DateOnly(2026, 7, 15)) "Bad entry" 500m
 
         let voidCmd = { journalEntryId = voidableId; voidReason = "Mistake" }
-        match JournalEntryService.voidEntry voidCmd with
+        match JournalEntryService.voidEntry env.Txn voidCmd with
         | Error errs -> failwith (sprintf "Void failed: %A" errs)
         | Ok _ -> ()
 
-        let result = GeneralLedgerReportService.generate "1110" (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
+        let result = GeneralLedgerReportService.generate env.Txn "1110" (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
         match result with
         | Ok report ->
             // Should only see the non-voided entry's debit side on 1110
@@ -386,12 +397,12 @@ let ``GeneralLedger entries are ordered by date then entry ID`` () =
     let env = createReportingEnv()
     try
         // Post entries in non-chronological order
-        postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
             (DateOnly(2026, 8, 15)) "Mid Aug" 500m |> ignore
-        postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
             (DateOnly(2026, 8, 1)) "Early Aug" 300m |> ignore
 
-        let result = GeneralLedgerReportService.generate "1110" (DateOnly(2026, 8, 1)) (DateOnly(2026, 8, 31))
+        let result = GeneralLedgerReportService.generate env.Txn "1110" (DateOnly(2026, 8, 1)) (DateOnly(2026, 8, 31))
         match result with
         | Ok report ->
             Assert.True(report.entries.Length >= 2)
@@ -409,10 +420,10 @@ let ``CashReceipts returns debits to cash accounts as receipts`` () =
     let env = createReportingEnv()
     try
         // Debit to 1110 (cash in) = receipt
-        postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
             (DateOnly(2026, 3, 1)) "Rent received" 2000m |> ignore
 
-        let result = CashFlowReportService.getReceipts (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
+        let result = CashFlowReportService.getReceipts env.Txn (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
         match result with
         | Ok report ->
             Assert.True(report.entries.Length >= 1, sprintf "Expected at least 1 receipt, got %d" report.entries.Length)
@@ -428,10 +439,10 @@ let ``CashDisbursements returns credits to cash accounts as disbursements`` () =
     try
         // Credit to 1110 (cash out) = disbursement
         // Post: debit mortgage expense, credit cash
-        postEntry env.Connection env.Tracker env.Accounts.["5110"] env.Accounts.["1110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["5110"] env.Accounts.["1110"] env.FiscalPeriodId
             (DateOnly(2026, 3, 5)) "Mortgage payment" 1200m |> ignore
 
-        let result = CashFlowReportService.getDisbursements (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
+        let result = CashFlowReportService.getDisbursements env.Txn (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
         match result with
         | Ok report ->
             Assert.True(report.entries.Length >= 1, sprintf "Expected at least 1 disbursement, got %d" report.entries.Length)
@@ -445,10 +456,10 @@ let ``CashDisbursements returns credits to cash accounts as disbursements`` () =
 let ``CashReceipts includes counterparty account name`` () =
     let env = createReportingEnv()
     try
-        postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
             (DateOnly(2026, 4, 1)) "April rent" 1500m |> ignore
 
-        let result = CashFlowReportService.getReceipts (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
+        let result = CashFlowReportService.getReceipts env.Txn (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
         match result with
         | Ok report ->
             let receipt = report.entries |> List.find (fun e -> e.amount = 1500m)
@@ -459,7 +470,9 @@ let ``CashReceipts includes counterparty account name`` () =
 
 [<Fact>]
 let ``CashReceipts rejects from date after to date`` () =
-    let result = CashFlowReportService.getReceipts (DateOnly(2026, 12, 31)) (DateOnly(2026, 1, 1))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = CashFlowReportService.getReceipts txn (DateOnly(2026, 12, 31)) (DateOnly(2026, 1, 1))
     match result with
     | Error errs ->
         Assert.True(errs |> List.exists (fun e -> e.Contains("after")))
@@ -467,7 +480,9 @@ let ``CashReceipts rejects from date after to date`` () =
 
 [<Fact>]
 let ``CashDisbursements rejects from date after to date`` () =
-    let result = CashFlowReportService.getDisbursements (DateOnly(2026, 12, 31)) (DateOnly(2026, 1, 1))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = CashFlowReportService.getDisbursements txn (DateOnly(2026, 12, 31)) (DateOnly(2026, 1, 1))
     match result with
     | Error errs ->
         Assert.True(errs |> List.exists (fun e -> e.Contains("after")))
@@ -478,7 +493,7 @@ let ``CashReceipts with no activity returns empty report`` () =
     let env = createReportingEnv()
     try
         // Query a range with no activity
-        let result = CashFlowReportService.getReceipts (DateOnly(2099, 1, 1)) (DateOnly(2099, 12, 31))
+        let result = CashFlowReportService.getReceipts env.Txn (DateOnly(2099, 1, 1)) (DateOnly(2099, 12, 31))
         match result with
         | Ok report ->
             Assert.Equal(0, report.entries.Length)
@@ -490,7 +505,7 @@ let ``CashReceipts with no activity returns empty report`` () =
 let ``CashDisbursements with no activity returns empty report`` () =
     let env = createReportingEnv()
     try
-        let result = CashFlowReportService.getDisbursements (DateOnly(2099, 1, 1)) (DateOnly(2099, 12, 31))
+        let result = CashFlowReportService.getDisbursements env.Txn (DateOnly(2099, 1, 1)) (DateOnly(2099, 12, 31))
         match result with
         | Ok report ->
             Assert.Equal(0, report.entries.Length)
@@ -502,18 +517,18 @@ let ``CashDisbursements with no activity returns empty report`` () =
 let ``CashReceipts excludes voided entries`` () =
     let env = createReportingEnv()
     try
-        postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+        postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
             (DateOnly(2026, 9, 1)) "Good receipt" 800m |> ignore
         let voidableId =
-            postEntry env.Connection env.Tracker env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
+            postEntry env.Txn env.Accounts.["1110"] env.Accounts.["4110"] env.FiscalPeriodId
                 (DateOnly(2026, 9, 15)) "Bad receipt" 200m
 
         let voidCmd = { journalEntryId = voidableId; voidReason = "Duplicate" }
-        match JournalEntryService.voidEntry voidCmd with
+        match JournalEntryService.voidEntry env.Txn voidCmd with
         | Error errs -> failwith (sprintf "Void failed: %A" errs)
         | Ok _ -> ()
 
-        let result = CashFlowReportService.getReceipts (DateOnly(2026, 9, 1)) (DateOnly(2026, 9, 30))
+        let result = CashFlowReportService.getReceipts env.Txn (DateOnly(2026, 9, 1)) (DateOnly(2026, 9, 30))
         match result with
         | Ok report ->
             let entryIds = report.entries |> List.map (fun e -> e.journalEntryId) |> Set.ofList

@@ -6,7 +6,6 @@ open LeoBloom.Domain.Ledger
 open LeoBloom.Utilities
 
 /// Orchestrates validation and persistence for posting journal entries.
-/// Opens its own connection + transaction for atomicity.
 module JournalEntryService =
 
     // --- DB-dependent validation queries ---
@@ -80,8 +79,7 @@ module JournalEntryService =
         if errors.IsEmpty then Ok () else Error errors
 
     /// Post a journal entry: validate, persist, return result.
-    /// Opens its own connection and transaction.
-    let post (cmd: PostJournalEntryCommand) : Result<PostedJournalEntry, string list> =
+    let post (txn: NpgsqlTransaction) (cmd: PostJournalEntryCommand) : Result<PostedJournalEntry, string list> =
         Log.info "Posting journal entry for date {EntryDate}, fiscal period {FiscalPeriodId}" [| cmd.entryDate :> obj; cmd.fiscalPeriodId :> obj |]
         // Phase 1: Pure validation (no DB)
         match validateCommand cmd with
@@ -89,46 +87,33 @@ module JournalEntryService =
             Log.warn "Journal entry validation failed: {Errors}" [| errs :> obj |]
             Error errs
         | Ok () ->
-            // Phase 2: DB validation + persistence in a single transaction
-            use conn = DataSource.openConnection()
-            use txn = conn.BeginTransaction()
-
+            // Phase 2: DB validation + persistence
             try
                 match validateDbDependencies txn cmd with
                 | Error errs ->
                     Log.warn "Journal entry DB validation failed: {Errors}" [| errs :> obj |]
-                    txn.Rollback()
                     Error errs
                 | Ok () ->
                     let entry = JournalEntryRepository.insertEntry txn cmd
                     let lines = JournalEntryRepository.insertLines txn entry.id cmd.lines
                     let refs = JournalEntryRepository.insertReferences txn entry.id cmd.references
-                    txn.Commit()
                     Log.info "Posted journal entry {EntryId} successfully" [| entry.id :> obj |]
                     Ok { entry = entry; lines = lines; references = refs }
             with ex ->
                 Log.errorExn ex "Failed to persist journal entry" [||]
-                try txn.Rollback() with _ -> ()
                 Error [ sprintf "Persistence error: %s" ex.Message ]
 
     /// Retrieve a journal entry with its lines and references by ID.
-    /// Opens its own connection and transaction.
-    let getEntry (entryId: int) : Result<PostedJournalEntry, string list> =
+    let getEntry (txn: NpgsqlTransaction) (entryId: int) : Result<PostedJournalEntry, string list> =
         Log.info "Retrieving journal entry {EntryId}" [| entryId :> obj |]
-        use conn = DataSource.openConnection()
-        use txn = conn.BeginTransaction()
-
         try
             match JournalEntryRepository.getEntryById txn entryId with
             | Some posted ->
-                txn.Commit()
                 Ok posted
             | None ->
-                txn.Rollback()
                 Error [ sprintf "Journal entry with id %d does not exist" entryId ]
         with ex ->
             Log.errorExn ex "Failed to retrieve journal entry {EntryId}" [| entryId :> obj |]
-            try txn.Rollback() with _ -> ()
             Error [ sprintf "Persistence error: %s" ex.Message ]
 
     // --- Void operations ---
@@ -139,28 +124,21 @@ module JournalEntryService =
         else Ok ()
 
     /// Void a journal entry: validate, update, return result.
-    /// Opens its own connection and transaction.
-    let voidEntry (cmd: VoidJournalEntryCommand) : Result<JournalEntry, string list> =
+    let voidEntry (txn: NpgsqlTransaction) (cmd: VoidJournalEntryCommand) : Result<JournalEntry, string list> =
         Log.info "Voiding journal entry {EntryId}" [| cmd.journalEntryId :> obj |]
         match validateVoidCommand cmd with
         | Error errs ->
             Log.warn "Void validation failed: {Errors}" [| errs :> obj |]
             Error errs
         | Ok () ->
-            use conn = DataSource.openConnection()
-            use txn = conn.BeginTransaction()
-
             try
                 match JournalEntryRepository.voidEntry txn cmd.journalEntryId cmd.voidReason with
                 | Some entry ->
-                    txn.Commit()
                     Log.info "Voided journal entry {EntryId} successfully" [| entry.id :> obj |]
                     Ok entry
                 | None ->
-                    txn.Rollback()
                     Log.warn "Journal entry {EntryId} not found for voiding" [| cmd.journalEntryId :> obj |]
                     Error [ sprintf "Journal entry with id %d does not exist" cmd.journalEntryId ]
             with ex ->
                 Log.errorExn ex "Failed to void journal entry {EntryId}" [| cmd.journalEntryId :> obj |]
-                try txn.Rollback() with _ -> ()
                 Error [ sprintf "Persistence error: %s" ex.Message ]

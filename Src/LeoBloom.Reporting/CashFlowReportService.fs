@@ -1,11 +1,11 @@
 namespace LeoBloom.Reporting
 
 open System
+open Npgsql
 open LeoBloom.Utilities
 open LeoBloom.Reporting.ReportingTypes
 
 /// Orchestrates cash receipts and cash disbursements report generation.
-/// Opens its own connection + transaction.
 module CashFlowReportService =
 
     let private validateDateRange (fromDate: DateOnly) (toDate: DateOnly) : Result<unit, string list> =
@@ -15,7 +15,7 @@ module CashFlowReportService =
             Ok ()
 
     /// Generate a cash receipts report (money in).
-    let getReceipts (fromDate: DateOnly) (toDate: DateOnly) : Result<CashReceiptsReport, string list> =
+    let getReceipts (txn: NpgsqlTransaction) (fromDate: DateOnly) (toDate: DateOnly) : Result<CashReceiptsReport, string list> =
         Log.info "Generating cash receipts report from {From} to {To}" [| fromDate :> obj; toDate :> obj |]
 
         match validateDateRange fromDate toDate with
@@ -23,9 +23,6 @@ module CashFlowReportService =
             Log.warn "Cash receipts validation failed: {Errors}" [| errs :> obj |]
             Error errs
         | Ok () ->
-            use conn = DataSource.openConnection()
-            use txn = conn.BeginTransaction()
-
             try
                 let rows = CashFlowRepository.getReceipts txn fromDate toDate
 
@@ -40,7 +37,6 @@ module CashFlowReportService =
 
                 let total = entries |> List.sumBy (fun e -> e.amount)
 
-                txn.Commit()
                 Log.info "Cash receipts report generated: {Count} entries" [| entries.Length :> obj |]
 
                 Ok { fromDate = fromDate
@@ -49,11 +45,10 @@ module CashFlowReportService =
                      totalReceipts = total }
             with ex ->
                 Log.errorExn ex "Failed to generate cash receipts report" [||]
-                try txn.Rollback() with _ -> ()
                 Error [ sprintf "Query error: %s" ex.Message ]
 
     /// Generate a cash disbursements report (money out).
-    let getDisbursements (fromDate: DateOnly) (toDate: DateOnly) : Result<CashDisbursementsReport, string list> =
+    let getDisbursements (txn: NpgsqlTransaction) (fromDate: DateOnly) (toDate: DateOnly) : Result<CashDisbursementsReport, string list> =
         Log.info "Generating cash disbursements report from {From} to {To}" [| fromDate :> obj; toDate :> obj |]
 
         match validateDateRange fromDate toDate with
@@ -61,9 +56,6 @@ module CashFlowReportService =
             Log.warn "Cash disbursements validation failed: {Errors}" [| errs :> obj |]
             Error errs
         | Ok () ->
-            use conn = DataSource.openConnection()
-            use txn = conn.BeginTransaction()
-
             try
                 let rows = CashFlowRepository.getDisbursements txn fromDate toDate
 
@@ -78,7 +70,6 @@ module CashFlowReportService =
 
                 let total = entries |> List.sumBy (fun e -> e.amount)
 
-                txn.Commit()
                 Log.info "Cash disbursements report generated: {Count} entries" [| entries.Length :> obj |]
 
                 Ok { fromDate = fromDate
@@ -87,5 +78,4 @@ module CashFlowReportService =
                      totalDisbursements = total }
             with ex ->
                 Log.errorExn ex "Failed to generate cash disbursements report" [||]
-                try txn.Rollback() with _ -> ()
                 Error [ sprintf "Query error: %s" ex.Message ]

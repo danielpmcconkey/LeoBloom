@@ -23,19 +23,19 @@ module ProjectionEnv =
           CheckingCode: string
           CounterId: int
           FiscalPeriodId: int
-          Tracker: TestCleanup.Tracker
+          Txn: NpgsqlTransaction
           Connection: NpgsqlConnection }
 
     /// Create a projection environment with the given opening balance on the checking account.
     /// Posts a journal entry: debit checking, credit counter by `balance`.
     let create (balance: decimal) =
         let conn = DataSource.openConnection()
-        let tracker = TestCleanup.create conn
+        let txn = conn.BeginTransaction()
         let prefix = TestData.uniquePrefix()
         let assetTypeId = 1 // pre-seeded "asset" type (normal_balance = 'debit')
-        let checkingId = InsertHelpers.insertAccount conn tracker (prefix + "CK") (prefix + "_checking") assetTypeId true
-        let counterId = InsertHelpers.insertAccount conn tracker (prefix + "CT") (prefix + "_counter") assetTypeId true
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31)) true
+        let checkingId = InsertHelpers.insertAccount txn (prefix + "CK") (prefix + "_checking") assetTypeId true
+        let counterId = InsertHelpers.insertAccount txn (prefix + "CT") (prefix + "_counter") assetTypeId true
+        let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31)) true
         if balance <> 0m then
             let jeCmd : LeoBloom.Domain.Ledger.PostJournalEntryCommand =
                 { entryDate = DateOnly(2026, 4, 1)
@@ -46,14 +46,14 @@ module ProjectionEnv =
                     [ { accountId = checkingId; amount = balance; entryType = LeoBloom.Domain.Ledger.EntryType.Debit; memo = None }
                       { accountId = counterId; amount = balance; entryType = LeoBloom.Domain.Ledger.EntryType.Credit; memo = None } ]
                   references = [] }
-            match JournalEntryService.post jeCmd with
-            | Ok posted -> TestCleanup.trackJournalEntry posted.entry.id tracker
+            match JournalEntryService.post txn jeCmd with
+            | Ok _ -> ()
             | Error errs -> failwith (sprintf "Failed to post opening balance entry: %A" errs)
         { CheckingId = checkingId
           CheckingCode = prefix + "CK"
           CounterId = counterId
           FiscalPeriodId = fpId
-          Tracker = tracker
+          Txn = txn
           Connection = conn }
 
     /// Insert a receivable obligation agreement targeting checking as dest_account_id.
@@ -62,12 +62,11 @@ module ProjectionEnv =
             "INSERT INTO ops.obligation_agreement \
              (name, obligation_type, cadence, dest_account_id, is_active) \
              VALUES (@n, 'receivable', 'one_time', @dest, true) RETURNING id",
-            env.Connection)
+            env.Txn.Connection)
+        cmd.Transaction <- env.Txn
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@dest", env.CheckingId) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackObligationAgreement id env.Tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
     /// Insert a payable obligation agreement with checking as source_account_id.
     let insertPayableAgreement (env: Env) (name: string) (amount: decimal option) : int =
@@ -75,12 +74,11 @@ module ProjectionEnv =
             "INSERT INTO ops.obligation_agreement \
              (name, obligation_type, cadence, source_account_id, is_active) \
              VALUES (@n, 'payable', 'one_time', @src, true) RETURNING id",
-            env.Connection)
+            env.Txn.Connection)
+        cmd.Transaction <- env.Txn
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@src", env.CheckingId) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackObligationAgreement id env.Tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
     /// Insert an obligation instance for the given agreement.
     let insertInstance (env: Env) (agreementId: int) (expectedDate: DateOnly) (amount: decimal option) : int =
@@ -88,7 +86,8 @@ module ProjectionEnv =
             "INSERT INTO ops.obligation_instance \
              (obligation_agreement_id, name, status, expected_date, amount, is_active) \
              VALUES (@aid, 'Test instance', 'expected', @ed, @amt, true) RETURNING id",
-            env.Connection)
+            env.Txn.Connection)
+        cmd.Transaction <- env.Txn
         cmd.Parameters.AddWithValue("@aid", agreementId) |> ignore
         cmd.Parameters.AddWithValue("@ed", expectedDate) |> ignore
         match amount with
@@ -105,7 +104,7 @@ module ProjectionEnv =
               initiatedDate = initiatedDate
               expectedSettlement = expectedSettlement
               description = Some "Test transfer out" }
-        match TransferService.initiate cmd with
+        match TransferService.initiate env.Txn cmd with
         | Ok t -> t.id
         | Error errs -> failwith (sprintf "Failed to initiate transfer out: %A" errs)
 
@@ -118,12 +117,12 @@ module ProjectionEnv =
               initiatedDate = initiatedDate
               expectedSettlement = expectedSettlement
               description = Some "Test transfer in" }
-        match TransferService.initiate cmd with
+        match TransferService.initiate env.Txn cmd with
         | Ok t -> t.id
         | Error errs -> failwith (sprintf "Failed to initiate transfer in: %A" errs)
 
     let cleanup (env: Env) =
-        TestCleanup.deleteAll env.Tracker
+        env.Txn.Dispose()
         env.Connection.Dispose()
 
 // =====================================================================
@@ -147,7 +146,7 @@ let private day3 = today.AddDays(3)
 let ``flat line when no future obligations or transfers`` () =
     let env = ProjectionEnv.create 5000m
     try
-        let result = BalanceProjectionService.project env.CheckingCode day3
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode day3
         match result with
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
         | Ok projection ->
@@ -172,7 +171,7 @@ let ``receivable inflow increases projected balance on expected_date`` () =
     try
         let agId = ProjectionEnv.insertReceivableAgreement env "Rent" None
         ProjectionEnv.insertInstance env agId dayAfter (Some 500m) |> ignore
-        let result = BalanceProjectionService.project env.CheckingCode day3
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode day3
         match result with
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
         | Ok projection ->
@@ -192,7 +191,7 @@ let ``payable outflow decreases projected balance on expected_date`` () =
     try
         let agId = ProjectionEnv.insertPayableAgreement env "Mortgage" None
         ProjectionEnv.insertInstance env agId tomorrow (Some 400m) |> ignore
-        let result = BalanceProjectionService.project env.CheckingCode day3
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode day3
         match result with
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
         | Ok projection ->
@@ -211,7 +210,7 @@ let ``initiated transfer out decreases projected balance on settlement date`` ()
     let env = ProjectionEnv.create 3000m
     try
         ProjectionEnv.insertTransferOut env 800m today (Some dayAfter) |> ignore
-        let result = BalanceProjectionService.project env.CheckingCode day3
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode day3
         match result with
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
         | Ok projection ->
@@ -229,7 +228,7 @@ let ``initiated transfer in increases projected balance on settlement date`` () 
     let env = ProjectionEnv.create 1000m
     try
         ProjectionEnv.insertTransferIn env 600m today (Some tomorrow) |> ignore
-        let result = BalanceProjectionService.project env.CheckingCode day3
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode day3
         match result with
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
         | Ok projection ->
@@ -247,7 +246,7 @@ let ``transfer with no expected_settlement uses initiated_date as projection dat
     let env = ProjectionEnv.create 2000m
     try
         ProjectionEnv.insertTransferOut env 300m dayAfter None |> ignore
-        let result = BalanceProjectionService.project env.CheckingCode day3
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode day3
         match result with
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
         | Ok projection ->
@@ -270,7 +269,7 @@ let ``all projection components combine correctly`` () =
         ProjectionEnv.insertInstance env payAg dayAfter (Some 400m) |> ignore
         ProjectionEnv.insertTransferOut env 200m today (Some dayAfter) |> ignore
         ProjectionEnv.insertTransferIn env 100m today (Some dayAfter) |> ignore
-        let result = BalanceProjectionService.project env.CheckingCode dayAfter
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode dayAfter
         match result with
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
         | Ok projection ->
@@ -287,7 +286,7 @@ let ``all projection components combine correctly`` () =
 let ``projection series includes every day from today through projection_date`` () =
     let env = ProjectionEnv.create 1000m
     try
-        let result = BalanceProjectionService.project env.CheckingCode day3
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode day3
         match result with
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
         | Ok projection ->
@@ -314,7 +313,7 @@ let ``multiple obligations on same day are summed with itemized breakdown`` () =
         ProjectionEnv.insertInstance env rcvAg tomorrow (Some 500m) |> ignore
         ProjectionEnv.insertInstance env pay1Ag tomorrow (Some 200m) |> ignore
         ProjectionEnv.insertInstance env pay2Ag tomorrow (Some 150m) |> ignore
-        let result = BalanceProjectionService.project env.CheckingCode day3
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode day3
         match result with
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
         | Ok projection ->
@@ -336,7 +335,7 @@ let ``null-amount payable obligation surfaces as unknown outflow`` () =
     try
         let agId = ProjectionEnv.insertPayableAgreement env "Mystery expense" None
         ProjectionEnv.insertInstance env agId dayAfter None |> ignore
-        let result = BalanceProjectionService.project env.CheckingCode day3
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode day3
         match result with
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
         | Ok projection ->
@@ -360,7 +359,7 @@ let ``null-amount receivable obligation surfaces as unknown inflow`` () =
     try
         let agId = ProjectionEnv.insertReceivableAgreement env "Mystery income" None
         ProjectionEnv.insertInstance env agId dayAfter None |> ignore
-        let result = BalanceProjectionService.project env.CheckingCode day3
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode day3
         match result with
         | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
         | Ok projection ->
@@ -383,7 +382,7 @@ let ``projection date in the past is rejected`` () =
     let env = ProjectionEnv.create 1000m
     try
         let pastDate = today.AddDays(-1)
-        let result = BalanceProjectionService.project env.CheckingCode pastDate
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode pastDate
         match result with
         | Ok _ -> Assert.Fail("Expected Error for past projection date")
         | Error errs ->
@@ -400,7 +399,7 @@ let ``projection date in the past is rejected`` () =
 let ``projection date equal to today is rejected`` () =
     let env = ProjectionEnv.create 1000m
     try
-        let result = BalanceProjectionService.project env.CheckingCode today
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode today
         match result with
         | Ok _ -> Assert.Fail("Expected Error for today as projection date")
         | Error errs ->
@@ -415,7 +414,9 @@ let ``projection date equal to today is rejected`` () =
 [<Fact>]
 [<Trait("GherkinId", "FT-BP-014")>]
 let ``nonexistent account returns error`` () =
-    let result = BalanceProjectionService.project "ZZZZ_NONEXISTENT" day3
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = BalanceProjectionService.project txn "ZZZZ_NONEXISTENT" day3
     match result with
     | Ok _ -> Assert.Fail("Expected Error for nonexistent account")
     | Error errs ->

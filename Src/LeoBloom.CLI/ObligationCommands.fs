@@ -4,6 +4,7 @@ open System
 open Argu
 open LeoBloom.Domain.Ops
 open LeoBloom.Ops
+open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 
 // --- Agreement leaf arg types ---
@@ -267,20 +268,35 @@ let private handleAgreementList (isJson: bool) (args: ParseResults<AgreementList
     | Error e, _ -> write isJson (Error [e])
     | _, Error e -> write isJson (Error [e])
     | Ok obligationType, Ok cadence ->
-        let isActive = if includeInactive then None else Some true
-        let filter : ListAgreementsFilter =
-            { isActive = isActive
-              obligationType = obligationType
-              cadence = cadence }
-        let agreements = ObligationAgreementService.list filter
-        writeAgreementList isJson agreements
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let isActive = if includeInactive then None else Some true
+            let filter : ListAgreementsFilter =
+                { isActive = isActive
+                  obligationType = obligationType
+                  cadence = cadence }
+            let agreements = ObligationAgreementService.list txn filter
+            txn.Commit()
+            writeAgreementList isJson agreements
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleAgreementShow (isJson: bool) (args: ParseResults<AgreementShowArgs>) : int =
     let isJson = isJson || args.Contains AgreementShowArgs.Json
     let id = args.GetResult AgreementShowArgs.Id
-    match ObligationAgreementService.getById id with
-    | None -> write isJson (Error [sprintf "Obligation agreement with id %d does not exist" id])
-    | Some agreement -> write isJson (Ok (agreement :> obj))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let found = ObligationAgreementService.getById txn id
+        txn.Commit()
+        match found with
+        | None -> write isJson (Error [sprintf "Obligation agreement with id %d does not exist" id])
+        | Some agreement -> write isJson (Ok (agreement :> obj))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleAgreementCreate (isJson: bool) (args: ParseResults<AgreementCreateArgs>) : int =
     let isJson = isJson || args.Contains AgreementCreateArgs.Json
@@ -305,19 +321,28 @@ let private handleAgreementCreate (isJson: bool) (args: ParseResults<AgreementCr
     | _, Error e, _ -> write isJson (Error [e])
     | _, _, Error e -> write isJson (Error [e])
     | Ok obligationType, Ok cadence, Ok paymentMethod ->
-        let cmd : CreateObligationAgreementCommand =
-            { name = nameRaw
-              obligationType = obligationType
-              counterparty = counterparty
-              amount = amount
-              cadence = cadence
-              expectedDay = expectedDay
-              paymentMethod = paymentMethod
-              sourceAccountId = sourceAccount
-              destAccountId = destAccount
-              notes = notes }
-        let result = ObligationAgreementService.create cmd
-        write isJson (result |> Result.map (fun v -> v :> obj))
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let cmd : CreateObligationAgreementCommand =
+                { name = nameRaw
+                  obligationType = obligationType
+                  counterparty = counterparty
+                  amount = amount
+                  cadence = cadence
+                  expectedDay = expectedDay
+                  paymentMethod = paymentMethod
+                  sourceAccountId = sourceAccount
+                  destAccountId = destAccount
+                  notes = notes }
+            let result = ObligationAgreementService.create txn cmd
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleAgreementUpdate (isJson: bool) (args: ParseResults<AgreementUpdateArgs>) : int =
     let isJson = isJson || args.Contains AgreementUpdateArgs.Json
@@ -344,27 +369,45 @@ let private handleAgreementUpdate (isJson: bool) (args: ParseResults<AgreementUp
     | _, Error e, _ -> write isJson (Error [e])
     | _, _, Error e -> write isJson (Error [e])
     | Ok obligationType, Ok cadence, Ok paymentMethod ->
-        let cmd : UpdateObligationAgreementCommand =
-            { id = id
-              name = nameRaw
-              obligationType = obligationType
-              counterparty = counterparty
-              amount = amount
-              cadence = cadence
-              expectedDay = expectedDay
-              paymentMethod = paymentMethod
-              sourceAccountId = sourceAccount
-              destAccountId = destAccount
-              isActive = isActive
-              notes = notes }
-        let result = ObligationAgreementService.update cmd
-        write isJson (result |> Result.map (fun v -> v :> obj))
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let cmd : UpdateObligationAgreementCommand =
+                { id = id
+                  name = nameRaw
+                  obligationType = obligationType
+                  counterparty = counterparty
+                  amount = amount
+                  cadence = cadence
+                  expectedDay = expectedDay
+                  paymentMethod = paymentMethod
+                  sourceAccountId = sourceAccount
+                  destAccountId = destAccount
+                  isActive = isActive
+                  notes = notes }
+            let result = ObligationAgreementService.update txn cmd
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleAgreementDeactivate (isJson: bool) (args: ParseResults<AgreementDeactivateArgs>) : int =
     let isJson = isJson || args.Contains AgreementDeactivateArgs.Json
     let id = args.GetResult AgreementDeactivateArgs.Id
-    let result = ObligationAgreementService.deactivate id
-    write isJson (result |> Result.map (fun v -> v :> obj))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = ObligationAgreementService.deactivate txn id
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        write isJson (result |> Result.map (fun v -> v :> obj))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 // --- Instance handlers ---
 
@@ -384,12 +427,19 @@ let private handleInstanceList (isJson: bool) (args: ParseResults<InstanceListAr
     | _, Error e, _ -> write isJson (Error [e])
     | _, _, Error e -> write isJson (Error [e])
     | Ok status, Ok dueBefore, Ok dueAfter ->
-        let filter : ListInstancesFilter =
-            { status = status
-              dueBefore = dueBefore
-              dueAfter = dueAfter }
-        let instances = ObligationInstanceService.list filter
-        writeInstanceList isJson instances
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let filter : ListInstancesFilter =
+                { status = status
+                  dueBefore = dueBefore
+                  dueAfter = dueAfter }
+            let instances = ObligationInstanceService.list txn filter
+            txn.Commit()
+            writeInstanceList isJson instances
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleInstanceSpawn (isJson: bool) (args: ParseResults<InstanceSpawnArgs>) : int =
     let isJson = isJson || args.Contains InstanceSpawnArgs.Json
@@ -401,13 +451,23 @@ let private handleInstanceSpawn (isJson: bool) (args: ParseResults<InstanceSpawn
     | Error e, _ -> write isJson (Error [e])
     | _, Error e -> write isJson (Error [e])
     | Ok startDate, Ok endDate ->
-        let cmd : SpawnObligationInstancesCommand =
-            { obligationAgreementId = agreementId
-              startDate = startDate
-              endDate = endDate }
-        match ObligationInstanceService.spawn cmd with
-        | Error errs -> write isJson (Error errs)
-        | Ok result -> writeSpawnResult isJson result
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let cmd : SpawnObligationInstancesCommand =
+                { obligationAgreementId = agreementId
+                  startDate = startDate
+                  endDate = endDate }
+            let result = ObligationInstanceService.spawn txn cmd
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            match result with
+            | Error errs -> write isJson (Error errs)
+            | Ok spawnResult -> writeSpawnResult isJson spawnResult
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleInstanceTransition (isJson: bool) (args: ParseResults<InstanceTransitionArgs>) : int =
     let isJson = isJson || args.Contains InstanceTransitionArgs.Json
@@ -422,23 +482,42 @@ let private handleInstanceTransition (isJson: bool) (args: ParseResults<Instance
     | Error e, _ -> write isJson (Error [e])
     | _, Error e -> write isJson (Error [e])
     | Ok targetStatus, Ok confirmedDate ->
-        let cmd : TransitionCommand =
-            { instanceId = instanceId
-              targetStatus = targetStatus
-              amount = amount
-              confirmedDate = confirmedDate
-              journalEntryId = journalEntryId
-              notes = notes }
-        let result = ObligationInstanceService.transition cmd
-        write isJson (result |> Result.map (fun v -> v :> obj))
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let cmd : TransitionCommand =
+                { instanceId = instanceId
+                  targetStatus = targetStatus
+                  amount = amount
+                  confirmedDate = confirmedDate
+                  journalEntryId = journalEntryId
+                  notes = notes }
+            let result = ObligationInstanceService.transition txn cmd
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleInstancePost (isJson: bool) (args: ParseResults<InstancePostArgs>) : int =
     let isJson = isJson || args.Contains InstancePostArgs.Json
     let instanceId = args.GetResult InstancePostArgs.Instance_Id
     let cmd : PostToLedgerCommand = { instanceId = instanceId }
-    match ObligationPostingService.postToLedger cmd with
-    | Error errs -> write isJson (Error errs)
-    | Ok result -> writePostResult isJson result
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = ObligationPostingService.postToLedger txn cmd
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        match result with
+        | Error errs -> write isJson (Error errs)
+        | Ok postResult -> writePostResult isJson postResult
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 // --- Overdue / Upcoming handlers ---
 
@@ -449,16 +528,30 @@ let private handleOverdue (isJson: bool) (args: ParseResults<OverdueArgs>) : int
     match parseOptDate asOfRaw with
     | Error e -> write isJson (Error [e])
     | Ok dateOpt ->
-        let referenceDate = dateOpt |> Option.defaultWith (fun () -> DateOnly.FromDateTime(DateTime.Today))
-        let result = ObligationInstanceService.detectOverdue referenceDate
-        writeOverdueResult isJson result
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let referenceDate = dateOpt |> Option.defaultWith (fun () -> DateOnly.FromDateTime(DateTime.Today))
+            let result = ObligationInstanceService.detectOverdue txn referenceDate
+            txn.Commit()
+            writeOverdueResult isJson result
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleUpcoming (isJson: bool) (args: ParseResults<UpcomingArgs>) : int =
     let isJson = isJson || args.Contains UpcomingArgs.Json
     let days = args.TryGetResult UpcomingArgs.Days |> Option.defaultValue 30
     let today = DateOnly.FromDateTime(DateTime.Today)
-    let instances = ObligationInstanceService.findUpcoming today days
-    writeInstanceList isJson instances
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let instances = ObligationInstanceService.findUpcoming txn today days
+        txn.Commit()
+        writeInstanceList isJson instances
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 // --- Dispatch ---
 

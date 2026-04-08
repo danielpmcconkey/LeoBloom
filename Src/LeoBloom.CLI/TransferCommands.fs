@@ -4,6 +4,7 @@ open System
 open Argu
 open LeoBloom.Domain.Ops
 open LeoBloom.Ops
+open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 
 // --- Argu DU definitions for transfer subcommands ---
@@ -101,25 +102,43 @@ let private handleInitiate (isJson: bool) (args: ParseResults<TransferInitiateAr
             | Error e ->
                 write isJson (Error [e])
             | Ok esDate ->
+                use conn = DataSource.openConnection()
+                use txn = conn.BeginTransaction()
+                try
+                    let cmd : InitiateTransferCommand =
+                        { fromAccountId = fromAccount
+                          toAccountId = toAccount
+                          amount = amount
+                          initiatedDate = initiatedDate
+                          expectedSettlement = Some esDate
+                          description = description }
+                    let result = TransferService.initiate txn cmd
+                    match result with
+                    | Ok _ -> txn.Commit()
+                    | Error _ -> txn.Rollback()
+                    write isJson (result |> Result.map (fun v -> v :> obj))
+                with ex ->
+                    try txn.Rollback() with _ -> ()
+                    reraise()
+        | None ->
+            use conn = DataSource.openConnection()
+            use txn = conn.BeginTransaction()
+            try
                 let cmd : InitiateTransferCommand =
                     { fromAccountId = fromAccount
                       toAccountId = toAccount
                       amount = amount
                       initiatedDate = initiatedDate
-                      expectedSettlement = Some esDate
+                      expectedSettlement = None
                       description = description }
-                let result = TransferService.initiate cmd
+                let result = TransferService.initiate txn cmd
+                match result with
+                | Ok _ -> txn.Commit()
+                | Error _ -> txn.Rollback()
                 write isJson (result |> Result.map (fun v -> v :> obj))
-        | None ->
-            let cmd : InitiateTransferCommand =
-                { fromAccountId = fromAccount
-                  toAccountId = toAccount
-                  amount = amount
-                  initiatedDate = initiatedDate
-                  expectedSettlement = None
-                  description = description }
-            let result = TransferService.initiate cmd
-            write isJson (result |> Result.map (fun v -> v :> obj))
+            with ex ->
+                try txn.Rollback() with _ -> ()
+                reraise()
 
 let private handleConfirm (isJson: bool) (args: ParseResults<TransferConfirmArgs>) : int =
     let isJson = isJson || args.Contains TransferConfirmArgs.Json
@@ -130,11 +149,20 @@ let private handleConfirm (isJson: bool) (args: ParseResults<TransferConfirmArgs
     | Error e ->
         write isJson (Error [e])
     | Ok confirmedDate ->
-        let cmd : ConfirmTransferCommand =
-            { transferId = transferId
-              confirmedDate = confirmedDate }
-        let result = TransferService.confirm cmd
-        write isJson (result |> Result.map (fun v -> v :> obj))
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let cmd : ConfirmTransferCommand =
+                { transferId = transferId
+                  confirmedDate = confirmedDate }
+            let result = TransferService.confirm txn cmd
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleList (isJson: bool) (args: ParseResults<TransferListArgs>) : int =
     let isJson = isJson || args.Contains TransferListArgs.Json
@@ -174,19 +202,35 @@ let private handleList (isJson: bool) (args: ParseResults<TransferListArgs>) : i
     | _, Error e, _ -> write isJson (Error [e])
     | _, _, Error e -> write isJson (Error [e])
     | Ok status, Ok fromDate, Ok toDate ->
-        let filter : ListTransfersFilter =
-            { status = status
-              fromDate = fromDate
-              toDate = toDate }
-        let transfers = TransferService.list filter
-        writeTransferList isJson transfers
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let filter : ListTransfersFilter =
+                { status = status
+                  fromDate = fromDate
+                  toDate = toDate }
+            let transfers = TransferService.list txn filter
+            txn.Commit()
+            writeTransferList isJson transfers
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleShow (isJson: bool) (args: ParseResults<TransferShowArgs>) : int =
     let isJson = isJson || args.Contains TransferShowArgs.Json
     let transferId = args.GetResult TransferShowArgs.Transfer_Id
 
-    let result = TransferService.show transferId
-    write isJson (result |> Result.map (fun v -> v :> obj))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = TransferService.show txn transferId
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        write isJson (result |> Result.map (fun v -> v :> obj))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 // --- Dispatch ---
 

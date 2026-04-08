@@ -14,7 +14,7 @@ module OpeningBalanceService =
           normalBalance: string
           accountTypeName: string }
 
-    let private lookupAccounts (conn: NpgsqlConnection) (accountIds: int list) : AccountInfo list =
+    let private lookupAccounts (txn: NpgsqlTransaction) (accountIds: int list) : AccountInfo list =
         if accountIds.IsEmpty then []
         else
             let paramNames =
@@ -26,7 +26,7 @@ module OpeningBalanceService =
                              FROM ledger.account a
                              JOIN ledger.account_type at ON a.account_type_id = at.id
                              WHERE a.id IN (%s)" paramNames
-            use cmd = new NpgsqlCommand(query, conn)
+            use cmd = new NpgsqlCommand(query, txn.Connection, txn)
             accountIds
             |> List.iteri (fun i aid ->
                 cmd.Parameters.AddWithValue(sprintf "@a%d" i, aid) |> ignore)
@@ -62,7 +62,7 @@ module OpeningBalanceService =
 
         if errors.IsEmpty then Ok () else Error (List.rev errors)
 
-    let post (cmd: PostOpeningBalancesCommand) : Result<PostedJournalEntry, string list> =
+    let post (txn: NpgsqlTransaction) (cmd: PostOpeningBalancesCommand) : Result<PostedJournalEntry, string list> =
         Log.info "Posting opening balances for {EntryCount} accounts, fiscal period {FiscalPeriodId}" [| cmd.entries.Length :> obj; cmd.fiscalPeriodId :> obj |]
 
         match validateCommand cmd with
@@ -71,9 +71,8 @@ module OpeningBalanceService =
             Error errs
         | Ok () ->
             // Look up normal balance direction for all accounts + balancing account
-            use conn = DataSource.openConnection()
             let allAccountIds = cmd.balancingAccountId :: (cmd.entries |> List.map (fun e -> e.accountId))
-            let accountInfos = lookupAccounts conn allAccountIds
+            let accountInfos = lookupAccounts txn allAccountIds
             let infoMap = accountInfos |> List.map (fun a -> a.id, a) |> Map.ofList
 
             let mutable errors = []
@@ -142,4 +141,4 @@ module OpeningBalanceService =
                       lines = allLines
                       references = [] }
 
-                JournalEntryService.post jeCmd
+                JournalEntryService.post txn jeCmd

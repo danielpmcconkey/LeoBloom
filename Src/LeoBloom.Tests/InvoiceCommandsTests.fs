@@ -2,6 +2,7 @@ module LeoBloom.Tests.InvoiceCommandsTests
 
 open System
 open System.Text.Json
+open Npgsql
 open Xunit
 open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
@@ -16,20 +17,29 @@ module InvoiceCliEnv =
     type Env =
         { FiscalPeriodId: int
           Prefix: string
-          Tracker: TestCleanup.Tracker }
+          Connection: NpgsqlConnection }
 
     let create () =
         let conn = DataSource.openConnection()
-        let tracker = TestCleanup.create conn
         let prefix = TestData.uniquePrefix()
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
+        let fpId =
+            use txn = conn.BeginTransaction()
+            let id = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2099, 4, 1)) (DateOnly(2099, 4, 30)) true
+            txn.Commit()
+            id
         { FiscalPeriodId = fpId
           Prefix = prefix
-          Tracker = tracker }
+          Connection = conn }
 
     let cleanup (env: Env) =
-        TestCleanup.deleteAll env.Tracker
-        env.Tracker.Connection.Dispose()
+        // Delete invoices for this fiscal period first (FK), then the period
+        use cmd1 = new NpgsqlCommand("DELETE FROM ops.invoice WHERE fiscal_period_id = @fp", env.Connection)
+        cmd1.Parameters.AddWithValue("@fp", env.FiscalPeriodId) |> ignore
+        cmd1.ExecuteNonQuery() |> ignore
+        use cmd2 = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", env.Connection)
+        cmd2.Parameters.AddWithValue("@id", env.FiscalPeriodId) |> ignore
+        cmd2.ExecuteNonQuery() |> ignore
+        env.Connection.Dispose()
 
     /// Record an invoice via CLI (human mode) and return the invoice ID.
     let recordInvoiceViaCli (env: Env) (tenant: string) : int =
@@ -45,9 +55,7 @@ module InvoiceCliEnv =
         let hashIdx = line.IndexOf('#')
         let rest = line.Substring(hashIdx + 1).Trim()
         let idStr = rest.Split([| ' '; '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries).[0]
-        let invoiceId = Int32.Parse(idStr)
-        TestCleanup.trackInvoice invoiceId env.Tracker
-        invoiceId
+        Int32.Parse(idStr)
 
     /// Record an invoice via CLI (JSON mode) and return the invoice ID.
     let recordInvoiceViaCliJson (env: Env) (tenant: string) : int =
@@ -59,9 +67,7 @@ module InvoiceCliEnv =
             failwith (sprintf "Failed to record invoice for test setup. stderr: %s" result.Stderr)
         let cleanStdout = CliRunner.stripLogLines result.Stdout
         let doc = JsonDocument.Parse(cleanStdout)
-        let invoiceId = doc.RootElement.GetProperty("id").GetInt32()
-        TestCleanup.trackInvoice invoiceId env.Tracker
-        invoiceId
+        doc.RootElement.GetProperty("id").GetInt32()
 
 // =====================================================================
 // invoice record -- Happy Path
@@ -85,13 +91,6 @@ let ``record an invoice with all required and optional args`` () =
         Assert.Contains("85.5", stdout)
         Assert.Contains("/docs/inv-001.pdf", stdout)
         Assert.Contains("April charges", stdout)
-        // Track for cleanup
-        if stdout.Contains("Invoice #") then
-            let line = stdout.Split('\n') |> Array.find (fun l -> l.Contains("Invoice #"))
-            let hashIdx = line.IndexOf('#')
-            let rest = line.Substring(hashIdx + 1).Trim()
-            let idStr = rest.Split([| ' '; '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries).[0]
-            TestCleanup.trackInvoice (Int32.Parse(idStr)) env.Tracker
     finally InvoiceCliEnv.cleanup env
 
 [<Fact>]
@@ -108,9 +107,6 @@ let ``record an invoice with --json flag outputs valid JSON`` () =
         let cleanStdout = CliRunner.stripLogLines result.Stdout
         let doc = JsonDocument.Parse(cleanStdout)
         Assert.NotNull(doc)
-        // Track for cleanup
-        let invoiceId = doc.RootElement.GetProperty("id").GetInt32()
-        TestCleanup.trackInvoice invoiceId env.Tracker
     finally InvoiceCliEnv.cleanup env
 
 // =====================================================================

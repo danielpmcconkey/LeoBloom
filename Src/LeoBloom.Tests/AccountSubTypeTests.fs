@@ -27,7 +27,18 @@ let private parseSubType (s: string) : AccountSubType =
     | Ok v -> v
     | Error msg -> failwithf "Bad subtype in test data: %s" msg
 
-/// Read account_subtype from DB by account code.
+/// Read account_subtype from DB by account code within a transaction.
+let private readSubTypeByCodeTxn (txn: NpgsqlTransaction) (code: string) : string option =
+    use cmd = new NpgsqlCommand(
+        "SELECT account_subtype FROM ledger.account WHERE code = @c",
+        txn.Connection)
+    cmd.Transaction <- txn
+    cmd.Parameters.AddWithValue("@c", code) |> ignore
+    let result = cmd.ExecuteScalar()
+    if result = null || result = (box DBNull.Value) then None
+    else Some (result :?> string)
+
+/// Read account_subtype from DB by account code using a bare connection (for seed-data reads).
 let private readSubTypeByCode (conn: NpgsqlConnection) (code: string) : string option =
     use cmd = new NpgsqlCommand(
         "SELECT account_subtype FROM ledger.account WHERE code = @c",
@@ -37,11 +48,12 @@ let private readSubTypeByCode (conn: NpgsqlConnection) (code: string) : string o
     if result = null || result = (box DBNull.Value) then None
     else Some (result :?> string)
 
-/// Update account_subtype by account code.
-let private updateSubType (conn: NpgsqlConnection) (code: string) (subType: string option) =
+/// Update account_subtype by account code within a transaction.
+let private updateSubTypeTxn (txn: NpgsqlTransaction) (code: string) (subType: string option) =
     use cmd = new NpgsqlCommand(
         "UPDATE ledger.account SET account_subtype = @st WHERE code = @c",
-        conn)
+        txn.Connection)
+    cmd.Transaction <- txn
     cmd.Parameters.AddWithValue("@c", code) |> ignore
     match subType with
     | Some s -> cmd.Parameters.AddWithValue("@st", s) |> ignore
@@ -163,15 +175,13 @@ let ``fromDbString rejects an unrecognized string`` () =
 [<Trait("GherkinId", "@FT-AST-007")>]
 let ``Account with subtype persists and reads back correctly`` () =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let atId = InsertHelpers.insertAccountType conn tracker (TestData.accountTypeName prefix) "debit"
-        let code = sprintf "%s1110" prefix
-        InsertHelpers.insertAccountWithSubType conn tracker code (sprintf "%s_checking" prefix) atId true (Some "Cash") |> ignore
-        let result = readSubTypeByCode conn code
-        Assert.Equal(Some "Cash", result)
-    finally TestCleanup.deleteAll tracker
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let atId = InsertHelpers.insertAccountType txn (TestData.accountTypeName prefix) "debit"
+    let code = sprintf "%s1110" prefix
+    InsertHelpers.insertAccountWithSubType txn code (sprintf "%s_checking" prefix) atId true (Some "Cash") |> ignore
+    let result = readSubTypeByCodeTxn txn code
+    Assert.Equal(Some "Cash", result)
 
 // =====================================================================
 // FT-AST-008: Account with null subtype persists and reads back correctly
@@ -181,15 +191,13 @@ let ``Account with subtype persists and reads back correctly`` () =
 [<Trait("GherkinId", "@FT-AST-008")>]
 let ``Account with null subtype persists and reads back correctly`` () =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let atId = InsertHelpers.insertAccountType conn tracker (TestData.accountTypeName prefix) "debit"
-        let code = sprintf "%s1000" prefix
-        InsertHelpers.insertAccountWithSubType conn tracker code (sprintf "%s_header" prefix) atId true None |> ignore
-        let result = readSubTypeByCode conn code
-        Assert.Equal(None, result)
-    finally TestCleanup.deleteAll tracker
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let atId = InsertHelpers.insertAccountType txn (TestData.accountTypeName prefix) "debit"
+    let code = sprintf "%s1000" prefix
+    InsertHelpers.insertAccountWithSubType txn code (sprintf "%s_header" prefix) atId true None |> ignore
+    let result = readSubTypeByCodeTxn txn code
+    Assert.Equal(None, result)
 
 // =====================================================================
 // FT-AST-009: Subtypes round-trip through write and read paths
@@ -208,17 +216,15 @@ let ``Account with null subtype persists and reads back correctly`` () =
 [<InlineData("5210", "expense", "OtherExpense")>]
 let ``Subtypes round-trip through write and read paths`` (codeSuffix: string) (accountType: string) (subtype: string) =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let atId = accountTypeNameToId accountType
-        // Use a seed account_type_id directly — they exist in the DB from seed migrations.
-        // Create a unique account with the given subtype.
-        let code = sprintf "%s%s" prefix codeSuffix
-        InsertHelpers.insertAccountWithSubType conn tracker code (sprintf "%s_test" prefix) atId true (Some subtype) |> ignore
-        let result = readSubTypeByCode conn code
-        Assert.Equal(Some subtype, result)
-    finally TestCleanup.deleteAll tracker
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let atId = accountTypeNameToId accountType
+    // Use a seed account_type_id directly — they exist in the DB from seed migrations.
+    // Create a unique account with the given subtype.
+    let code = sprintf "%s%s" prefix codeSuffix
+    InsertHelpers.insertAccountWithSubType txn code (sprintf "%s_test" prefix) atId true (Some subtype) |> ignore
+    let result = readSubTypeByCodeTxn txn code
+    Assert.Equal(Some subtype, result)
 
 // =====================================================================
 // FT-AST-010: Invalid subtype for account type is rejected by domain validation
@@ -261,24 +267,22 @@ let ``Invalid subtype change is rejected by domain validation`` () =
 [<Trait("GherkinId", "@FT-AST-013")>]
 let ``Updating an account to a valid subtype succeeds`` () =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let atId = InsertHelpers.insertAccountType conn tracker (TestData.accountTypeName prefix) "debit"
-        let code = sprintf "%s1110" prefix
-        InsertHelpers.insertAccountWithSubType conn tracker code (sprintf "%s_checking" prefix) atId true (Some "Cash") |> ignore
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let atId = InsertHelpers.insertAccountType txn (TestData.accountTypeName prefix) "debit"
+    let code = sprintf "%s1110" prefix
+    InsertHelpers.insertAccountWithSubType txn code (sprintf "%s_checking" prefix) atId true (Some "Cash") |> ignore
 
-        // Validate that Investment is valid for Asset
-        let isValid = AccountSubType.isValidSubType "Asset" (Some Investment)
-        Assert.True(isValid, "Investment should be valid for Asset")
+    // Validate that Investment is valid for Asset
+    let isValid = AccountSubType.isValidSubType "Asset" (Some Investment)
+    Assert.True(isValid, "Investment should be valid for Asset")
 
-        // Perform the update
-        updateSubType conn code (Some "Investment")
+    // Perform the update
+    updateSubTypeTxn txn code (Some "Investment")
 
-        // Verify the update persisted
-        let result = readSubTypeByCode conn code
-        Assert.Equal(Some "Investment", result)
-    finally TestCleanup.deleteAll tracker
+    // Verify the update persisted
+    let result = readSubTypeByCodeTxn txn code
+    Assert.Equal(Some "Investment", result)
 
 // =====================================================================
 // FT-AST-014: Updating an account to null subtype succeeds
@@ -288,24 +292,22 @@ let ``Updating an account to a valid subtype succeeds`` () =
 [<Trait("GherkinId", "@FT-AST-014")>]
 let ``Updating an account to null subtype succeeds`` () =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let atId = InsertHelpers.insertAccountType conn tracker (TestData.accountTypeName prefix) "debit"
-        let code = sprintf "%s1110" prefix
-        InsertHelpers.insertAccountWithSubType conn tracker code (sprintf "%s_checking" prefix) atId true (Some "Cash") |> ignore
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let atId = InsertHelpers.insertAccountType txn (TestData.accountTypeName prefix) "debit"
+    let code = sprintf "%s1110" prefix
+    InsertHelpers.insertAccountWithSubType txn code (sprintf "%s_checking" prefix) atId true (Some "Cash") |> ignore
 
-        // Validate that None is valid for Asset
-        let isValid = AccountSubType.isValidSubType "Asset" None
-        Assert.True(isValid, "None should be valid for Asset")
+    // Validate that None is valid for Asset
+    let isValid = AccountSubType.isValidSubType "Asset" None
+    Assert.True(isValid, "None should be valid for Asset")
 
-        // Perform the update
-        updateSubType conn code None
+    // Perform the update
+    updateSubTypeTxn txn code None
 
-        // Verify the update persisted
-        let result = readSubTypeByCode conn code
-        Assert.Equal(None, result)
-    finally TestCleanup.deleteAll tracker
+    // Verify the update persisted
+    let result = readSubTypeByCodeTxn txn code
+    Assert.Equal(None, result)
 
 // =====================================================================
 // FT-AST-015: Seed accounts have expected subtypes after migration

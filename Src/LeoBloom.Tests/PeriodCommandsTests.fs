@@ -2,6 +2,7 @@ module LeoBloom.Tests.PeriodCommandsTests
 
 open System
 open System.Text.Json
+open Npgsql
 open Xunit
 open LeoBloom.Utilities
 open LeoBloom.Ledger
@@ -24,29 +25,37 @@ module PeriodCliEnv =
     type Env =
         { PeriodId: int
           PeriodKey: string
-          Tracker: TestCleanup.Tracker }
+          Connection: NpgsqlConnection }
 
     /// Create an open period for close tests.
     let createOpen () =
         let conn = DataSource.openConnection()
-        let tracker = TestCleanup.create conn
         let prefix = TestData.uniquePrefix()
         let key = TestData.periodKey prefix
-        let periodId = InsertHelpers.insertFiscalPeriod conn tracker key (DateOnly(2093, 1, 1)) (DateOnly(2093, 1, 31)) true
-        { PeriodId = periodId; PeriodKey = key; Tracker = tracker }
+        let periodId =
+            use txn = conn.BeginTransaction()
+            let id = InsertHelpers.insertFiscalPeriod txn key (DateOnly(2093, 1, 1)) (DateOnly(2093, 1, 31)) true
+            txn.Commit()
+            id
+        { PeriodId = periodId; PeriodKey = key; Connection = conn }
 
     /// Create a closed period for reopen tests.
     let createClosed () =
         let conn = DataSource.openConnection()
-        let tracker = TestCleanup.create conn
         let prefix = TestData.uniquePrefix()
         let key = TestData.periodKey prefix
-        let periodId = InsertHelpers.insertFiscalPeriod conn tracker key (DateOnly(2093, 2, 1)) (DateOnly(2093, 2, 28)) false
-        { PeriodId = periodId; PeriodKey = key; Tracker = tracker }
+        let periodId =
+            use txn = conn.BeginTransaction()
+            let id = InsertHelpers.insertFiscalPeriod txn key (DateOnly(2093, 2, 1)) (DateOnly(2093, 2, 28)) false
+            txn.Commit()
+            id
+        { PeriodId = periodId; PeriodKey = key; Connection = conn }
 
     let cleanup (env: Env) =
-        TestCleanup.deleteAll env.Tracker
-        env.Tracker.Connection.Dispose()
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", env.Connection)
+        cmd.Parameters.AddWithValue("@id", env.PeriodId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
+        env.Connection.Dispose()
 
 // =====================================================================
 // period (no subcommand)
@@ -225,23 +234,17 @@ let ``create a new fiscal period with all required args`` () =
     let prefix = TestData.uniquePrefix()
     let key = sprintf "%sCR" prefix
     let conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
     try
         let args = sprintf "period create --start 2093-05-01 --end 2093-05-31 --key \"%s\"" key
         let result = CliRunner.run args
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
         Assert.Contains(key, stdout)
-        // Track the created period for cleanup
-        let jsonResult = CliRunner.run (sprintf "period list --json")
-        let cleanJson = CliRunner.stripLogLines jsonResult.Stdout
-        let doc = JsonDocument.Parse(cleanJson)
-        let periods = doc.RootElement.EnumerateArray()
-        for p in periods do
-            if p.GetProperty("periodKey").GetString() = key then
-                TestCleanup.trackFiscalPeriod (p.GetProperty("id").GetInt32()) tracker
+        // Clean up the created period (committed by CLI)
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE period_key = @k", conn)
+        cmd.Parameters.AddWithValue("@k", key) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
     finally
-        TestCleanup.deleteAll tracker
         conn.Dispose()
 
 [<Fact>]
@@ -250,7 +253,6 @@ let ``create with --json flag outputs valid JSON`` () =
     let prefix = TestData.uniquePrefix()
     let key = sprintf "%sCJ" prefix
     let conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
     try
         let args = sprintf "period create --start 2093-06-01 --end 2093-06-30 --key \"%s\" --json" key
         let result = CliRunner.run args
@@ -258,11 +260,12 @@ let ``create with --json flag outputs valid JSON`` () =
         let cleanStdout = CliRunner.stripLogLines result.Stdout
         let doc = JsonDocument.Parse(cleanStdout)
         Assert.NotNull(doc)
-        // Track created period for cleanup
+        // Clean up the created period
         let createdId = doc.RootElement.GetProperty("id").GetInt32()
-        TestCleanup.trackFiscalPeriod createdId tracker
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", conn)
+        cmd.Parameters.AddWithValue("@id", createdId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
     finally
-        TestCleanup.deleteAll tracker
         conn.Dispose()
 
 // =====================================================================
@@ -325,17 +328,21 @@ let ``create with duplicate period key prints error to stderr`` () =
     let prefix = TestData.uniquePrefix()
     let key = sprintf "%sDK" prefix
     let conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
+    let periodId =
+        use txn = conn.BeginTransaction()
+        let id = InsertHelpers.insertFiscalPeriod txn key (DateOnly(2093, 7, 1)) (DateOnly(2093, 7, 31)) true
+        txn.Commit()
+        id
     try
-        // Create a period first
-        let _periodId = InsertHelpers.insertFiscalPeriod conn tracker key (DateOnly(2093, 7, 1)) (DateOnly(2093, 7, 31)) true
         // Try to create another period with the same key
         let args = sprintf "period create --start 2093-07-01 --end 2093-07-31 --key \"%s\"" key
         let result = CliRunner.run args
         Assert.Equal(1, result.ExitCode)
         Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
     finally
-        TestCleanup.deleteAll tracker
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", conn)
+        cmd.Parameters.AddWithValue("@id", periodId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
         conn.Dispose()
 
 // =====================================================================
@@ -357,7 +364,6 @@ let ``--json flag produces valid JSON for period create`` () =
     let prefix = TestData.uniquePrefix()
     let key = sprintf "%sJF" prefix
     let conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
     try
         let args = sprintf "period create --start 2093-07-01 --end 2093-07-31 --key \"%s\" --json" key
         let result = CliRunner.run args
@@ -365,11 +371,12 @@ let ``--json flag produces valid JSON for period create`` () =
         let cleanStdout = CliRunner.stripLogLines result.Stdout
         let doc = JsonDocument.Parse(cleanStdout)
         Assert.NotNull(doc)
-        // Track for cleanup
+        // Clean up the created period
         let createdId = doc.RootElement.GetProperty("id").GetInt32()
-        TestCleanup.trackFiscalPeriod createdId tracker
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", conn)
+        cmd.Parameters.AddWithValue("@id", createdId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
     finally
-        TestCleanup.deleteAll tracker
         conn.Dispose()
 
 // =====================================================================
@@ -381,7 +388,9 @@ let ``--json flag produces valid JSON for period create`` () =
 [<Fact>]
 [<Trait("Category", "Service")>]
 let ``createPeriod rejects blank period key`` () =
-    let result = FiscalPeriodService.createPeriod "" (DateOnly(2093, 8, 1)) (DateOnly(2093, 8, 31))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = FiscalPeriodService.createPeriod txn "" (DateOnly(2093, 8, 1)) (DateOnly(2093, 8, 31))
     match result with
     | Error errs ->
         Assert.Contains("Period key is required and cannot be blank", errs)
@@ -391,7 +400,9 @@ let ``createPeriod rejects blank period key`` () =
 [<Fact>]
 [<Trait("Category", "Service")>]
 let ``createPeriod rejects whitespace-only period key`` () =
-    let result = FiscalPeriodService.createPeriod "   " (DateOnly(2093, 8, 1)) (DateOnly(2093, 8, 31))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = FiscalPeriodService.createPeriod txn "   " (DateOnly(2093, 8, 1)) (DateOnly(2093, 8, 31))
     match result with
     | Error errs ->
         Assert.Contains("Period key is required and cannot be blank", errs)
@@ -401,7 +412,9 @@ let ``createPeriod rejects whitespace-only period key`` () =
 [<Fact>]
 [<Trait("Category", "Service")>]
 let ``createPeriod rejects start date after end date`` () =
-    let result = FiscalPeriodService.createPeriod "test-key" (DateOnly(2093, 8, 31)) (DateOnly(2093, 8, 1))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result = FiscalPeriodService.createPeriod txn "test-key" (DateOnly(2093, 8, 31)) (DateOnly(2093, 8, 1))
     match result with
     | Error errs ->
         Assert.Contains("Start date must be on or before end date", errs)
@@ -414,20 +427,28 @@ let ``createPeriod returns friendly error on duplicate key`` () =
     let prefix = TestData.uniquePrefix()
     let key = sprintf "%sSV" prefix
     let conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
+    let periodId =
+        use txn = conn.BeginTransaction()
+        let id = InsertHelpers.insertFiscalPeriod txn key (DateOnly(2093, 9, 1)) (DateOnly(2093, 9, 30)) true
+        txn.Commit()
+        id
     try
-        // Create a period first via direct insert
-        let _periodId = InsertHelpers.insertFiscalPeriod conn tracker key (DateOnly(2093, 9, 1)) (DateOnly(2093, 9, 30)) true
         // Try to create another via the service with the same key
-        let result = FiscalPeriodService.createPeriod key (DateOnly(2093, 9, 1)) (DateOnly(2093, 9, 30))
+        use txn2 = conn.BeginTransaction()
+        let result = FiscalPeriodService.createPeriod txn2 key (DateOnly(2093, 9, 1)) (DateOnly(2093, 9, 30))
         match result with
         | Error errs ->
             let hasExpectedMsg = errs |> List.exists (fun e -> e.Contains("already exists"))
             Assert.True(hasExpectedMsg, sprintf "Expected 'already exists' error, got: %A" errs)
         | Ok period ->
             // Clean up the accidentally created period
-            TestCleanup.trackFiscalPeriod period.id tracker
+            txn2.Rollback()
+            use delCmd = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", conn)
+            delCmd.Parameters.AddWithValue("@id", period.id) |> ignore
+            delCmd.ExecuteNonQuery() |> ignore
             Assert.Fail("Expected Error for duplicate key, got Ok")
     finally
-        TestCleanup.deleteAll tracker
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", conn)
+        cmd.Parameters.AddWithValue("@id", periodId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
         conn.Dispose()

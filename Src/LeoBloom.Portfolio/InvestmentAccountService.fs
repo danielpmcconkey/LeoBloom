@@ -6,10 +6,12 @@ open LeoBloom.Domain.Portfolio
 open LeoBloom.Utilities
 
 /// Orchestrates validation and persistence for investment account operations.
+/// Caller is responsible for connection and transaction lifecycle.
 module InvestmentAccountService =
 
     /// Create a new investment account. Validates name is non-blank.
     let createAccount
+        (txn: NpgsqlTransaction)
         (name: string)
         (taxBucketId: int)
         (accountGroupId: int)
@@ -21,28 +23,20 @@ module InvestmentAccountService =
             Error (errors |> Seq.toList)
         else
             Log.info "Creating investment account {Name}" [| name :> obj |]
-            use conn = DataSource.openConnection()
-            use txn = conn.BeginTransaction()
             try
                 let acct = InvestmentAccountRepository.create txn name taxBucketId accountGroupId
-                txn.Commit()
                 Log.info "Created investment account {Id}" [| acct.id :> obj |]
                 Ok acct
             with ex ->
                 Log.errorExn ex "Failed to create investment account {Name}" [| name :> obj |]
-                try txn.Rollback() with _ -> ()
                 Error [ sprintf "Persistence error: %s" ex.Message ]
 
     /// List all investment accounts.
-    let listAccounts () : Result<InvestmentAccount list, string list> =
+    let listAccounts (txn: NpgsqlTransaction) : Result<InvestmentAccount list, string list> =
         Log.info "Listing all investment accounts" [||]
-        use conn = DataSource.openConnection()
-        use txn = conn.BeginTransaction()
         try
             let result = InvestmentAccountRepository.listAll txn
-            txn.Commit()
             Ok result
         with ex ->
             Log.errorExn ex "Failed to list investment accounts" [||]
-            try txn.Rollback() with _ -> ()
             Error [ sprintf "Persistence error: %s" ex.Message ]

@@ -2,6 +2,7 @@ module LeoBloom.Tests.AccountCommandsTests
 
 open System
 open System.Text.Json
+open Npgsql
 open Xunit
 open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
@@ -30,25 +31,30 @@ module AccountCliEnv =
     type Env =
         { AccountId: int
           AccountCode: string
-          Tracker: TestCleanup.Tracker }
+          Connection: NpgsqlConnection }
 
     /// Create a test account with a non-numeric code for "by code" tests.
     let createWithCode () =
         let conn = DataSource.openConnection()
-        let tracker = TestCleanup.create conn
         let prefix = TestData.uniquePrefix()
         let code = prefix + "CA"  // e.g., "t7f3CA" -- non-numeric
-        let acctId = InsertHelpers.insertAccount conn tracker code "CLI Test Account" 1 true
-        { AccountId = acctId; AccountCode = code; Tracker = tracker }
+        let acctId =
+            use txn = conn.BeginTransaction()
+            let id = InsertHelpers.insertAccount txn code "CLI Test Account" 1 true
+            txn.Commit()
+            id
+        { AccountId = acctId; AccountCode = code; Connection = conn }
 
     let cleanup (env: Env) =
-        TestCleanup.deleteAll env.Tracker
-        env.Tracker.Connection.Dispose()
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.account WHERE id = @id", env.Connection)
+        cmd.Parameters.AddWithValue("@id", env.AccountId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
+        env.Connection.Dispose()
 
     /// Look up the actual account ID for a seed code via the DB.
     let lookupSeedAccountId (code: string) : int =
         use conn = DataSource.openConnection()
-        use cmd = new Npgsql.NpgsqlCommand("SELECT id FROM ledger.account WHERE code = @c", conn)
+        use cmd = new NpgsqlCommand("SELECT id FROM ledger.account WHERE code = @c", conn)
         cmd.Parameters.AddWithValue("@c", code) |> ignore
         cmd.ExecuteScalar() :?> int
 
@@ -87,16 +93,21 @@ let ``list accounts filtered by type`` () =
 [<Trait("GherkinId", "FT-ACT-012")>]
 let ``list accounts with --inactive includes inactive accounts`` () =
     let conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
+    let prefix = TestData.uniquePrefix()
+    let inactiveAcctId =
+        use txn = conn.BeginTransaction()
+        let id = InsertHelpers.insertAccount txn (prefix + "IA") "InactiveTestAcct" 1 false
+        txn.Commit()
+        id
     try
-        let prefix = TestData.uniquePrefix()
-        let _inactiveAcctId = InsertHelpers.insertAccount conn tracker (prefix + "IA") "InactiveTestAcct" 1 false
         let result = CliRunner.run "account list --inactive"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
         Assert.Contains("InactiveTestAcct", stdout)
     finally
-        TestCleanup.deleteAll tracker
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.account WHERE id = @id", conn)
+        cmd.Parameters.AddWithValue("@id", inactiveAcctId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
         conn.Dispose()
 
 [<Fact>]

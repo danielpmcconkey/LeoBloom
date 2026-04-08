@@ -1,10 +1,12 @@
 namespace LeoBloom.Portfolio
 
 open System
+open Npgsql
 open LeoBloom.Domain.Portfolio
 open LeoBloom.Utilities
 
 /// Orchestrates portfolio report calculations.
+/// Caller is responsible for connection and transaction lifecycle.
 module PortfolioReportService =
 
     let private validDimensions =
@@ -35,18 +37,15 @@ module PortfolioReportService =
     // Allocation
     // ---------------------------------------------------------------
 
-    let getAllocation (dimension: string) : Result<AllocationReport, string list> =
+    let getAllocation (txn: NpgsqlTransaction) (dimension: string) : Result<AllocationReport, string list> =
         let dim = if String.IsNullOrWhiteSpace(dimension) then "account-group" else dimension
         if not (validDimensions.Contains(dim)) then
             Error [ sprintf "Unknown dimension '%s'. Valid values: %s"
                         dim (String.concat ", " (Set.toList validDimensions)) ]
         else
             Log.info "Getting allocation by {Dimension}" [| dim :> obj |]
-            use conn = DataSource.openConnection()
-            use txn  = conn.BeginTransaction()
             try
                 let rawRows = PortfolioReportRepository.getAllocation txn dim
-                txn.Commit()
                 let total = rawRows |> List.sumBy snd
                 if total = 0m then
                     Ok { dimension = dim; rows = []; total = 0m }
@@ -61,20 +60,16 @@ module PortfolioReportService =
                     Ok { dimension = dim; rows = adjusted; total = total }
             with ex ->
                 Log.errorExn ex "Failed to get allocation by {Dimension}" [| dim :> obj |]
-                try txn.Rollback() with _ -> ()
                 Error [ sprintf "Persistence error: %s" ex.Message ]
 
     // ---------------------------------------------------------------
     // Portfolio Summary
     // ---------------------------------------------------------------
 
-    let getPortfolioSummary () : Result<PortfolioSummary, string list> =
+    let getPortfolioSummary (txn: NpgsqlTransaction) : Result<PortfolioSummary, string list> =
         Log.info "Getting portfolio summary" [||]
-        use conn = DataSource.openConnection()
-        use txn  = conn.BeginTransaction()
         try
             let rows = PortfolioReportRepository.getSummaryData txn
-            txn.Commit()
             if rows.IsEmpty then
                 Ok { totalValue            = 0m
                      totalCostBasis        = 0m
@@ -121,7 +116,6 @@ module PortfolioReportService =
                      topHoldings           = topHoldings }
         with ex ->
             Log.errorExn ex "Failed to get portfolio summary" [||]
-            try txn.Rollback() with _ -> ()
             Error [ sprintf "Persistence error: %s" ex.Message ]
 
     // ---------------------------------------------------------------
@@ -129,6 +123,7 @@ module PortfolioReportService =
     // ---------------------------------------------------------------
 
     let getPortfolioHistory
+        (txn: NpgsqlTransaction)
         (dimension: string)
         (fromRaw: string option)
         (toRaw: string option)
@@ -148,11 +143,8 @@ module PortfolioReportService =
                 let startDate = fromResult |> Option.bind (function Ok d -> Some d | _ -> None)
                 let endDate   = toResult   |> Option.bind (function Ok d -> Some d | _ -> None)
                 Log.info "Getting portfolio history by {Dimension}" [| dim :> obj |]
-                use conn = DataSource.openConnection()
-                use txn  = conn.BeginTransaction()
                 try
                     let rawRows = PortfolioReportRepository.getHistoryData txn dim startDate endDate
-                    txn.Commit()
                     // Group raw rows by date, pivot to HistoryRow
                     let historyRows =
                         rawRows
@@ -167,20 +159,16 @@ module PortfolioReportService =
                     Ok { dimension = dim; rows = historyRows }
                 with ex ->
                     Log.errorExn ex "Failed to get portfolio history by {Dimension}" [| dim :> obj |]
-                    try txn.Rollback() with _ -> ()
                     Error [ sprintf "Persistence error: %s" ex.Message ]
 
     // ---------------------------------------------------------------
     // Gains
     // ---------------------------------------------------------------
 
-    let getGains (accountId: int option) : Result<GainsReport, string list> =
+    let getGains (txn: NpgsqlTransaction) (accountId: int option) : Result<GainsReport, string list> =
         Log.info "Getting gains report" [||]
-        use conn = DataSource.openConnection()
-        use txn  = conn.BeginTransaction()
         try
             let rawRows = PortfolioReportRepository.getGainsData txn accountId
-            txn.Commit()
             if rawRows.IsEmpty then
                 Ok { rows               = []
                      totalCostBasis     = 0m
@@ -214,5 +202,4 @@ module PortfolioReportService =
                      totalGainLossPct  = totalPct }
         with ex ->
             Log.errorExn ex "Failed to get gains report" [||]
-            try txn.Rollback() with _ -> ()
             Error [ sprintf "Persistence error: %s" ex.Message ]

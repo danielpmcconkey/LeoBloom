@@ -1,6 +1,7 @@
 module LeoBloom.Tests.AcctAmountParsingTests
 
 open System
+open Npgsql
 open Xunit
 open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
@@ -13,63 +14,97 @@ open LeoBloom.Tests.CliFrameworkTests
 // Per ADR-003, we do NOT re-test service validation — only arg parsing.
 // =====================================================================
 
+/// Parse a journal entry ID from "Journal Entry #NNN ..." output, if present.
+let private parseJeId (stdout: string) : int option =
+    if stdout.Contains("Journal Entry #") then
+        let line = stdout.Split('\n') |> Array.tryFind (fun l -> l.Contains("Journal Entry #"))
+        line |> Option.bind (fun l ->
+            let hashIdx = l.IndexOf('#')
+            let rest = l.Substring(hashIdx + 1).Trim()
+            let parts = rest.Split([| ' '; '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries)
+            if parts.Length > 0 then
+                match Int32.TryParse(parts.[0]) with
+                | true, id -> Some id
+                | _ -> None
+            else None)
+    else None
+
+/// Clean up a test's ledger data: optionally delete a JE, then delete accounts, fp, account type.
+let private cleanup (conn: NpgsqlConnection) (jeId: int option) (acct1: int) (acct2: int) (fpId: int) (atId: int) =
+    // Delete JE lines + JE if created by CLI
+    match jeId with
+    | Some id ->
+        use c = new NpgsqlCommand("DELETE FROM ledger.journal_entry_line WHERE journal_entry_id = @id", conn)
+        c.Parameters.AddWithValue("@id", id) |> ignore
+        c.ExecuteNonQuery() |> ignore
+        use c2 = new NpgsqlCommand("DELETE FROM ledger.journal_entry WHERE id = @id", conn)
+        c2.Parameters.AddWithValue("@id", id) |> ignore
+        c2.ExecuteNonQuery() |> ignore
+    | None -> ()
+    // Delete fiscal period
+    use c3 = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", conn)
+    c3.Parameters.AddWithValue("@id", fpId) |> ignore
+    c3.ExecuteNonQuery() |> ignore
+    // Delete accounts
+    use c4 = new NpgsqlCommand("DELETE FROM ledger.account WHERE id IN (@a1, @a2)", conn)
+    c4.Parameters.AddWithValue("@a1", acct1) |> ignore
+    c4.Parameters.AddWithValue("@a2", acct2) |> ignore
+    c4.ExecuteNonQuery() |> ignore
+    // Delete account type
+    use c5 = new NpgsqlCommand("DELETE FROM ledger.account_type WHERE id = @id", conn)
+    c5.Parameters.AddWithValue("@id", atId) |> ignore
+    c5.ExecuteNonQuery() |> ignore
+    conn.Dispose()
+
 // --- Valid Formats ---
 
 [<Fact>]
 [<Trait("GherkinId", "FT-AAP-001")>]
 let ``integer account ID with decimal amount parses correctly`` () =
     let conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
+    let atId, acct1, acct2, fpId =
+        use txn = conn.BeginTransaction()
         let prefix = TestData.uniquePrefix()
-        let atId = InsertHelpers.insertAccountType conn tracker (prefix + "_at") "debit"
-        let acct1 = InsertHelpers.insertAccount conn tracker (prefix + "A1") "AcctA" atId true
-        let acct2 = InsertHelpers.insertAccount conn tracker (prefix + "A2") "AcctB" atId true
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
-
+        let at   = InsertHelpers.insertAccountType txn (prefix + "_at") "debit"
+        let a1   = InsertHelpers.insertAccount txn (prefix + "A1") "AcctA" at true
+        let a2   = InsertHelpers.insertAccount txn (prefix + "A2") "AcctB" at true
+        let fp   = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
+        txn.Commit()
+        at, a1, a2, fp
+    let mutable jeId = None
+    try
         let args =
             sprintf "ledger post --debit %d:1000.00 --credit %d:1000.00 --date 2026-03-15 --description \"Parse test\" --fiscal-period-id %d"
                 acct1 acct2 fpId
         let result = CliRunner.run args
         Assert.Equal(0, result.ExitCode)
-        // Track for cleanup
-        if result.Stdout.Contains("Journal Entry #") then
-            let line = result.Stdout.Split('\n') |> Array.find (fun l -> l.Contains("Journal Entry #"))
-            let hashIdx = line.IndexOf('#')
-            let spaceIdx = line.IndexOf(' ', hashIdx)
-            let idStr = line.Substring(hashIdx + 1, spaceIdx - hashIdx - 1)
-            TestCleanup.trackJournalEntry (Int32.Parse(idStr)) tracker
+        jeId <- parseJeId (CliRunner.stripLogLines result.Stdout)
     finally
-        TestCleanup.deleteAll tracker
-        conn.Dispose()
+        cleanup conn jeId acct1 acct2 fpId atId
 
 [<Fact>]
 [<Trait("GherkinId", "FT-AAP-002")>]
 let ``whole number amount without decimal parses correctly`` () =
     let conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
+    let atId, acct1, acct2, fpId =
+        use txn = conn.BeginTransaction()
         let prefix = TestData.uniquePrefix()
-        let atId = InsertHelpers.insertAccountType conn tracker (prefix + "_at") "debit"
-        let acct1 = InsertHelpers.insertAccount conn tracker (prefix + "A1") "AcctA" atId true
-        let acct2 = InsertHelpers.insertAccount conn tracker (prefix + "A2") "AcctB" atId true
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
-
+        let at   = InsertHelpers.insertAccountType txn (prefix + "_at") "debit"
+        let a1   = InsertHelpers.insertAccount txn (prefix + "A1") "AcctA" at true
+        let a2   = InsertHelpers.insertAccount txn (prefix + "A2") "AcctB" at true
+        let fp   = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
+        txn.Commit()
+        at, a1, a2, fp
+    let mutable jeId = None
+    try
         let args =
             sprintf "ledger post --debit %d:1000 --credit %d:1000 --date 2026-03-15 --description \"No decimal\" --fiscal-period-id %d"
                 acct1 acct2 fpId
         let result = CliRunner.run args
         Assert.Equal(0, result.ExitCode)
-        // Track for cleanup
-        if result.Stdout.Contains("Journal Entry #") then
-            let line = result.Stdout.Split('\n') |> Array.find (fun l -> l.Contains("Journal Entry #"))
-            let hashIdx = line.IndexOf('#')
-            let spaceIdx = line.IndexOf(' ', hashIdx)
-            let idStr = line.Substring(hashIdx + 1, spaceIdx - hashIdx - 1)
-            TestCleanup.trackJournalEntry (Int32.Parse(idStr)) tracker
+        jeId <- parseJeId (CliRunner.stripLogLines result.Stdout)
     finally
-        TestCleanup.deleteAll tracker
-        conn.Dispose()
+        cleanup conn jeId acct1 acct2 fpId atId
 
 // --- Malformed acct:amount (Scenario Outline FT-AAP-003) ---
 

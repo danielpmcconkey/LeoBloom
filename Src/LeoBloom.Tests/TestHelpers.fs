@@ -25,139 +25,47 @@ module TestData =
     let periodKey prefix = sprintf "%sFP" prefix
 
 // =====================================================================
-// TestCleanup — tracks inserted rows and deletes in FK-safe order
-// =====================================================================
-
-module TestCleanup =
-    type Tracker =
-        { mutable JournalEntryIds: int list
-          mutable AccountIds: int list
-          mutable AccountTypeIds: int list
-          mutable FiscalPeriodIds: int list
-          mutable ObligationAgreementIds: int list
-          mutable InvoiceIds: int list
-          Connection: NpgsqlConnection }
-
-    let create (conn: NpgsqlConnection) =
-        Log.initialize()
-        { JournalEntryIds = []
-          AccountIds = []
-          AccountTypeIds = []
-          FiscalPeriodIds = []
-          ObligationAgreementIds = []
-          InvoiceIds = []
-          Connection = conn }
-
-    let trackJournalEntry id tracker =
-        tracker.JournalEntryIds <- id :: tracker.JournalEntryIds
-
-    let trackAccount id tracker =
-        tracker.AccountIds <- id :: tracker.AccountIds
-
-    let trackAccountType id tracker =
-        tracker.AccountTypeIds <- id :: tracker.AccountTypeIds
-
-    let trackFiscalPeriod id tracker =
-        tracker.FiscalPeriodIds <- id :: tracker.FiscalPeriodIds
-
-    let trackObligationAgreement id tracker =
-        tracker.ObligationAgreementIds <- id :: tracker.ObligationAgreementIds
-
-    let trackInvoice id tracker =
-        tracker.InvoiceIds <- id :: tracker.InvoiceIds
-
-    /// Delete all tracked rows in FK-safe order.
-    /// Catches exceptions per-table so one failure doesn't block the rest.
-    /// Logs failures to stderr — silent swallowing is the bug this project fixes.
-    let deleteAll (tracker: Tracker) =
-        let tryDelete (table: string) (idColumn: string) (ids: int list) =
-            if not ids.IsEmpty then
-                try
-                    use cmd = new NpgsqlCommand(
-                        sprintf "DELETE FROM %s WHERE %s = ANY(@ids)" table idColumn,
-                        tracker.Connection)
-                    cmd.Parameters.AddWithValue("@ids", ids |> List.toArray) |> ignore
-                    cmd.ExecuteNonQuery() |> ignore
-                with ex ->
-                    Log.errorExn ex "TestCleanup failed to clean {Table}" [| table :> obj |]
-
-        let tryDeleteMultiColumn (table: string) (columns: (string * int list) list) =
-            for (col, ids) in columns do
-                if not ids.IsEmpty then
-                    try
-                        use cmd = new NpgsqlCommand(
-                            sprintf "DELETE FROM %s WHERE %s = ANY(@ids)" table col,
-                            tracker.Connection)
-                        cmd.Parameters.AddWithValue("@ids", ids |> List.toArray) |> ignore
-                        cmd.ExecuteNonQuery() |> ignore
-                    with ex ->
-                        Log.errorExn ex "TestCleanup failed to clean {Table}.{Column}" [| table :> obj; col :> obj |]
-
-        // FK-safe order: children before parents
-        tryDelete "ledger.journal_entry_reference" "journal_entry_id" tracker.JournalEntryIds
-        tryDelete "ledger.journal_entry_line" "journal_entry_id" tracker.JournalEntryIds
-        tryDeleteMultiColumn "ops.obligation_instance"
-            [ "journal_entry_id", tracker.JournalEntryIds
-              "obligation_agreement_id", tracker.ObligationAgreementIds ]
-        tryDeleteMultiColumn "ops.transfer"
-            [ "journal_entry_id", tracker.JournalEntryIds
-              "from_account_id", tracker.AccountIds
-              "to_account_id", tracker.AccountIds ]
-        tryDelete "ops.invoice" "id" tracker.InvoiceIds
-        tryDelete "ops.invoice" "fiscal_period_id" tracker.FiscalPeriodIds
-        tryDelete "ledger.journal_entry" "id" tracker.JournalEntryIds
-        tryDeleteMultiColumn "ops.obligation_agreement"
-            [ "id", tracker.ObligationAgreementIds
-              "source_account_id", tracker.AccountIds
-              "dest_account_id", tracker.AccountIds ]
-        tryDelete "ledger.account" "id" tracker.AccountIds
-        tryDelete "ledger.account_type" "id" tracker.AccountTypeIds
-        tryDelete "ledger.fiscal_period" "id" tracker.FiscalPeriodIds
-
-// =====================================================================
-// Insert helpers — return IDs and register with cleanup tracker
+// Insert helpers — execute within caller's transaction
 // =====================================================================
 
 module InsertHelpers =
-    let insertAccountType (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (name: string) (normalBalance: string) : int =
+    let insertAccountType (txn: NpgsqlTransaction) (name: string) (normalBalance: string) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ledger.account_type (name, normal_balance) VALUES (@n, @nb) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@nb", normalBalance) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackAccountType id tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
-    let insertAccount (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (code: string) (name: string) (accountTypeId: int) (isActive: bool) : int =
+    let insertAccount (txn: NpgsqlTransaction) (code: string) (name: string) (accountTypeId: int) (isActive: bool) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ledger.account (code, name, account_type_id, is_active) VALUES (@c, @n, @at, @active) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@c", code) |> ignore
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@at", accountTypeId) |> ignore
         cmd.Parameters.AddWithValue("@active", isActive) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackAccount id tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
-    let insertAccountWithParent (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (code: string) (name: string) (accountTypeId: int) (parentId: int) (isActive: bool) : int =
+    let insertAccountWithParent (txn: NpgsqlTransaction) (code: string) (name: string) (accountTypeId: int) (parentId: int) (isActive: bool) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ledger.account (code, name, account_type_id, parent_id, is_active) VALUES (@c, @n, @at, @pi, @active) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@c", code) |> ignore
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@at", accountTypeId) |> ignore
         cmd.Parameters.AddWithValue("@pi", parentId) |> ignore
         cmd.Parameters.AddWithValue("@active", isActive) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackAccount id tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
-    let insertAccountWithSubType (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (code: string) (name: string) (accountTypeId: int) (isActive: bool) (subType: string option) : int =
+    let insertAccountWithSubType (txn: NpgsqlTransaction) (code: string) (name: string) (accountTypeId: int) (isActive: bool) (subType: string option) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ledger.account (code, name, account_type_id, is_active, account_subtype) VALUES (@c, @n, @at, @active, @st) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@c", code) |> ignore
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@at", accountTypeId) |> ignore
@@ -165,14 +73,13 @@ module InsertHelpers =
         match subType with
         | Some s -> cmd.Parameters.AddWithValue("@st", s) |> ignore
         | None -> cmd.Parameters.AddWithValue("@st", DBNull.Value) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackAccount id tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
-    let insertAccountWithParentAndSubType (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (code: string) (name: string) (accountTypeId: int) (parentId: int) (isActive: bool) (subType: string option) : int =
+    let insertAccountWithParentAndSubType (txn: NpgsqlTransaction) (code: string) (name: string) (accountTypeId: int) (parentId: int) (isActive: bool) (subType: string option) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ledger.account (code, name, account_type_id, parent_id, is_active, account_subtype) VALUES (@c, @n, @at, @pi, @active, @st) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@c", code) |> ignore
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@at", accountTypeId) |> ignore
@@ -181,78 +88,72 @@ module InsertHelpers =
         match subType with
         | Some s -> cmd.Parameters.AddWithValue("@st", s) |> ignore
         | None -> cmd.Parameters.AddWithValue("@st", DBNull.Value) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackAccount id tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
-    let insertFiscalPeriod (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (periodKey: string) (startDate: DateOnly) (endDate: DateOnly) (isOpen: bool) : int =
+    let insertFiscalPeriod (txn: NpgsqlTransaction) (periodKey: string) (startDate: DateOnly) (endDate: DateOnly) (isOpen: bool) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ledger.fiscal_period (period_key, start_date, end_date, is_open) VALUES (@k, @s, @e, @o) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@k", periodKey) |> ignore
         cmd.Parameters.AddWithValue("@s", startDate) |> ignore
         cmd.Parameters.AddWithValue("@e", endDate) |> ignore
         cmd.Parameters.AddWithValue("@o", isOpen) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackFiscalPeriod id tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
-    let insertJournalEntry (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (entryDate: DateOnly) (description: string) (fiscalPeriodId: int) : int =
+    let insertJournalEntry (txn: NpgsqlTransaction) (entryDate: DateOnly) (description: string) (fiscalPeriodId: int) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ledger.journal_entry (entry_date, description, fiscal_period_id) VALUES (@d, @desc, @fp) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@d", entryDate) |> ignore
         cmd.Parameters.AddWithValue("@desc", description) |> ignore
         cmd.Parameters.AddWithValue("@fp", fiscalPeriodId) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackJournalEntry id tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
-    let insertObligationAgreement (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker) (name: string) : int =
+    let insertObligationAgreement (txn: NpgsqlTransaction) (name: string) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence) VALUES (@n, 'receivable', 'monthly') RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@n", name) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackObligationAgreement id tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
     let insertObligationAgreementFull
-        (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker)
+        (txn: NpgsqlTransaction)
         (name: string) (obligationType: string) (cadence: string) (isActive: bool) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence, is_active) VALUES (@n, @ot, @c, @a) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@ot", obligationType) |> ignore
         cmd.Parameters.AddWithValue("@c", cadence) |> ignore
         cmd.Parameters.AddWithValue("@a", isActive) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackObligationAgreement id tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
     let insertObligationInstance
-        (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker)
+        (txn: NpgsqlTransaction)
         (agreementId: int) (name: string) (isActive: bool) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date, is_active) \
              VALUES (@aid, @n, 'expected', '2026-04-01', @a) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@aid", agreementId) |> ignore
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@a", isActive) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        // Tracked via agreement_id in cleanup (obligation_instance cleaned by agreement_id)
-        id
+        cmd.ExecuteScalar() :?> int
 
     let insertObligationAgreementForSpawn
-        (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker)
+        (txn: NpgsqlTransaction)
         (name: string) (obligationType: string) (cadence: string)
         (expectedDay: int option) (amount: decimal option) (isActive: bool) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence, expected_day, amount, is_active) \
              VALUES (@n, @ot, @c, @ed, @amt, @a) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@ot", obligationType) |> ignore
         cmd.Parameters.AddWithValue("@c", cadence) |> ignore
@@ -263,34 +164,32 @@ module InsertHelpers =
         | Some a -> cmd.Parameters.AddWithValue("@amt", a) |> ignore
         | None -> cmd.Parameters.AddWithValue("@amt", DBNull.Value) |> ignore
         cmd.Parameters.AddWithValue("@a", isActive) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackObligationAgreement id tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
     let insertObligationInstanceWithDate
-        (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker)
+        (txn: NpgsqlTransaction)
         (agreementId: int) (name: string) (expectedDate: DateOnly) (isActive: bool) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ops.obligation_instance (obligation_agreement_id, name, status, expected_date, is_active) \
              VALUES (@aid, @n, 'expected', @ed, @a) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@aid", agreementId) |> ignore
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@ed", expectedDate) |> ignore
         cmd.Parameters.AddWithValue("@a", isActive) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        // Tracked via agreement_id in cleanup (obligation_instance cleaned by agreement_id)
-        id
+        cmd.ExecuteScalar() :?> int
 
     let insertObligationInstanceFull
-        (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker)
+        (txn: NpgsqlTransaction)
         (agreementId: int) (name: string) (status: string) (expectedDate: DateOnly)
         (amount: decimal option) (notes: string option) (isActive: bool) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ops.obligation_instance \
              (obligation_agreement_id, name, status, expected_date, amount, notes, is_active) \
              VALUES (@aid, @n, @status, @ed, @amt, @notes, @a) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@aid", agreementId) |> ignore
         cmd.Parameters.AddWithValue("@n", name) |> ignore
         cmd.Parameters.AddWithValue("@status", status) |> ignore
@@ -302,26 +201,24 @@ module InsertHelpers =
         | Some n -> cmd.Parameters.AddWithValue("@notes", n) |> ignore
         | None -> cmd.Parameters.AddWithValue("@notes", DBNull.Value) |> ignore
         cmd.Parameters.AddWithValue("@a", isActive) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        id
+        cmd.ExecuteScalar() :?> int
 
     let insertInvoice
-        (conn: NpgsqlConnection) (tracker: TestCleanup.Tracker)
+        (txn: NpgsqlTransaction)
         (tenant: string) (fiscalPeriodId: int)
         (rent: decimal) (utility: decimal) (total: decimal) : int =
         use cmd = new NpgsqlCommand(
             "INSERT INTO ops.invoice (tenant, fiscal_period_id, rent_amount, utility_share, total_amount, generated_at) \
              VALUES (@t, @fp, @r, @u, @tot, @ga) RETURNING id",
-            conn)
+            txn.Connection)
+        cmd.Transaction <- txn
         cmd.Parameters.AddWithValue("@t", tenant) |> ignore
         cmd.Parameters.AddWithValue("@fp", fiscalPeriodId) |> ignore
         cmd.Parameters.AddWithValue("@r", rent) |> ignore
         cmd.Parameters.AddWithValue("@u", utility) |> ignore
         cmd.Parameters.AddWithValue("@tot", total) |> ignore
         cmd.Parameters.AddWithValue("@ga", DateTimeOffset.UtcNow) |> ignore
-        let id = cmd.ExecuteScalar() :?> int
-        TestCleanup.trackInvoice id tracker
-        id
+        cmd.ExecuteScalar() :?> int
 
 // =====================================================================
 // ConstraintAssert — shared SQL constraint test helpers
@@ -349,6 +246,28 @@ module ConstraintAssert =
     let assertNotNull = assertSqlState "23502"
     let assertUnique = assertSqlState "23505"
     let assertFk = assertSqlState "23503"
+
+    /// Attempt SQL execution within a transaction using a savepoint so that a
+    /// constraint violation does not abort the outer transaction.
+    let tryExecTxn (txn: NpgsqlTransaction) (sql: string) (paramSetup: NpgsqlCommand -> unit) =
+        let savepointName = "constraint_check"
+        txn.Save(savepointName)
+        try
+            use cmd = new NpgsqlCommand(sql, txn.Connection)
+            cmd.Transaction <- txn
+            paramSetup cmd
+            cmd.ExecuteNonQuery() |> ignore
+            None
+        with
+        | :? PostgresException as e ->
+            txn.Rollback(savepointName)
+            Some e
+        | _ ->
+            txn.Rollback(savepointName)
+            reraise()
+
+    /// Convenience: tryExecTxn with no parameters.
+    let tryInsertTxn txn sql = tryExecTxn txn sql ignore
 
     /// Assert that the operation succeeded (no exception).
     let assertSuccess (ex: PostgresException option) =

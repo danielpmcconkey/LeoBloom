@@ -1,6 +1,7 @@
 namespace LeoBloom.Ops
 
 open System
+open Npgsql
 open LeoBloom.Domain.Ops
 open LeoBloom.Utilities
 open LeoBloom.Ledger
@@ -15,6 +16,7 @@ open LeoBloom.Ledger
 module BalanceProjectionService =
 
     let project
+        (txn: NpgsqlTransaction)
         (accountCode: string)
         (projectionEndDate: DateOnly)
         : Result<BalanceProjection, string list> =
@@ -28,16 +30,14 @@ module BalanceProjectionService =
                 [| projectionEndDate :> obj; today :> obj |]
             Error [ "Projection end date must be in the future (past or today dates are not allowed)" ]
         else
-            match AccountBalanceService.showAccountByCode accountCode with
+            match AccountBalanceService.showAccountByCode txn accountCode with
             | Error msg -> Error [ msg ]
             | Ok account ->
-                match AccountBalanceService.getBalanceById account.id today with
+                match AccountBalanceService.getBalanceById txn account.id today with
                 | Error msg -> Error [ msg ]
                 | Ok balanceRecord ->
                     let currentBalance = balanceRecord.balance
 
-                    use conn = DataSource.openConnection()
-                    use txn = conn.BeginTransaction()
                     try
                         let obligationItems =
                             BalanceProjectionRepository.getProjectedObligationItems
@@ -45,7 +45,6 @@ module BalanceProjectionService =
                         let transferItems =
                             BalanceProjectionRepository.getProjectedTransferItems
                                 txn account.id today projectionEndDate
-                        txn.Commit()
 
                         let allItems = obligationItems @ transferItems
                         let dayCount = projectionEndDate.DayNumber - today.DayNumber + 1
@@ -87,5 +86,4 @@ module BalanceProjectionService =
                         Log.errorExn ex
                             "Failed to compute balance projection for account {AccountCode}"
                             [| accountCode :> obj |]
-                        try txn.Rollback() with _ -> ()
                         Error [ sprintf "Persistence error: %s" ex.Message ]

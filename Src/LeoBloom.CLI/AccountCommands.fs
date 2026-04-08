@@ -2,7 +2,9 @@ module LeoBloom.CLI.AccountCommands
 
 open System
 open Argu
+open Npgsql
 open LeoBloom.Ledger
+open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 
 // --- Argu DU definitions ---
@@ -51,12 +53,12 @@ type AccountArgs =
 
 // --- Helpers ---
 
-let private resolveAccount (raw: string) =
-    match AccountBalanceService.showAccountByCode raw with
+let private resolveAccount (txn: NpgsqlTransaction) (raw: string) =
+    match AccountBalanceService.showAccountByCode txn raw with
     | Ok account -> Ok account
     | Error _ ->
         match Int32.TryParse(raw) with
-        | true, id -> AccountBalanceService.showAccountById id
+        | true, id -> AccountBalanceService.showAccountById txn id
         | false, _ -> Error (sprintf "Account '%s' does not exist" raw)
 
 let private parseDate (raw: string) : Result<DateOnly, string> =
@@ -78,17 +80,36 @@ let private handleList (isJson: bool) (args: ParseResults<AccountListArgs>) : in
     | Some t when not (validAccountTypes.Contains (t.ToLowerInvariant())) ->
         write isJson (Error [sprintf "Invalid account type '%s' -- valid types: asset, liability, equity, revenue, expense" t])
     | _ ->
-        let typeName = typeRaw |> Option.map (fun t -> t.ToLowerInvariant())
-        match AccountBalanceService.listAccounts typeName includeInactive with
-        | Ok accounts -> writeAccountList isJson accounts
-        | Error errs -> write isJson (Error errs)
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let typeName = typeRaw |> Option.map (fun t -> t.ToLowerInvariant())
+            let result = AccountBalanceService.listAccounts txn typeName includeInactive
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            match result with
+            | Ok accounts -> writeAccountList isJson accounts
+            | Error errs -> write isJson (Error errs)
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleShow (isJson: bool) (args: ParseResults<AccountShowArgs>) : int =
     let isJson = isJson || args.Contains AccountShowArgs.Json
     let accountRaw = args.GetResult AccountShowArgs.Account
 
-    let result = resolveAccount accountRaw
-    write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = resolveAccount txn accountRaw
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleBalance (isJson: bool) (args: ParseResults<AccountBalanceCmdArgs>) : int =
     let isJson = isJson || args.Contains AccountBalanceCmdArgs.Json
@@ -103,14 +124,23 @@ let private handleBalance (isJson: bool) (args: ParseResults<AccountBalanceCmdAr
     match asOfResult with
     | Error e -> write isJson (Error [e])
     | Ok asOfDate ->
-        let result =
-            match AccountBalanceService.getBalanceByCode accountRaw asOfDate with
-            | Ok _ as found -> found
-            | Error _ ->
-                match Int32.TryParse(accountRaw) with
-                | true, id -> AccountBalanceService.getBalanceById id asOfDate
-                | false, _ -> Error (sprintf "Account '%s' does not exist" accountRaw)
-        write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result =
+                match AccountBalanceService.getBalanceByCode txn accountRaw asOfDate with
+                | Ok _ as found -> found
+                | Error _ ->
+                    match Int32.TryParse(accountRaw) with
+                    | true, id -> AccountBalanceService.getBalanceById txn id asOfDate
+                    | false, _ -> Error (sprintf "Account '%s' does not exist" accountRaw)
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 // --- Dispatch ---
 

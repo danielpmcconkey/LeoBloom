@@ -1,11 +1,11 @@
 namespace LeoBloom.Reporting
 
+open Npgsql
 open LeoBloom.Utilities
 open LeoBloom.Reporting.ReportingTypes
 open LeoBloom.Reporting.ScheduleEMapping
 
 /// Orchestrates Schedule E report generation.
-/// Opens its own connection + transaction.
 module ScheduleEService =
 
     let private validateYear (year: int) : Result<unit, string list> =
@@ -44,16 +44,13 @@ module ScheduleEService =
               else [] }
 
     /// Generate a Schedule E report for the given year.
-    let generate (year: int) : Result<ScheduleEReport, string list> =
+    let generate (txn: NpgsqlTransaction) (year: int) : Result<ScheduleEReport, string list> =
         Log.info "Generating Schedule E report for year {Year}" [| year :> obj |]
         match validateYear year with
         | Error errs ->
             Log.warn "Schedule E validation failed: {Errors}" [| errs :> obj |]
             Error errs
         | Ok () ->
-            use conn = DataSource.openConnection()
-            use txn = conn.BeginTransaction()
-
             try
                 let balances = ScheduleERepository.getBalancesForYear txn allMappedAccountCodes year
 
@@ -76,7 +73,6 @@ module ScheduleEService =
                     |> List.filter (fun l -> l.lineNumber <> 3)
                     |> List.sumBy (fun l -> l.amount)
 
-                txn.Commit()
                 Log.info "Schedule E report generated for year {Year}" [| year :> obj |]
 
                 Ok { year = year
@@ -85,5 +81,4 @@ module ScheduleEService =
                      netRentalIncome = revenueTotal - expenseTotal }
             with ex ->
                 Log.errorExn ex "Failed to generate Schedule E for year {Year}" [| year :> obj |]
-                try txn.Rollback() with _ -> ()
                 Error [ sprintf "Query error: %s" ex.Message ]

@@ -1,11 +1,11 @@
 namespace LeoBloom.Reporting
 
 open System
+open Npgsql
 open LeoBloom.Utilities
 open LeoBloom.Reporting.ReportingTypes
 
 /// Orchestrates general ledger detail report generation.
-/// Opens its own connection + transaction.
 module GeneralLedgerReportService =
 
     let private validateInputs (accountCode: string) (fromDate: DateOnly) (toDate: DateOnly) : Result<unit, string list> =
@@ -17,7 +17,7 @@ module GeneralLedgerReportService =
         if errors.IsEmpty then Ok () else Error errors
 
     /// Generate a general ledger detail report for a single account.
-    let generate (accountCode: string) (fromDate: DateOnly) (toDate: DateOnly) : Result<GeneralLedgerReport, string list> =
+    let generate (txn: NpgsqlTransaction) (accountCode: string) (fromDate: DateOnly) (toDate: DateOnly) : Result<GeneralLedgerReport, string list> =
         Log.info "Generating general ledger report for account {AccountCode} from {From} to {To}"
             [| accountCode :> obj; fromDate :> obj; toDate :> obj |]
 
@@ -26,13 +26,9 @@ module GeneralLedgerReportService =
             Log.warn "General ledger validation failed: {Errors}" [| errs :> obj |]
             Error errs
         | Ok () ->
-            use conn = DataSource.openConnection()
-            use txn = conn.BeginTransaction()
-
             try
                 match GeneralLedgerRepository.resolveAccountByCode txn accountCode with
                 | None ->
-                    txn.Rollback()
                     Error [ sprintf "Account with code '%s' does not exist" accountCode ]
                 | Some (accountId, accountName, normalBalance) ->
                     let rows = GeneralLedgerRepository.getEntriesForAccount txn accountId fromDate toDate
@@ -56,7 +52,6 @@ module GeneralLedgerReportService =
                               creditAmount = row.creditAmount
                               runningBalance = runningBalance } : GeneralLedgerEntry)
 
-                    txn.Commit()
                     Log.info "General ledger report generated for account {AccountCode}" [| accountCode :> obj |]
 
                     Ok { accountCode = accountCode
@@ -67,5 +62,4 @@ module GeneralLedgerReportService =
                          endingBalance = runningBalance }
             with ex ->
                 Log.errorExn ex "Failed to generate general ledger for account {AccountCode}" [| accountCode :> obj |]
-                try txn.Rollback() with _ -> ()
                 Error [ sprintf "Query error: %s" ex.Message ]

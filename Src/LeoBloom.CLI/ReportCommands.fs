@@ -6,6 +6,7 @@ open LeoBloom.Reporting
 open LeoBloom.Ledger
 open LeoBloom.Ops
 open LeoBloom.Portfolio
+open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 
 // --- Argu DU definitions for report subcommands ---
@@ -148,8 +149,17 @@ let private parseDate (raw: string) : Result<DateOnly, string> =
 
 let private handleScheduleE (args: ParseResults<ScheduleEArgs>) : int =
     let year = args.GetResult ScheduleEArgs.Year
-    let result = ScheduleEService.generate year
-    writeHuman result
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = ScheduleEService.generate txn year
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        writeHuman result
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleGeneralLedger (args: ParseResults<GeneralLedgerArgs>) : int =
     let accountCode = args.GetResult GeneralLedgerArgs.Account
@@ -162,8 +172,17 @@ let private handleGeneralLedger (args: ParseResults<GeneralLedgerArgs>) : int =
     | Error e, _ | _, Error e ->
         writeHumanErrors [ e ]
     | Ok fromDate, Ok toDate ->
-        let result = GeneralLedgerReportService.generate accountCode fromDate toDate
-        writeHuman result
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = GeneralLedgerReportService.generate txn accountCode fromDate toDate
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            writeHuman result
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleCashReceipts (args: ParseResults<CashReceiptsArgs>) : int =
     let fromRaw = args.GetResult CashReceiptsArgs.From
@@ -175,8 +194,17 @@ let private handleCashReceipts (args: ParseResults<CashReceiptsArgs>) : int =
     | Error e, _ | _, Error e ->
         writeHumanErrors [ e ]
     | Ok fromDate, Ok toDate ->
-        let result = CashFlowReportService.getReceipts fromDate toDate
-        writeHuman result
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = CashFlowReportService.getReceipts txn fromDate toDate
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            writeHuman result
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleCashDisbursements (args: ParseResults<CashDisbursementsArgs>) : int =
     let fromRaw = args.GetResult CashDisbursementsArgs.From
@@ -188,8 +216,17 @@ let private handleCashDisbursements (args: ParseResults<CashDisbursementsArgs>) 
     | Error e, _ | _, Error e ->
         writeHumanErrors [ e ]
     | Ok fromDate, Ok toDate ->
-        let result = CashFlowReportService.getDisbursements fromDate toDate
-        writeHuman result
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = CashFlowReportService.getDisbursements txn fromDate toDate
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            writeHuman result
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 // --- Period argument parsing helper ---
 
@@ -204,12 +241,20 @@ let private handleTrialBalance (args: ParseResults<TrialBalanceArgs>) : int =
     let isJson = args.Contains TrialBalanceArgs.Json
     let periodRaw = args.GetResult TrialBalanceArgs.Period
 
-    let result =
-        match parsePeriodArg periodRaw with
-        | Choice1Of2 id -> TrialBalanceService.getByPeriodId id
-        | Choice2Of2 key -> TrialBalanceService.getByPeriodKey key
-
-    write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result =
+            match parsePeriodArg periodRaw with
+            | Choice1Of2 id -> TrialBalanceService.getByPeriodId txn id
+            | Choice2Of2 key -> TrialBalanceService.getByPeriodKey txn key
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleBalanceSheet (args: ParseResults<BalanceSheetArgs>) : int =
     let isJson = args.Contains BalanceSheetArgs.Json
@@ -219,31 +264,56 @@ let private handleBalanceSheet (args: ParseResults<BalanceSheetArgs>) : int =
     | Error e ->
         write isJson (Error [e])
     | Ok asOfDate ->
-        let result = BalanceSheetService.getAsOfDate asOfDate
-        write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = BalanceSheetService.getAsOfDate txn asOfDate
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleIncomeStatement (args: ParseResults<IncomeStatementArgs>) : int =
     let isJson = args.Contains IncomeStatementArgs.Json
     let periodRaw = args.GetResult IncomeStatementArgs.Period
 
-    let result =
-        match parsePeriodArg periodRaw with
-        | Choice1Of2 id -> IncomeStatementService.getByPeriodId id
-        | Choice2Of2 key -> IncomeStatementService.getByPeriodKey key
-
-    write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result =
+            match parsePeriodArg periodRaw with
+            | Choice1Of2 id -> IncomeStatementService.getByPeriodId txn id
+            | Choice2Of2 key -> IncomeStatementService.getByPeriodKey txn key
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handlePnlSubtree (args: ParseResults<PnlSubtreeArgs>) : int =
     let isJson = args.Contains PnlSubtreeArgs.Json
     let account = args.GetResult PnlSubtreeArgs.Account
     let periodRaw = args.GetResult PnlSubtreeArgs.Period
 
-    let result =
-        match parsePeriodArg periodRaw with
-        | Choice1Of2 id -> SubtreePLService.getByAccountCodeAndPeriodId account id
-        | Choice2Of2 key -> SubtreePLService.getByAccountCodeAndPeriodKey account key
-
-    write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result =
+            match parsePeriodArg periodRaw with
+            | Choice1Of2 id -> SubtreePLService.getByAccountCodeAndPeriodId txn account id
+            | Choice2Of2 key -> SubtreePLService.getByAccountCodeAndPeriodKey txn account key
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleProjection (args: ParseResults<ProjectionArgs>) : int =
     let account = args.GetResult ProjectionArgs.Account
@@ -253,10 +323,19 @@ let private handleProjection (args: ParseResults<ProjectionArgs>) : int =
     | Error e ->
         writeHumanErrors [ e ]
     | Ok throughDate ->
-        let result = BalanceProjectionService.project account throughDate
-        match result with
-        | Error errs -> writeHumanErrors errs
-        | Ok projection -> writeBalanceProjection projection
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = BalanceProjectionService.project txn account throughDate
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            match result with
+            | Error errs -> writeHumanErrors errs
+            | Ok projection -> writeBalanceProjection projection
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleAccountBalance (args: ParseResults<AccountBalanceArgs>) : int =
     let isJson = args.Contains AccountBalanceArgs.Json
@@ -272,8 +351,17 @@ let private handleAccountBalance (args: ParseResults<AccountBalanceArgs>) : int 
     | Error e ->
         write isJson (Error [e])
     | Ok asOfDate ->
-        let result = AccountBalanceService.getBalanceByCode account asOfDate
-        write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = AccountBalanceService.getBalanceByCode txn account asOfDate
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj) |> Result.mapError (fun e -> [e]))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 // --- Dispatch ---
 

@@ -23,65 +23,160 @@ module OblCliEnv =
           FiscalPeriodId: int       // Year 2094, for post tests
           SourceAccountId: int
           DestAccountId: int
+          SourceAccountTypeId: int
+          DestAccountTypeId: int
           Prefix: string
-          Tracker: TestCleanup.Tracker }
+          Connection: NpgsqlConnection }
 
     let create () =
         let conn = DataSource.openConnection()
-        let tracker = TestCleanup.create conn
         let prefix = TestData.uniquePrefix()
+
+        use txn = conn.BeginTransaction()
 
         // Basic agreement — receivable, monthly, active
         let basicAgrId =
-            InsertHelpers.insertObligationAgreementFull conn tracker $"{prefix}_agr" "receivable" "monthly" true
+            InsertHelpers.insertObligationAgreementFull txn $"{prefix}_agr" "receivable" "monthly" true
 
         // Accounts for postable agreement (post requires source + dest on agreement)
-        let revTypeId = InsertHelpers.insertAccountType conn tracker $"{prefix}_rv" "credit"
-        let astTypeId = InsertHelpers.insertAccountType conn tracker $"{prefix}_as" "debit"
-        let srcId = InsertHelpers.insertAccount conn tracker $"{prefix}SR" $"{prefix}_src" revTypeId true
-        let dstId = InsertHelpers.insertAccount conn tracker $"{prefix}DS" $"{prefix}_dst" astTypeId true
+        let revTypeId = InsertHelpers.insertAccountType txn $"{prefix}_rv" "credit"
+        let astTypeId = InsertHelpers.insertAccountType txn $"{prefix}_as" "debit"
+        let srcId = InsertHelpers.insertAccount txn $"{prefix}SR" $"{prefix}_src" revTypeId true
+        let dstId = InsertHelpers.insertAccount txn $"{prefix}DS" $"{prefix}_dst" astTypeId true
 
         // Postable agreement — receivable, monthly, with accounts + amount
         let postAgrId =
             use cmd = new NpgsqlCommand(
                 "INSERT INTO ops.obligation_agreement (name, obligation_type, cadence, source_account_id, dest_account_id, amount) \
                  VALUES (@n, 'receivable', 'monthly', @sa, @da, 1200) RETURNING id",
-                conn)
+                txn.Connection)
+            cmd.Transaction <- txn
             cmd.Parameters.AddWithValue("@n", $"{prefix}_post") |> ignore
             cmd.Parameters.AddWithValue("@sa", srcId) |> ignore
             cmd.Parameters.AddWithValue("@da", dstId) |> ignore
-            let id = cmd.ExecuteScalar() :?> int
-            TestCleanup.trackObligationAgreement id tracker
-            id
+            cmd.ExecuteScalar() :?> int
 
         // Fiscal period year 2094 for post tests
         let fpId =
-            InsertHelpers.insertFiscalPeriod conn tracker $"{prefix}94" (DateOnly(2094, 1, 1)) (DateOnly(2094, 12, 31)) true
+            InsertHelpers.insertFiscalPeriod txn $"{prefix}94" (DateOnly(2094, 1, 1)) (DateOnly(2094, 12, 31)) true
+
+        txn.Commit()
 
         { AgreementId = basicAgrId
           PostableAgreementId = postAgrId
           FiscalPeriodId = fpId
           SourceAccountId = srcId
           DestAccountId = dstId
+          SourceAccountTypeId = revTypeId
+          DestAccountTypeId = astTypeId
           Prefix = prefix
-          Tracker = tracker }
+          Connection = conn }
 
     let cleanup (env: Env) =
-        // Find JEs created by CLI post operations so they are deleted in FK-safe order
+        // Find JEs created by CLI post operations so they are deleted in FK-safe order.
+        // obligation_instance.journal_entry_id FK blocks JE deletion — delete instances first.
         try
             use cmd = new NpgsqlCommand(
                 "SELECT journal_entry_id FROM ops.obligation_instance \
                  WHERE obligation_agreement_id = ANY(@aids) AND journal_entry_id IS NOT NULL",
-                env.Tracker.Connection)
+                env.Connection)
             cmd.Parameters.AddWithValue("@aids", [| env.AgreementId; env.PostableAgreementId |]) |> ignore
             use reader = cmd.ExecuteReader()
-            while reader.Read() do
-                TestCleanup.trackJournalEntry (reader.GetInt32(0)) env.Tracker
+            let jeIds = [ while reader.Read() do yield reader.GetInt32(0) ]
             reader.Close()
+            // Delete JE references pointing to these instances before deleting instances/JEs
+            use cmdJeRefInst = new NpgsqlCommand(
+                "DELETE FROM ledger.journal_entry_reference \
+                 WHERE reference_type = 'obligation' \
+                   AND reference_value IN ( \
+                     SELECT CAST(id AS text) FROM ops.obligation_instance \
+                     WHERE obligation_agreement_id = ANY(@aids) \
+                   )",
+                env.Connection)
+            cmdJeRefInst.Parameters.AddWithValue("@aids", [| env.AgreementId; env.PostableAgreementId |]) |> ignore
+            cmdJeRefInst.ExecuteNonQuery() |> ignore
+            // Delete obligation instances before JEs — obligation_instance.journal_entry_id FK blocks JE deletion
+            use cmdInstFirst = new NpgsqlCommand(
+                "DELETE FROM ops.obligation_instance WHERE obligation_agreement_id = ANY(@aids)",
+                env.Connection)
+            cmdInstFirst.Parameters.AddWithValue("@aids", [| env.AgreementId; env.PostableAgreementId |]) |> ignore
+            cmdInstFirst.ExecuteNonQuery() |> ignore
+            for jeId in jeIds do
+                use cmd1 = new NpgsqlCommand("DELETE FROM ledger.journal_entry_line WHERE journal_entry_id = @id", env.Connection)
+                cmd1.Parameters.AddWithValue("@id", jeId) |> ignore
+                cmd1.ExecuteNonQuery() |> ignore
+                use cmd1b = new NpgsqlCommand("DELETE FROM ledger.journal_entry_reference WHERE journal_entry_id = @id", env.Connection)
+                cmd1b.Parameters.AddWithValue("@id", jeId) |> ignore
+                cmd1b.ExecuteNonQuery() |> ignore
+                use cmd2 = new NpgsqlCommand("DELETE FROM ledger.journal_entry WHERE id = @id", env.Connection)
+                cmd2.Parameters.AddWithValue("@id", jeId) |> ignore
+                cmd2.ExecuteNonQuery() |> ignore
         with ex ->
-            eprintfn "OblCliEnv.cleanup: failed to find JE IDs: %s" ex.Message
-        TestCleanup.deleteAll env.Tracker
-        env.Tracker.Connection.Dispose()
+            eprintfn "OblCliEnv.cleanup: error during JE cleanup: %s" ex.Message
+        // Safety-net: delete any JE references pointing to these obligation instances.
+        // Prevents orphaned references if the try block above failed to clean JEs first.
+        use cmdJeRefSafety = new NpgsqlCommand(
+            "DELETE FROM ledger.journal_entry_reference \
+             WHERE reference_type = 'obligation' \
+               AND reference_value IN ( \
+                 SELECT CAST(id AS text) FROM ops.obligation_instance \
+                 WHERE obligation_agreement_id = ANY(@aids) \
+               )",
+            env.Connection)
+        cmdJeRefSafety.Parameters.AddWithValue("@aids", [| env.AgreementId; env.PostableAgreementId |]) |> ignore
+        cmdJeRefSafety.ExecuteNonQuery() |> ignore
+        // Delete obligation instances
+        use cmdInst = new NpgsqlCommand(
+            "DELETE FROM ops.obligation_instance WHERE obligation_agreement_id = ANY(@aids)",
+            env.Connection)
+        cmdInst.Parameters.AddWithValue("@aids", [| env.AgreementId; env.PostableAgreementId |]) |> ignore
+        cmdInst.ExecuteNonQuery() |> ignore
+        // Delete obligation agreements
+        use cmdAgrP = new NpgsqlCommand("DELETE FROM ops.obligation_agreement WHERE id = @id", env.Connection)
+        cmdAgrP.Parameters.AddWithValue("@id", env.PostableAgreementId) |> ignore
+        cmdAgrP.ExecuteNonQuery() |> ignore
+        use cmdAgr = new NpgsqlCommand("DELETE FROM ops.obligation_agreement WHERE id = @id", env.Connection)
+        cmdAgr.Parameters.AddWithValue("@id", env.AgreementId) |> ignore
+        cmdAgr.ExecuteNonQuery() |> ignore
+        // Safety-net: delete any remaining JEs that still reference the fiscal period.
+        // This handles the case where the try block above failed before deleting JEs.
+        // FK-safe order: lines and references first, then entries.
+        use cmdFpJeRef = new NpgsqlCommand(
+            "DELETE FROM ledger.journal_entry_reference \
+             WHERE journal_entry_id IN (SELECT id FROM ledger.journal_entry WHERE fiscal_period_id = @fp)",
+            env.Connection)
+        cmdFpJeRef.Parameters.AddWithValue("@fp", env.FiscalPeriodId) |> ignore
+        cmdFpJeRef.ExecuteNonQuery() |> ignore
+        use cmdFpJeLine = new NpgsqlCommand(
+            "DELETE FROM ledger.journal_entry_line \
+             WHERE journal_entry_id IN (SELECT id FROM ledger.journal_entry WHERE fiscal_period_id = @fp)",
+            env.Connection)
+        cmdFpJeLine.Parameters.AddWithValue("@fp", env.FiscalPeriodId) |> ignore
+        cmdFpJeLine.ExecuteNonQuery() |> ignore
+        use cmdFpJe = new NpgsqlCommand(
+            "DELETE FROM ledger.journal_entry WHERE fiscal_period_id = @fp",
+            env.Connection)
+        cmdFpJe.Parameters.AddWithValue("@fp", env.FiscalPeriodId) |> ignore
+        cmdFpJe.ExecuteNonQuery() |> ignore
+        // Delete fiscal period
+        use cmdFp = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", env.Connection)
+        cmdFp.Parameters.AddWithValue("@id", env.FiscalPeriodId) |> ignore
+        cmdFp.ExecuteNonQuery() |> ignore
+        // Delete accounts
+        use cmdA1 = new NpgsqlCommand("DELETE FROM ledger.account WHERE id = @id", env.Connection)
+        cmdA1.Parameters.AddWithValue("@id", env.SourceAccountId) |> ignore
+        cmdA1.ExecuteNonQuery() |> ignore
+        use cmdA2 = new NpgsqlCommand("DELETE FROM ledger.account WHERE id = @id", env.Connection)
+        cmdA2.Parameters.AddWithValue("@id", env.DestAccountId) |> ignore
+        cmdA2.ExecuteNonQuery() |> ignore
+        // Delete account types
+        use cmdAt1 = new NpgsqlCommand("DELETE FROM ledger.account_type WHERE id = @id", env.Connection)
+        cmdAt1.Parameters.AddWithValue("@id", env.SourceAccountTypeId) |> ignore
+        cmdAt1.ExecuteNonQuery() |> ignore
+        use cmdAt2 = new NpgsqlCommand("DELETE FROM ledger.account_type WHERE id = @id", env.Connection)
+        cmdAt2.Parameters.AddWithValue("@id", env.DestAccountTypeId) |> ignore
+        cmdAt2.ExecuteNonQuery() |> ignore
+        env.Connection.Dispose()
 
     /// Parse an obligation agreement ID from human-readable CLI output.
     /// Format: "Obligation Agreement #NNN — name"
@@ -106,7 +201,7 @@ module OblCliEnv =
             failwithf "Spawn failed. stderr: %s" result.Stderr
         use cmd = new NpgsqlCommand(
             "SELECT id FROM ops.obligation_instance WHERE obligation_agreement_id = @aid ORDER BY id DESC LIMIT 1",
-            env.Tracker.Connection)
+            env.Connection)
         cmd.Parameters.AddWithValue("@aid", env.AgreementId) |> ignore
         cmd.ExecuteScalar() :?> int
 
@@ -120,7 +215,7 @@ module OblCliEnv =
         let instanceId =
             use cmd = new NpgsqlCommand(
                 "SELECT id FROM ops.obligation_instance WHERE obligation_agreement_id = @aid ORDER BY id DESC LIMIT 1",
-                env.Tracker.Connection)
+                env.Connection)
             cmd.Parameters.AddWithValue("@aid", env.PostableAgreementId) |> ignore
             cmd.ExecuteScalar() :?> int
         let r1 = CliRunner.run (sprintf "obligation instance transition %d --to in_flight" instanceId)
@@ -178,9 +273,9 @@ let ``List agreements filtered by type receivable`` () =
     let env = OblCliEnv.create()
     try
         // Create a payable agreement alongside the env's receivable one
-        InsertHelpers.insertObligationAgreementFull
-            env.Tracker.Connection env.Tracker $"{env.Prefix}_pay" "payable" "monthly" true
-        |> ignore
+        use txn = env.Connection.BeginTransaction()
+        InsertHelpers.insertObligationAgreementFull txn $"{env.Prefix}_pay" "payable" "monthly" true |> ignore
+        txn.Commit()
         let result = CliRunner.run "obligation agreement list --type receivable"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -194,9 +289,9 @@ let ``List agreements filtered by cadence monthly`` () =
     let env = OblCliEnv.create()
     try
         // Create a quarterly agreement alongside the env's monthly one
-        InsertHelpers.insertObligationAgreementFull
-            env.Tracker.Connection env.Tracker $"{env.Prefix}_qrt" "receivable" "quarterly" true
-        |> ignore
+        use txn = env.Connection.BeginTransaction()
+        InsertHelpers.insertObligationAgreementFull txn $"{env.Prefix}_qrt" "receivable" "quarterly" true |> ignore
+        txn.Commit()
         let result = CliRunner.run "obligation agreement list --cadence monthly"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -210,8 +305,10 @@ let ``List agreements with --inactive includes inactive agreements`` () =
     let env = OblCliEnv.create()
     try
         let inactiveId =
-            InsertHelpers.insertObligationAgreementFull
-                env.Tracker.Connection env.Tracker $"{env.Prefix}_ina" "receivable" "monthly" false
+            use txn = env.Connection.BeginTransaction()
+            let id = InsertHelpers.insertObligationAgreementFull txn $"{env.Prefix}_ina" "receivable" "monthly" false
+            txn.Commit()
+            id
         let result = CliRunner.run "obligation agreement list --inactive"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -304,9 +401,12 @@ let ``Create an agreement with all required args`` () =
         Assert.Contains("Obligation Agreement #", stdout)
         Assert.Contains("receivable", stdout)
         Assert.Contains("monthly", stdout)
-        // Track created agreement for cleanup
+        // Track created agreement for cleanup (it's committed by CLI, cleanup deletes all by prefix — but
+        // this one has a generic name, so delete it explicitly after parsing the ID)
         let agrId = OblCliEnv.parseAgreementId stdout
-        TestCleanup.trackObligationAgreement agrId env.Tracker
+        use cmd = new NpgsqlCommand("DELETE FROM ops.obligation_agreement WHERE id = @id", env.Connection)
+        cmd.Parameters.AddWithValue("@id", agrId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
     finally OblCliEnv.cleanup env
 
 [<Fact>]
@@ -320,7 +420,9 @@ let ``Create an agreement with optional args included in output`` () =
         Assert.Contains("Jeffrey", stdout)
         Assert.Contains("1200", stdout)
         let agrId = OblCliEnv.parseAgreementId stdout
-        TestCleanup.trackObligationAgreement agrId env.Tracker
+        use cmd = new NpgsqlCommand("DELETE FROM ops.obligation_agreement WHERE id = @id", env.Connection)
+        cmd.Parameters.AddWithValue("@id", agrId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
     finally OblCliEnv.cleanup env
 
 [<Fact>]
@@ -334,7 +436,9 @@ let ``Create agreement with --json flag outputs valid JSON`` () =
         let doc = JsonDocument.Parse(clean)
         Assert.NotNull(doc)
         let agrId = doc.RootElement.GetProperty("id").GetInt32()
-        TestCleanup.trackObligationAgreement agrId env.Tracker
+        use cmd = new NpgsqlCommand("DELETE FROM ops.obligation_agreement WHERE id = @id", env.Connection)
+        cmd.Parameters.AddWithValue("@id", agrId) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
     finally OblCliEnv.cleanup env
 
 [<Fact>]
@@ -467,7 +571,9 @@ let ``Deactivate with no ID argument prints error to stderr`` () =
 let ``List all instances with no filters`` () =
     let env = OblCliEnv.create()
     try
-        InsertHelpers.insertObligationInstance env.Tracker.Connection env.Tracker env.AgreementId $"{env.Prefix}_i1" true |> ignore
+        use txn = env.Connection.BeginTransaction()
+        InsertHelpers.insertObligationInstance txn env.AgreementId $"{env.Prefix}_i1" true |> ignore
+        txn.Commit()
         let result = CliRunner.run "obligation instance list"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -480,14 +586,16 @@ let ``List instances filtered by status expected`` () =
     let env = OblCliEnv.create()
     try
         // Insert one expected and one with in_flight status
+        use txn = env.Connection.BeginTransaction()
         InsertHelpers.insertObligationInstanceFull
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_exp" "expected"
             (DateOnly(2026, 6, 1)) None None true |> ignore
         InsertHelpers.insertObligationInstanceFull
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_fly" "in_flight"
             (DateOnly(2026, 6, 2)) None None true |> ignore
+        txn.Commit()
 
         let result = CliRunner.run "obligation instance list --status expected"
         Assert.Equal(0, result.ExitCode)
@@ -501,12 +609,14 @@ let ``List instances filtered by status expected`` () =
 let ``List instances filtered by due-before date`` () =
     let env = OblCliEnv.create()
     try
+        use txn = env.Connection.BeginTransaction()
         InsertHelpers.insertObligationInstanceWithDate
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_b4" (DateOnly(2026, 4, 15)) true |> ignore
         InsertHelpers.insertObligationInstanceWithDate
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_aft" (DateOnly(2026, 5, 15)) true |> ignore
+        txn.Commit()
 
         let result = CliRunner.run "obligation instance list --due-before 2026-04-30"
         Assert.Equal(0, result.ExitCode)
@@ -520,12 +630,14 @@ let ``List instances filtered by due-before date`` () =
 let ``List instances filtered by due-after date`` () =
     let env = OblCliEnv.create()
     try
+        use txn = env.Connection.BeginTransaction()
         InsertHelpers.insertObligationInstanceWithDate
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_bef" (DateOnly(2026, 3, 15)) true |> ignore
         InsertHelpers.insertObligationInstanceWithDate
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_aft" (DateOnly(2026, 4, 15)) true |> ignore
+        txn.Commit()
 
         let result = CliRunner.run "obligation instance list --due-after 2026-04-01"
         Assert.Equal(0, result.ExitCode)
@@ -539,7 +651,9 @@ let ``List instances filtered by due-after date`` () =
 let ``List instances with --json flag outputs valid JSON`` () =
     let env = OblCliEnv.create()
     try
-        InsertHelpers.insertObligationInstance env.Tracker.Connection env.Tracker env.AgreementId $"{env.Prefix}_i1" true |> ignore
+        use txn = env.Connection.BeginTransaction()
+        InsertHelpers.insertObligationInstance txn env.AgreementId $"{env.Prefix}_i1" true |> ignore
+        txn.Commit()
         let result = CliRunner.run "obligation instance list --json"
         Assert.Equal(0, result.ExitCode)
         let clean = CliRunner.stripLogLines result.Stdout
@@ -640,10 +754,14 @@ let ``Transition an instance to a new status`` () =
     try
         // Insert expected instance, transition to in_flight
         let instId =
-            InsertHelpers.insertObligationInstanceFull
-                env.Tracker.Connection env.Tracker
-                env.AgreementId $"{env.Prefix}_t1" "expected"
-                (DateOnly(2026, 6, 1)) None None true
+            use txn = env.Connection.BeginTransaction()
+            let id =
+                InsertHelpers.insertObligationInstanceFull
+                    txn
+                    env.AgreementId $"{env.Prefix}_t1" "expected"
+                    (DateOnly(2026, 6, 1)) None None true
+            txn.Commit()
+            id
         let result = CliRunner.run (sprintf "obligation instance transition %d --to in_flight" instId)
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -658,10 +776,14 @@ let ``Transition with optional args included in result`` () =
     try
         // Insert in_flight instance; transition to confirmed with amount + date + notes
         let instId =
-            InsertHelpers.insertObligationInstanceFull
-                env.Tracker.Connection env.Tracker
-                env.AgreementId $"{env.Prefix}_t2" "in_flight"
-                (DateOnly(2026, 6, 1)) None None true
+            use txn = env.Connection.BeginTransaction()
+            let id =
+                InsertHelpers.insertObligationInstanceFull
+                    txn
+                    env.AgreementId $"{env.Prefix}_t2" "in_flight"
+                    (DateOnly(2026, 6, 1)) None None true
+            txn.Commit()
+            id
         let result = CliRunner.run (sprintf "obligation instance transition %d --to confirmed --amount 1200.00 --date 2026-04-15 --notes \"Payment received\"" instId)
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -675,10 +797,14 @@ let ``Transition with --json flag outputs valid JSON`` () =
     let env = OblCliEnv.create()
     try
         let instId =
-            InsertHelpers.insertObligationInstanceFull
-                env.Tracker.Connection env.Tracker
-                env.AgreementId $"{env.Prefix}_t3" "expected"
-                (DateOnly(2026, 6, 1)) None None true
+            use txn = env.Connection.BeginTransaction()
+            let id =
+                InsertHelpers.insertObligationInstanceFull
+                    txn
+                    env.AgreementId $"{env.Prefix}_t3" "expected"
+                    (DateOnly(2026, 6, 1)) None None true
+            txn.Commit()
+            id
         let result = CliRunner.run (sprintf "obligation instance transition %d --to in_flight --json" instId)
         Assert.Equal(0, result.ExitCode)
         let clean = CliRunner.stripLogLines result.Stdout
@@ -782,10 +908,12 @@ let ``Overdue detection with --as-of date uses that date as reference`` () =
     let env = OblCliEnv.create()
     try
         // Create an instance expected before the as-of date
+        use txn = env.Connection.BeginTransaction()
         InsertHelpers.insertObligationInstanceFull
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_od" "expected"
             (DateOnly(2026, 3, 1)) None None true |> ignore
+        txn.Commit()
         let result = CliRunner.run "obligation overdue --as-of 2026-04-01"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -834,9 +962,11 @@ let ``Upcoming with no flags defaults to 30-day horizon`` () =
     let env = OblCliEnv.create()
     try
         let today = DateOnly.FromDateTime(DateTime.Today)
+        use txn = env.Connection.BeginTransaction()
         InsertHelpers.insertObligationInstanceWithDate
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_up" (today.AddDays(15)) true |> ignore
+        txn.Commit()
         let result = CliRunner.run "obligation upcoming"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -849,12 +979,14 @@ let ``Upcoming with --days 7 returns only instances within 7 days`` () =
     let env = OblCliEnv.create()
     try
         let today = DateOnly.FromDateTime(DateTime.Today)
+        use txn = env.Connection.BeginTransaction()
         InsertHelpers.insertObligationInstanceWithDate
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_in7" (today.AddDays(5)) true |> ignore
         InsertHelpers.insertObligationInstanceWithDate
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_out7" (today.AddDays(15)) true |> ignore
+        txn.Commit()
         let result = CliRunner.run "obligation upcoming --days 7"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -868,10 +1000,12 @@ let ``Upcoming includes instances in expected status`` () =
     let env = OblCliEnv.create()
     try
         let today = DateOnly.FromDateTime(DateTime.Today)
+        use txn = env.Connection.BeginTransaction()
         InsertHelpers.insertObligationInstanceFull
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_exp7" "expected"
             (today.AddDays(5)) None None true |> ignore
+        txn.Commit()
         let result = CliRunner.run "obligation upcoming --days 7"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -884,10 +1018,12 @@ let ``Upcoming includes instances in in_flight status`` () =
     let env = OblCliEnv.create()
     try
         let today = DateOnly.FromDateTime(DateTime.Today)
+        use txn = env.Connection.BeginTransaction()
         InsertHelpers.insertObligationInstanceFull
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_fly7" "in_flight"
             (today.AddDays(5)) None None true |> ignore
+        txn.Commit()
         let result = CliRunner.run "obligation upcoming --days 7"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -900,9 +1036,11 @@ let ``Upcoming excludes instances beyond the horizon`` () =
     let env = OblCliEnv.create()
     try
         let today = DateOnly.FromDateTime(DateTime.Today)
+        use txn = env.Connection.BeginTransaction()
         InsertHelpers.insertObligationInstanceWithDate
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_far" (today.AddDays(31)) true |> ignore
+        txn.Commit()
         let result = CliRunner.run "obligation upcoming --days 30"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -915,10 +1053,12 @@ let ``Upcoming excludes confirmed instances`` () =
     let env = OblCliEnv.create()
     try
         let today = DateOnly.FromDateTime(DateTime.Today)
+        use txn = env.Connection.BeginTransaction()
         InsertHelpers.insertObligationInstanceFull
-            env.Tracker.Connection env.Tracker
+            txn
             env.AgreementId $"{env.Prefix}_cfm" "confirmed"
             (today.AddDays(5)) None None true |> ignore
+        txn.Commit()
         let result = CliRunner.run "obligation upcoming --days 7"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout

@@ -155,85 +155,79 @@ let ``instance names follow cadence-specific format`` (cadenceStr: string) (date
 [<Trait("GherkinId", "FT-SI-011")>]
 let ``spawn monthly instances for a 3-month range`` () =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let agreementId =
-            InsertHelpers.insertObligationAgreementForSpawn
-                conn tracker $"{prefix}_monthly" "receivable" "monthly" (Some 15) (Some 150.00m) true
-        let cmd =
-            { obligationAgreementId = agreementId
-              startDate = DateOnly(2026, 1, 1)
-              endDate = DateOnly(2026, 3, 31) }
-        let result = ObligationInstanceService.spawn cmd
-        match result with
-        | Ok spawnResult ->
-            Assert.Equal(3, spawnResult.created.Length)
-            Assert.Equal(0, spawnResult.skippedCount)
-            // Verify dates
-            let dates = spawnResult.created |> List.map (fun i -> i.expectedDate)
-            let expectedDates =
-                [ DateOnly(2026, 1, 15); DateOnly(2026, 2, 15); DateOnly(2026, 3, 15) ]
-            Assert.Equal<DateOnly list>(expectedDates, dates)
-            // Verify names
-            let names = spawnResult.created |> List.map (fun i -> i.name)
-            Assert.Equal<string list>([ "Jan 2026"; "Feb 2026"; "Mar 2026" ], names)
-            // Verify status and isActive
-            for inst in spawnResult.created do
-                Assert.Equal(Expected, inst.status)
-                Assert.True(inst.isActive)
-                Assert.Equal(Some 150.00m, inst.amount)
-        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
-    finally TestCleanup.deleteAll tracker
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let agreementId =
+        InsertHelpers.insertObligationAgreementForSpawn
+            txn $"{prefix}_monthly" "receivable" "monthly" (Some 15) (Some 150.00m) true
+    let cmd =
+        { obligationAgreementId = agreementId
+          startDate = DateOnly(2026, 1, 1)
+          endDate = DateOnly(2026, 3, 31) }
+    let result = ObligationInstanceService.spawn txn cmd
+    match result with
+    | Ok spawnResult ->
+        Assert.Equal(3, spawnResult.created.Length)
+        Assert.Equal(0, spawnResult.skippedCount)
+        // Verify dates
+        let dates = spawnResult.created |> List.map (fun i -> i.expectedDate)
+        let expectedDates =
+            [ DateOnly(2026, 1, 15); DateOnly(2026, 2, 15); DateOnly(2026, 3, 15) ]
+        Assert.Equal<DateOnly list>(expectedDates, dates)
+        // Verify names
+        let names = spawnResult.created |> List.map (fun i -> i.name)
+        Assert.Equal<string list>([ "Jan 2026"; "Feb 2026"; "Mar 2026" ], names)
+        // Verify status and isActive
+        for inst in spawnResult.created do
+            Assert.Equal(Expected, inst.status)
+            Assert.True(inst.isActive)
+            Assert.Equal(Some 150.00m, inst.amount)
+    | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
 
 [<Fact>]
 [<Trait("GherkinId", "FT-SI-012")>]
 let ``spawn for variable-amount agreement leaves instance amount empty`` () =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let agreementId =
-            InsertHelpers.insertObligationAgreementForSpawn
-                conn tracker $"{prefix}_variable" "receivable" "monthly" (Some 1) None true
-        let cmd =
-            { obligationAgreementId = agreementId
-              startDate = DateOnly(2026, 1, 1)
-              endDate = DateOnly(2026, 1, 31) }
-        let result = ObligationInstanceService.spawn cmd
-        match result with
-        | Ok spawnResult ->
-            Assert.Equal(1, spawnResult.created.Length)
-            Assert.Equal(0, spawnResult.skippedCount)
-            Assert.True(spawnResult.created.[0].amount.IsNone,
-                        "Expected no amount on instance for variable-amount agreement")
-        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
-    finally TestCleanup.deleteAll tracker
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let agreementId =
+        InsertHelpers.insertObligationAgreementForSpawn
+            txn $"{prefix}_variable" "receivable" "monthly" (Some 1) None true
+    let cmd =
+        { obligationAgreementId = agreementId
+          startDate = DateOnly(2026, 1, 1)
+          endDate = DateOnly(2026, 1, 31) }
+    let result = ObligationInstanceService.spawn txn cmd
+    match result with
+    | Ok spawnResult ->
+        Assert.Equal(1, spawnResult.created.Length)
+        Assert.Equal(0, spawnResult.skippedCount)
+        Assert.True(spawnResult.created.[0].amount.IsNone,
+                    "Expected no amount on instance for variable-amount agreement")
+    | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
 
 [<Fact>]
 [<Trait("GherkinId", "FT-SI-013")>]
 let ``spawn OneTime creates a single instance`` () =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let agreementId =
-            InsertHelpers.insertObligationAgreementForSpawn
-                conn tracker $"{prefix}_onetime" "receivable" "one_time" None (Some 500.00m) true
-        let cmd =
-            { obligationAgreementId = agreementId
-              startDate = DateOnly(2026, 5, 20)
-              endDate = DateOnly(2026, 5, 20) }
-        let result = ObligationInstanceService.spawn cmd
-        match result with
-        | Ok spawnResult ->
-            Assert.Equal(1, spawnResult.created.Length)
-            Assert.Equal(0, spawnResult.skippedCount)
-            let inst = spawnResult.created.[0]
-            Assert.Equal("One-time", inst.name)
-            Assert.Equal(Some 500.00m, inst.amount)
-        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
-    finally TestCleanup.deleteAll tracker
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let agreementId =
+        InsertHelpers.insertObligationAgreementForSpawn
+            txn $"{prefix}_onetime" "receivable" "one_time" None (Some 500.00m) true
+    let cmd =
+        { obligationAgreementId = agreementId
+          startDate = DateOnly(2026, 5, 20)
+          endDate = DateOnly(2026, 5, 20) }
+    let result = ObligationInstanceService.spawn txn cmd
+    match result with
+    | Ok spawnResult ->
+        Assert.Equal(1, spawnResult.created.Length)
+        Assert.Equal(0, spawnResult.skippedCount)
+        let inst = spawnResult.created.[0]
+        Assert.Equal("One-time", inst.name)
+        Assert.Equal(Some 500.00m, inst.amount)
+    | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
 
 // SI-014 removed (REM-014): redundant with SI-011
 
@@ -245,56 +239,52 @@ let ``spawn OneTime creates a single instance`` () =
 [<Trait("GherkinId", "FT-SI-015")>]
 let ``spawn overlapping range skips existing dates and creates new ones`` () =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let agreementId =
-            InsertHelpers.insertObligationAgreementForSpawn
-                conn tracker $"{prefix}_overlap" "receivable" "monthly" (Some 15) (Some 100.00m) true
-        // Pre-insert instances for Jan 15 and Feb 15
-        InsertHelpers.insertObligationInstanceWithDate
-            conn tracker agreementId "Jan 2026" (DateOnly(2026, 1, 15)) true |> ignore
-        InsertHelpers.insertObligationInstanceWithDate
-            conn tracker agreementId "Feb 2026" (DateOnly(2026, 2, 15)) true |> ignore
-        let cmd =
-            { obligationAgreementId = agreementId
-              startDate = DateOnly(2026, 1, 1)
-              endDate = DateOnly(2026, 4, 30) }
-        let result = ObligationInstanceService.spawn cmd
-        match result with
-        | Ok spawnResult ->
-            Assert.Equal(2, spawnResult.created.Length)
-            Assert.Equal(2, spawnResult.skippedCount)
-            let createdDates = spawnResult.created |> List.map (fun i -> i.expectedDate)
-            let expectedDates = [ DateOnly(2026, 3, 15); DateOnly(2026, 4, 15) ]
-            Assert.Equal<DateOnly list>(expectedDates, createdDates)
-        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
-    finally TestCleanup.deleteAll tracker
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let agreementId =
+        InsertHelpers.insertObligationAgreementForSpawn
+            txn $"{prefix}_overlap" "receivable" "monthly" (Some 15) (Some 100.00m) true
+    // Pre-insert instances for Jan 15 and Feb 15
+    InsertHelpers.insertObligationInstanceWithDate
+        txn agreementId "Jan 2026" (DateOnly(2026, 1, 15)) true |> ignore
+    InsertHelpers.insertObligationInstanceWithDate
+        txn agreementId "Feb 2026" (DateOnly(2026, 2, 15)) true |> ignore
+    let cmd =
+        { obligationAgreementId = agreementId
+          startDate = DateOnly(2026, 1, 1)
+          endDate = DateOnly(2026, 4, 30) }
+    let result = ObligationInstanceService.spawn txn cmd
+    match result with
+    | Ok spawnResult ->
+        Assert.Equal(2, spawnResult.created.Length)
+        Assert.Equal(2, spawnResult.skippedCount)
+        let createdDates = spawnResult.created |> List.map (fun i -> i.expectedDate)
+        let expectedDates = [ DateOnly(2026, 3, 15); DateOnly(2026, 4, 15) ]
+        Assert.Equal<DateOnly list>(expectedDates, createdDates)
+    | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
 
 [<Fact>]
 [<Trait("GherkinId", "FT-SI-016")>]
 let ``spawn OneTime when instance already exists skips without error`` () =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let agreementId =
-            InsertHelpers.insertObligationAgreementForSpawn
-                conn tracker $"{prefix}_otdup" "receivable" "one_time" None (Some 500.00m) true
-        // Pre-insert the one-time instance
-        InsertHelpers.insertObligationInstanceWithDate
-            conn tracker agreementId "One-time" (DateOnly(2026, 5, 20)) true |> ignore
-        let cmd =
-            { obligationAgreementId = agreementId
-              startDate = DateOnly(2026, 5, 20)
-              endDate = DateOnly(2026, 5, 20) }
-        let result = ObligationInstanceService.spawn cmd
-        match result with
-        | Ok spawnResult ->
-            Assert.Equal(0, spawnResult.created.Length)
-            Assert.Equal(1, spawnResult.skippedCount)
-        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
-    finally TestCleanup.deleteAll tracker
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let agreementId =
+        InsertHelpers.insertObligationAgreementForSpawn
+            txn $"{prefix}_otdup" "receivable" "one_time" None (Some 500.00m) true
+    // Pre-insert the one-time instance
+    InsertHelpers.insertObligationInstanceWithDate
+        txn agreementId "One-time" (DateOnly(2026, 5, 20)) true |> ignore
+    let cmd =
+        { obligationAgreementId = agreementId
+          startDate = DateOnly(2026, 5, 20)
+          endDate = DateOnly(2026, 5, 20) }
+    let result = ObligationInstanceService.spawn txn cmd
+    match result with
+    | Ok spawnResult ->
+        Assert.Equal(0, spawnResult.created.Length)
+        Assert.Equal(1, spawnResult.skippedCount)
+    | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
 
 // =====================================================================
 // Integration: Error Cases (FT-SI-017, FT-SI-018)
@@ -304,38 +294,34 @@ let ``spawn OneTime when instance already exists skips without error`` () =
 [<Trait("GherkinId", "FT-SI-017")>]
 let ``spawn for inactive agreement returns error`` () =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let prefix = TestData.uniquePrefix()
-        let agreementId =
-            InsertHelpers.insertObligationAgreementForSpawn
-                conn tracker $"{prefix}_inactive" "receivable" "monthly" (Some 1) None false
-        let cmd =
-            { obligationAgreementId = agreementId
-              startDate = DateOnly(2026, 1, 1)
-              endDate = DateOnly(2026, 6, 30) }
-        let result = ObligationInstanceService.spawn cmd
-        match result with
-        | Ok _ -> Assert.Fail("Expected Error for inactive agreement")
-        | Error errs ->
-            Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("inactive")),
-                        sprintf "Expected error containing 'inactive': %A" errs)
-    finally TestCleanup.deleteAll tracker
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let agreementId =
+        InsertHelpers.insertObligationAgreementForSpawn
+            txn $"{prefix}_inactive" "receivable" "monthly" (Some 1) None false
+    let cmd =
+        { obligationAgreementId = agreementId
+          startDate = DateOnly(2026, 1, 1)
+          endDate = DateOnly(2026, 6, 30) }
+    let result = ObligationInstanceService.spawn txn cmd
+    match result with
+    | Ok _ -> Assert.Fail("Expected Error for inactive agreement")
+    | Error errs ->
+        Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("inactive")),
+                    sprintf "Expected error containing 'inactive': %A" errs)
 
 [<Fact>]
 [<Trait("GherkinId", "FT-SI-018")>]
 let ``spawn for nonexistent agreement returns error`` () =
     use conn = DataSource.openConnection()
-    let tracker = TestCleanup.create conn
-    try
-        let cmd =
-            { obligationAgreementId = 999999
-              startDate = DateOnly(2026, 1, 1)
-              endDate = DateOnly(2026, 6, 30) }
-        let result = ObligationInstanceService.spawn cmd
-        match result with
-        | Ok _ -> Assert.Fail("Expected Error for nonexistent agreement")
-        | Error errs ->
-            Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("does not exist")),
-                        sprintf "Expected error containing 'does not exist': %A" errs)
-    finally TestCleanup.deleteAll tracker
+    use txn = conn.BeginTransaction()
+    let cmd =
+        { obligationAgreementId = 999999
+          startDate = DateOnly(2026, 1, 1)
+          endDate = DateOnly(2026, 6, 30) }
+    let result = ObligationInstanceService.spawn txn cmd
+    match result with
+    | Ok _ -> Assert.Fail("Expected Error for nonexistent agreement")
+    | Error errs ->
+        Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("does not exist")),
+                    sprintf "Expected error containing 'does not exist': %A" errs)

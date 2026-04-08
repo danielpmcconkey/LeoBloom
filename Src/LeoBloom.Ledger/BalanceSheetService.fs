@@ -1,6 +1,7 @@
 namespace LeoBloom.Ledger
 
 open System
+open Npgsql
 open LeoBloom.Domain.Ledger
 open LeoBloom.Utilities
 
@@ -12,10 +13,8 @@ module BalanceSheetService =
           lines = lines
           sectionTotal = lines |> List.sumBy (fun l -> l.balance) }
 
-    let getAsOfDate (asOfDate: DateOnly) : Result<BalanceSheetReport, string> =
+    let getAsOfDate (txn: NpgsqlTransaction) (asOfDate: DateOnly) : Result<BalanceSheetReport, string> =
         Log.info "Getting balance sheet as of {AsOfDate}" [| asOfDate :> obj |]
-        use conn = DataSource.openConnection()
-        use txn = conn.BeginTransaction()
         try
             let balances = BalanceSheetRepository.getCumulativeBalances txn asOfDate
             let retainedEarnings = BalanceSheetRepository.getRetainedEarnings txn asOfDate
@@ -48,9 +47,7 @@ module BalanceSheetService =
                   totalEquity = totalEquity
                   isBalanced = isBalanced }
 
-            txn.Commit()
             Ok report
         with ex ->
             Log.errorExn ex "Failed to get balance sheet as of {AsOfDate}" [| asOfDate :> obj |]
-            try txn.Rollback() with _ -> ()
             Error (sprintf "Query error: %s" ex.Message)

@@ -2,6 +2,7 @@ module LeoBloom.Tests.PortfolioCommandsTests
 
 open System
 open System.Text.Json
+open Npgsql
 open Xunit
 open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
@@ -14,23 +15,65 @@ open LeoBloom.Tests.PortfolioTestHelpers
 
 module PortfolioCliEnv =
     type Env =
-        { Tracker:        PortfolioTracker
-          TaxBucketId:    int
-          AccountGroupId: int
-          Prefix:         string }
+        { TaxBucketId:              int
+          AccountGroupId:           int
+          Prefix:                   string
+          Connection:               NpgsqlConnection
+          mutable InvestmentAccountIds: int list
+          mutable FundSymbols:          string list }
 
     let create () =
         Log.initialize()
-        let conn    = DataSource.openConnection()
-        let tracker = createPortfolioTracker conn
-        let prefix  = TestData.uniquePrefix()
-        let tbId    = PortfolioInsertHelpers.insertTaxBucket    conn tracker (prefix + "_tb")
-        let agId    = PortfolioInsertHelpers.insertAccountGroup conn tracker (prefix + "_ag")
-        { Tracker = tracker; TaxBucketId = tbId; AccountGroupId = agId; Prefix = prefix }
+        let conn   = DataSource.openConnection()
+        let prefix = TestData.uniquePrefix()
+        let tbId, agId =
+            use txn = conn.BeginTransaction()
+            let tb = PortfolioInsertHelpers.insertTaxBucket    txn (prefix + "_tb")
+            let ag = PortfolioInsertHelpers.insertAccountGroup txn (prefix + "_ag")
+            txn.Commit()
+            tb, ag
+        { TaxBucketId              = tbId
+          AccountGroupId           = agId
+          Prefix                   = prefix
+          Connection               = conn
+          InvestmentAccountIds     = []
+          FundSymbols              = [] }
 
     let cleanup (env: Env) =
-        deletePortfolioAll env.Tracker
-        env.Tracker.Connection.Dispose()
+        // positions → investment_accounts → funds → tax_buckets → account_groups
+        use cmd1 = new NpgsqlCommand(
+            "DELETE FROM portfolio.position WHERE investment_account_id = ANY(@ids)",
+            env.Connection)
+        let idsArr = env.InvestmentAccountIds |> List.toArray
+        cmd1.Parameters.AddWithValue("@ids", idsArr) |> ignore
+        cmd1.ExecuteNonQuery() |> ignore
+
+        use cmd2 = new NpgsqlCommand(
+            "DELETE FROM portfolio.investment_account WHERE id = ANY(@ids)",
+            env.Connection)
+        cmd2.Parameters.AddWithValue("@ids", idsArr) |> ignore
+        cmd2.ExecuteNonQuery() |> ignore
+
+        use cmd3 = new NpgsqlCommand(
+            "DELETE FROM portfolio.fund WHERE symbol = ANY(@syms)",
+            env.Connection)
+        let symsArr = env.FundSymbols |> List.toArray
+        cmd3.Parameters.AddWithValue("@syms", symsArr) |> ignore
+        cmd3.ExecuteNonQuery() |> ignore
+
+        use cmd4 = new NpgsqlCommand(
+            "DELETE FROM portfolio.tax_bucket WHERE id = @tb",
+            env.Connection)
+        cmd4.Parameters.AddWithValue("@tb", env.TaxBucketId) |> ignore
+        cmd4.ExecuteNonQuery() |> ignore
+
+        use cmd5 = new NpgsqlCommand(
+            "DELETE FROM portfolio.account_group WHERE id = @ag",
+            env.Connection)
+        cmd5.Parameters.AddWithValue("@ag", env.AccountGroupId) |> ignore
+        cmd5.ExecuteNonQuery() |> ignore
+
+        env.Connection.Dispose()
 
     /// Create an investment account via CLI and return its ID.
     let createAccountViaCli (env: Env) (name: string) : int =
@@ -44,7 +87,7 @@ module PortfolioCliEnv =
         let rest = line.Substring(hashIdx + 1).Trim()
         let idStr = rest.Split([| ' '; '\r'; '\n'; '\u2014'; '\u2013'; '-' |], StringSplitOptions.RemoveEmptyEntries).[0]
         let id = Int32.Parse(idStr)
-        trackInvestmentAccount id env.Tracker
+        env.InvestmentAccountIds <- id :: env.InvestmentAccountIds
         id
 
     /// Create a fund via CLI.
@@ -53,7 +96,7 @@ module PortfolioCliEnv =
         let result = CliRunner.run args
         if result.ExitCode <> 0 then
             failwith (sprintf "Failed to create fund '%s'. stderr: %s" symbol result.Stderr)
-        trackFund symbol env.Tracker
+        env.FundSymbols <- symbol :: env.FundSymbols
 
 // =====================================================================
 // portfolio account create
@@ -72,11 +115,11 @@ let ``portfolio account create prints account details`` () =
         Assert.Contains("Investment Account #", stdout)
         Assert.Contains(name, stdout)
         // Track for cleanup
-        let line   = stdout.Split('\n') |> Array.find (fun l -> l.Contains("Investment Account #"))
+        let line    = stdout.Split('\n') |> Array.find (fun l -> l.Contains("Investment Account #"))
         let hashIdx = line.IndexOf('#')
-        let rest   = line.Substring(hashIdx + 1).Trim()
-        let idStr  = rest.Split([| ' '; '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries).[0]
-        trackInvestmentAccount (Int32.Parse(idStr)) env.Tracker
+        let rest    = line.Substring(hashIdx + 1).Trim()
+        let idStr   = rest.Split([| ' '; '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries).[0]
+        env.InvestmentAccountIds <- Int32.Parse(idStr) :: env.InvestmentAccountIds
     finally PortfolioCliEnv.cleanup env
 
 [<Fact>]
@@ -93,7 +136,7 @@ let ``portfolio account create with --json returns valid JSON`` () =
         let id   = doc.RootElement.GetProperty("id").GetInt32()
         Assert.True(id > 0)
         Assert.Equal(name, doc.RootElement.GetProperty("name").GetString())
-        trackInvestmentAccount id env.Tracker
+        env.InvestmentAccountIds <- id :: env.InvestmentAccountIds
     finally PortfolioCliEnv.cleanup env
 
 [<Fact>]
@@ -118,7 +161,7 @@ let ``portfolio account list shows table output`` () =
     try
         let name = sprintf "%s_ListTest" env.Prefix
         let id   = PortfolioCliEnv.createAccountViaCli env name
-        trackInvestmentAccount id env.Tracker
+        // id already tracked inside createAccountViaCli
         let result = CliRunner.run "portfolio account list"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -131,8 +174,7 @@ let ``portfolio account list --json returns JSON array`` () =
     let env = PortfolioCliEnv.create()
     try
         let name = sprintf "%s_JsonList" env.Prefix
-        let id   = PortfolioCliEnv.createAccountViaCli env name
-        trackInvestmentAccount id env.Tracker
+        let _id  = PortfolioCliEnv.createAccountViaCli env name
         let result = CliRunner.run "portfolio account list --json"
         Assert.Equal(0, result.ExitCode)
         let json = CliRunner.stripLogLines result.Stdout
@@ -155,7 +197,7 @@ let ``portfolio fund create prints fund details`` () =
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
         Assert.Contains(symbol, stdout)
-        trackFund symbol env.Tracker
+        env.FundSymbols <- symbol :: env.FundSymbols
     finally PortfolioCliEnv.cleanup env
 
 [<Fact>]
@@ -170,7 +212,7 @@ let ``portfolio fund create with --json returns valid JSON`` () =
         let json   = CliRunner.stripLogLines result.Stdout
         let doc    = JsonDocument.Parse(json)
         Assert.Equal(symbol, doc.RootElement.GetProperty("symbol").GetString())
-        trackFund symbol env.Tracker
+        env.FundSymbols <- symbol :: env.FundSymbols
     finally PortfolioCliEnv.cleanup env
 
 [<Fact>]

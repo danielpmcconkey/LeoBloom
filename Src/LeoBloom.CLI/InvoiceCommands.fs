@@ -4,6 +4,7 @@ open System
 open Argu
 open LeoBloom.Domain.Ops
 open LeoBloom.Ops
+open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 
 // --- Argu DU definitions for invoice subcommands ---
@@ -86,25 +87,43 @@ let private handleRecord (isJson: bool) (args: ParseResults<InvoiceRecordArgs>) 
     | Error e ->
         write isJson (Error [e])
     | Ok generatedAt ->
-        let cmd : RecordInvoiceCommand =
-            { tenant = tenant
-              fiscalPeriodId = fpId
-              rentAmount = rentAmount
-              utilityShare = utilityShare
-              totalAmount = totalAmount
-              generatedAt = generatedAt
-              documentPath = documentPath
-              notes = notes }
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let cmd : RecordInvoiceCommand =
+                { tenant = tenant
+                  fiscalPeriodId = fpId
+                  rentAmount = rentAmount
+                  utilityShare = utilityShare
+                  totalAmount = totalAmount
+                  generatedAt = generatedAt
+                  documentPath = documentPath
+                  notes = notes }
 
-        let result = InvoiceService.recordInvoice cmd
-        write isJson (result |> Result.map (fun v -> v :> obj))
+            let result = InvoiceService.recordInvoice txn cmd
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 let private handleShow (isJson: bool) (args: ParseResults<InvoiceShowArgs>) : int =
     let isJson = isJson || args.Contains InvoiceShowArgs.Json
     let invoiceId = args.GetResult InvoiceShowArgs.Invoice_Id
 
-    let result = InvoiceService.showInvoice invoiceId
-    write isJson (result |> Result.map (fun v -> v :> obj))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = InvoiceService.showInvoice txn invoiceId
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        write isJson (result |> Result.map (fun v -> v :> obj))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleList (isJson: bool) (args: ParseResults<InvoiceListArgs>) : int =
     let isJson = isJson || args.Contains InvoiceListArgs.Json
@@ -115,8 +134,15 @@ let private handleList (isJson: bool) (args: ParseResults<InvoiceListArgs>) : in
         { tenant = tenant
           fiscalPeriodId = fpId }
 
-    let invoices = InvoiceService.listInvoices filter
-    writeInvoiceList isJson invoices
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let invoices = InvoiceService.listInvoices txn filter
+        txn.Commit()
+        writeInvoiceList isJson invoices
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 // --- Dispatch ---
 

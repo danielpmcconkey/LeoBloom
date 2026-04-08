@@ -2,6 +2,7 @@ module LeoBloom.Tests.PortfolioReportCommandsTests
 
 open System
 open System.Text.Json
+open Npgsql
 open Xunit
 open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
@@ -14,60 +15,103 @@ open LeoBloom.Tests.PortfolioTestHelpers
 
 module ReportEnv =
     type Env =
-        { Tracker:        PortfolioTracker
-          TaxBucketId:    int
+        { TaxBucketId:    int
           TaxBucketId2:   int
           AccountGroupId: int
           AccountId1:     int
           AccountId2:     int
-          Prefix:         string }
+          FundSymbol1:    string
+          FundSymbol2:    string
+          Prefix:         string
+          Connection:     NpgsqlConnection }
 
     let create () =
         Log.initialize()
-        let conn    = DataSource.openConnection()
-        let tracker = createPortfolioTracker conn
-        let prefix  = TestData.uniquePrefix()
+        let conn   = DataSource.openConnection()
+        let prefix = TestData.uniquePrefix()
 
-        // Two tax buckets, one account group
-        let tb1 = PortfolioInsertHelpers.insertTaxBucket    conn tracker (prefix + "_Taxable")
-        let tb2 = PortfolioInsertHelpers.insertTaxBucket    conn tracker (prefix + "_Roth")
-        let ag  = PortfolioInsertHelpers.insertAccountGroup conn tracker (prefix + "_AG")
+        let tb1, tb2, ag, acct1, acct2, sym1, sym2 =
+            use txn = conn.BeginTransaction()
 
-        // Two investment accounts
-        let acct1 = PortfolioInsertHelpers.insertInvestmentAccount conn tracker (prefix + "_Brok") tb1 ag
-        let acct2 = PortfolioInsertHelpers.insertInvestmentAccount conn tracker (prefix + "_Roth") tb2 ag
+            // Two tax buckets, one account group
+            let tb1 = PortfolioInsertHelpers.insertTaxBucket    txn (prefix + "_Taxable")
+            let tb2 = PortfolioInsertHelpers.insertTaxBucket    txn (prefix + "_Roth")
+            let ag  = PortfolioInsertHelpers.insertAccountGroup txn (prefix + "_AG")
 
-        // Two funds (no dimension IDs — symbol dimension will still work)
-        PortfolioInsertHelpers.insertFund conn tracker (prefix + "_VTSAX") (prefix + " Total Stock") |> ignore
-        PortfolioInsertHelpers.insertFund conn tracker (prefix + "_VTIAX") (prefix + " Intl Stock")  |> ignore
+            // Two investment accounts
+            let acct1 = PortfolioInsertHelpers.insertInvestmentAccount txn (prefix + "_Brok") tb1 ag
+            let acct2 = PortfolioInsertHelpers.insertInvestmentAccount txn (prefix + "_Roth") tb2 ag
 
-        // Positions on two dates
-        let d1 = DateOnly(2024, 1, 1)
-        let d2 = DateOnly(2024, 2, 1)
+            // Two funds
+            let sym1 = PortfolioInsertHelpers.insertFund txn (prefix + "_VTSAX") (prefix + " Total Stock")
+            let sym2 = PortfolioInsertHelpers.insertFund txn (prefix + "_VTIAX") (prefix + " Intl Stock")
 
-        // Account 1: VTSAX $10000 cb $8000, VTIAX $5000 cb $4000
-        PortfolioInsertHelpers.insertPosition conn tracker acct1 (prefix + "_VTSAX") d1 100m 100m 10000m 8000m |> ignore
-        PortfolioInsertHelpers.insertPosition conn tracker acct1 (prefix + "_VTIAX") d1 50m  100m  5000m 4000m |> ignore
+            // Positions on two dates
+            let d1 = DateOnly(2024, 1, 1)
+            let d2 = DateOnly(2024, 2, 1)
 
-        // Account 2: VTSAX $20000 cb $15000
-        PortfolioInsertHelpers.insertPosition conn tracker acct2 (prefix + "_VTSAX") d1 100m 200m 20000m 15000m |> ignore
+            // Account 1: VTSAX $10000 cb $8000, VTIAX $5000 cb $4000
+            PortfolioInsertHelpers.insertPosition txn acct1 (prefix + "_VTSAX") d1 100m 100m 10000m 8000m  |> ignore
+            PortfolioInsertHelpers.insertPosition txn acct1 (prefix + "_VTIAX") d1 50m  100m  5000m 4000m  |> ignore
 
-        // Second date positions (latest)
-        PortfolioInsertHelpers.insertPosition conn tracker acct1 (prefix + "_VTSAX") d2 105m 100m 10500m 8000m |> ignore
-        PortfolioInsertHelpers.insertPosition conn tracker acct1 (prefix + "_VTIAX") d2 52m  100m  5200m 4000m |> ignore
-        PortfolioInsertHelpers.insertPosition conn tracker acct2 (prefix + "_VTSAX") d2 105m 200m 21000m 15000m |> ignore
+            // Account 2: VTSAX $20000 cb $15000
+            PortfolioInsertHelpers.insertPosition txn acct2 (prefix + "_VTSAX") d1 100m 200m 20000m 15000m |> ignore
 
-        { Tracker        = tracker
-          TaxBucketId    = tb1
+            // Second date positions (latest)
+            PortfolioInsertHelpers.insertPosition txn acct1 (prefix + "_VTSAX") d2 105m 100m 10500m 8000m  |> ignore
+            PortfolioInsertHelpers.insertPosition txn acct1 (prefix + "_VTIAX") d2 52m  100m  5200m 4000m  |> ignore
+            PortfolioInsertHelpers.insertPosition txn acct2 (prefix + "_VTSAX") d2 105m 200m 21000m 15000m |> ignore
+
+            txn.Commit()
+            tb1, tb2, ag, acct1, acct2, sym1, sym2
+
+        { TaxBucketId    = tb1
           TaxBucketId2   = tb2
           AccountGroupId = ag
           AccountId1     = acct1
           AccountId2     = acct2
-          Prefix         = prefix }
+          FundSymbol1    = sym1
+          FundSymbol2    = sym2
+          Prefix         = prefix
+          Connection     = conn }
 
     let cleanup (env: Env) =
-        deletePortfolioAll env.Tracker
-        env.Tracker.Connection.Dispose()
+        // positions → investment_accounts → funds → tax_buckets → account_groups
+        use cmd1 = new NpgsqlCommand(
+            "DELETE FROM portfolio.position WHERE investment_account_id IN (@a1, @a2)",
+            env.Connection)
+        cmd1.Parameters.AddWithValue("@a1", env.AccountId1) |> ignore
+        cmd1.Parameters.AddWithValue("@a2", env.AccountId2) |> ignore
+        cmd1.ExecuteNonQuery() |> ignore
+
+        use cmd2 = new NpgsqlCommand(
+            "DELETE FROM portfolio.investment_account WHERE id IN (@a1, @a2)",
+            env.Connection)
+        cmd2.Parameters.AddWithValue("@a1", env.AccountId1) |> ignore
+        cmd2.Parameters.AddWithValue("@a2", env.AccountId2) |> ignore
+        cmd2.ExecuteNonQuery() |> ignore
+
+        use cmd3 = new NpgsqlCommand(
+            "DELETE FROM portfolio.fund WHERE symbol IN (@s1, @s2)",
+            env.Connection)
+        cmd3.Parameters.AddWithValue("@s1", env.FundSymbol1) |> ignore
+        cmd3.Parameters.AddWithValue("@s2", env.FundSymbol2) |> ignore
+        cmd3.ExecuteNonQuery() |> ignore
+
+        use cmd4 = new NpgsqlCommand(
+            "DELETE FROM portfolio.tax_bucket WHERE id IN (@tb1, @tb2)",
+            env.Connection)
+        cmd4.Parameters.AddWithValue("@tb1", env.TaxBucketId)  |> ignore
+        cmd4.Parameters.AddWithValue("@tb2", env.TaxBucketId2) |> ignore
+        cmd4.ExecuteNonQuery() |> ignore
+
+        use cmd5 = new NpgsqlCommand(
+            "DELETE FROM portfolio.account_group WHERE id = @ag",
+            env.Connection)
+        cmd5.Parameters.AddWithValue("@ag", env.AccountGroupId) |> ignore
+        cmd5.ExecuteNonQuery() |> ignore
+
+        env.Connection.Dispose()
 
 // =====================================================================
 // report allocation
@@ -168,19 +212,32 @@ let ``report allocation --json returns valid JSON`` () =
 let ``report allocation empty portfolio returns informative message`` () =
     let env = ReportEnv.create()
     try
-        // No positions -- just the prefix dimensions but no positions
-        let conn    = env.Tracker.Connection
-        let tracker = createPortfolioTracker conn
+        // Insert an account with no positions, then run report
         let emptyPrefix = TestData.uniquePrefix()
-        let tb  = PortfolioInsertHelpers.insertTaxBucket    conn tracker (emptyPrefix + "_tb")
-        let ag  = PortfolioInsertHelpers.insertAccountGroup conn tracker (emptyPrefix + "_ag")
-        PortfolioInsertHelpers.insertInvestmentAccount conn tracker (emptyPrefix + "_acct") tb ag |> ignore
+        let emptyConn   = DataSource.openConnection()
+        let emptyTbId, emptyAgId, emptyAcctId =
+            use txn = emptyConn.BeginTransaction()
+            let tb   = PortfolioInsertHelpers.insertTaxBucket          txn (emptyPrefix + "_tb")
+            let ag   = PortfolioInsertHelpers.insertAccountGroup        txn (emptyPrefix + "_ag")
+            let acct = PortfolioInsertHelpers.insertInvestmentAccount   txn (emptyPrefix + "_acct") tb ag
+            txn.Commit()
+            tb, ag, acct
         try
             let result = CliRunner.run "report allocation"
             // Should succeed with exit 0 and mention no positions
             Assert.Equal(0, result.ExitCode)
         finally
-            deletePortfolioAll tracker
+            // Clean up the extra account/group/bucket (no positions to delete)
+            use c1 = new NpgsqlCommand("DELETE FROM portfolio.investment_account WHERE id = @id", emptyConn)
+            c1.Parameters.AddWithValue("@id", emptyAcctId) |> ignore
+            c1.ExecuteNonQuery() |> ignore
+            use c2 = new NpgsqlCommand("DELETE FROM portfolio.tax_bucket WHERE id = @id", emptyConn)
+            c2.Parameters.AddWithValue("@id", emptyTbId) |> ignore
+            c2.ExecuteNonQuery() |> ignore
+            use c3 = new NpgsqlCommand("DELETE FROM portfolio.account_group WHERE id = @id", emptyConn)
+            c3.Parameters.AddWithValue("@id", emptyAgId) |> ignore
+            c3.ExecuteNonQuery() |> ignore
+            emptyConn.Dispose()
     finally ReportEnv.cleanup env
 
 [<Fact>]

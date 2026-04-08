@@ -1,5 +1,6 @@
 namespace LeoBloom.Ledger
 
+open Npgsql
 open LeoBloom.Domain.Ledger
 open LeoBloom.Utilities
 
@@ -33,38 +34,26 @@ module TrialBalanceService =
           grandTotalCredits = grandTotalCredits
           isBalanced = (grandTotalDebits = grandTotalCredits) }
 
-    let getByPeriodId (fiscalPeriodId: int) : Result<TrialBalanceReport, string> =
+    let getByPeriodId (txn: NpgsqlTransaction) (fiscalPeriodId: int) : Result<TrialBalanceReport, string> =
         Log.info "Getting trial balance for fiscal period ID {FiscalPeriodId}" [| fiscalPeriodId :> obj |]
-        use conn = DataSource.openConnection()
-        use txn = conn.BeginTransaction()
         try
-            let result =
-                match TrialBalanceRepository.periodExists txn fiscalPeriodId with
-                | None -> Error (sprintf "Fiscal period with id %d does not exist" fiscalPeriodId)
-                | Some (id, periodKey) ->
-                    let lines = TrialBalanceRepository.getActivityByPeriod txn id
-                    Ok (buildReport id periodKey lines)
-            txn.Commit()
-            result
+            match TrialBalanceRepository.periodExists txn fiscalPeriodId with
+            | None -> Error (sprintf "Fiscal period with id %d does not exist" fiscalPeriodId)
+            | Some (id, periodKey) ->
+                let lines = TrialBalanceRepository.getActivityByPeriod txn id
+                Ok (buildReport id periodKey lines)
         with ex ->
             Log.errorExn ex "Failed to get trial balance for fiscal period ID {FiscalPeriodId}" [| fiscalPeriodId :> obj |]
-            try txn.Rollback() with _ -> ()
             Error (sprintf "Query error: %s" ex.Message)
 
-    let getByPeriodKey (periodKey: string) : Result<TrialBalanceReport, string> =
+    let getByPeriodKey (txn: NpgsqlTransaction) (periodKey: string) : Result<TrialBalanceReport, string> =
         Log.info "Getting trial balance for period key {PeriodKey}" [| periodKey :> obj |]
-        use conn = DataSource.openConnection()
-        use txn = conn.BeginTransaction()
         try
-            let result =
-                match TrialBalanceRepository.resolvePeriodId txn periodKey with
-                | None -> Error (sprintf "Fiscal period with key '%s' does not exist" periodKey)
-                | Some fiscalPeriodId ->
-                    let lines = TrialBalanceRepository.getActivityByPeriod txn fiscalPeriodId
-                    Ok (buildReport fiscalPeriodId periodKey lines)
-            txn.Commit()
-            result
+            match TrialBalanceRepository.resolvePeriodId txn periodKey with
+            | None -> Error (sprintf "Fiscal period with key '%s' does not exist" periodKey)
+            | Some fiscalPeriodId ->
+                let lines = TrialBalanceRepository.getActivityByPeriod txn fiscalPeriodId
+                Ok (buildReport fiscalPeriodId periodKey lines)
         with ex ->
             Log.errorExn ex "Failed to get trial balance for period key {PeriodKey}" [| periodKey :> obj |]
-            try txn.Rollback() with _ -> ()
             Error (sprintf "Query error: %s" ex.Message)

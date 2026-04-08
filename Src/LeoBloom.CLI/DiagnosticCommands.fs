@@ -3,6 +3,7 @@ module LeoBloom.CLI.DiagnosticCommands
 open System
 open Argu
 open LeoBloom.Ops
+open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 
 // --- Argu DU definitions ---
@@ -24,13 +25,23 @@ type DiagnosticArgs =
 // --- Command handlers ---
 
 let private handleOrphanedPostings (isJson: bool) : int =
-    match OrphanedPostingService.findOrphanedPostings() with
-    | Error errs ->
-        for err in errs do
-            Console.Error.WriteLine(sprintf "Error: %s" err)
-        ExitCodes.systemError
-    | Ok result ->
-        writeOrphanedPostings isJson result
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = OrphanedPostingService.findOrphanedPostings txn
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        match result with
+        | Error errs ->
+            for err in errs do
+                Console.Error.WriteLine(sprintf "Error: %s" err)
+            ExitCodes.systemError
+        | Ok orphanResult ->
+            writeOrphanedPostings isJson orphanResult
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 // --- Dispatch ---
 

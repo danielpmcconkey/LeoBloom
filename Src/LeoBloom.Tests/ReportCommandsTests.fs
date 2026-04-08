@@ -20,11 +20,10 @@ module ReportCliEnv =
           RevenueAccountId: int    // 4110-style revenue (credit normal)
           ExpenseAccountId: int    // 5110-style expense (debit normal)
           FiscalPeriodId: int
-          Tracker: TestCleanup.Tracker }
+          Connection: NpgsqlConnection }
 
     let create () =
         let conn = DataSource.openConnection()
-        let tracker = TestCleanup.create conn
         let prefix = TestData.uniquePrefix()
 
         // Use the standard seeded account type IDs
@@ -32,20 +31,44 @@ module ReportCliEnv =
         let revenueTypeId = 4
         let expenseTypeId = 5
 
-        let cashAcct = InsertHelpers.insertAccount conn tracker (prefix + "CA") "TestCash" assetTypeId true
-        let revAcct = InsertHelpers.insertAccount conn tracker (prefix + "RV") "TestRevenue" revenueTypeId true
-        let expAcct = InsertHelpers.insertAccount conn tracker (prefix + "EX") "TestExpense" expenseTypeId true
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31)) true
+        let (cashAcct, revAcct, expAcct, fpId) =
+            use txn = conn.BeginTransaction()
+            let ca = InsertHelpers.insertAccount txn (prefix + "CA") "TestCash" assetTypeId true
+            let rv = InsertHelpers.insertAccount txn (prefix + "RV") "TestRevenue" revenueTypeId true
+            let ex = InsertHelpers.insertAccount txn (prefix + "EX") "TestExpense" expenseTypeId true
+            let fp = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31)) true
+            txn.Commit()
+            (ca, rv, ex, fp)
 
         { CashAccountId = cashAcct
           RevenueAccountId = revAcct
           ExpenseAccountId = expAcct
           FiscalPeriodId = fpId
-          Tracker = tracker }
+          Connection = conn }
 
     let cleanup (env: Env) =
-        TestCleanup.deleteAll env.Tracker
-        env.Tracker.Connection.Dispose()
+        // Delete journal entry lines and entries for our fiscal period
+        use cmd1 = new NpgsqlCommand(
+            "DELETE FROM ledger.journal_entry_line WHERE journal_entry_id IN \
+             (SELECT id FROM ledger.journal_entry WHERE fiscal_period_id = @fp)", env.Connection)
+        cmd1.Parameters.AddWithValue("@fp", env.FiscalPeriodId) |> ignore
+        cmd1.ExecuteNonQuery() |> ignore
+        use cmd2 = new NpgsqlCommand("DELETE FROM ledger.journal_entry WHERE fiscal_period_id = @fp", env.Connection)
+        cmd2.Parameters.AddWithValue("@fp", env.FiscalPeriodId) |> ignore
+        cmd2.ExecuteNonQuery() |> ignore
+        use cmd3 = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", env.Connection)
+        cmd3.Parameters.AddWithValue("@id", env.FiscalPeriodId) |> ignore
+        cmd3.ExecuteNonQuery() |> ignore
+        use cmd4 = new NpgsqlCommand("DELETE FROM ledger.account WHERE id = @id", env.Connection)
+        cmd4.Parameters.AddWithValue("@id", env.CashAccountId) |> ignore
+        cmd4.ExecuteNonQuery() |> ignore
+        use cmd5 = new NpgsqlCommand("DELETE FROM ledger.account WHERE id = @id", env.Connection)
+        cmd5.Parameters.AddWithValue("@id", env.RevenueAccountId) |> ignore
+        cmd5.ExecuteNonQuery() |> ignore
+        use cmd6 = new NpgsqlCommand("DELETE FROM ledger.account WHERE id = @id", env.Connection)
+        cmd6.Parameters.AddWithValue("@id", env.ExpenseAccountId) |> ignore
+        cmd6.ExecuteNonQuery() |> ignore
+        env.Connection.Dispose()
 
     /// Post an entry via the service (not CLI) for test setup.
     let postEntry (env: Env) (debitAcctId: int) (creditAcctId: int) (date: DateOnly) (desc: string) (amount: decimal) =
@@ -58,11 +81,14 @@ module ReportCliEnv =
                 [ { accountId = debitAcctId; amount = amount; entryType = EntryType.Debit; memo = None }
                   { accountId = creditAcctId; amount = amount; entryType = EntryType.Credit; memo = None } ]
               references = [] }
-        match JournalEntryService.post cmd with
+        use txn = env.Connection.BeginTransaction()
+        match JournalEntryService.post txn cmd with
         | Ok posted ->
-            TestCleanup.trackJournalEntry posted.entry.id env.Tracker
+            txn.Commit()
             posted.entry.id
-        | Error errs -> failwith (sprintf "Setup post failed: %A" errs)
+        | Error errs ->
+            txn.Rollback()
+            failwith (sprintf "Setup post failed: %A" errs)
 
 // =====================================================================
 // report command group — FT-RPT-001 to FT-RPT-003
@@ -177,7 +203,7 @@ let ``General ledger for a valid account and date range produces formatted outpu
             (DateOnly(2026, 3, 15)) "Test GL entry" 1000m |> ignore
 
         // Look up the account code we just created
-        use cmd = new NpgsqlCommand("SELECT code FROM ledger.account WHERE id = @id", env.Tracker.Connection)
+        use cmd = new NpgsqlCommand("SELECT code FROM ledger.account WHERE id = @id", env.Connection)
         cmd.Parameters.AddWithValue("@id", env.CashAccountId) |> ignore
         let accountCode = cmd.ExecuteScalar() :?> string
 
@@ -707,4 +733,3 @@ let ``--json on account-balance produces valid JSON`` () =
     let cleanStdout = CliRunner.stripLogLines result.Stdout
     let doc = JsonDocument.Parse(cleanStdout)
     Assert.NotNull(doc)
-

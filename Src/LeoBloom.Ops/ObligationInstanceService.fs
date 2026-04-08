@@ -6,7 +6,7 @@ open LeoBloom.Domain.Ops
 open LeoBloom.Utilities
 
 /// Orchestrates spawning obligation instances from an agreement and date range.
-/// Opens its own connection + transaction for atomicity.
+/// Caller is responsible for connection and transaction lifecycle.
 module ObligationInstanceService =
 
     let private journalEntryExists (txn: Npgsql.NpgsqlTransaction) (jeId: int) : bool =
@@ -19,34 +19,24 @@ module ObligationInstanceService =
         reader.Close()
         exists
 
-    let list (filter: ListInstancesFilter) : ObligationInstance list =
+    let list (txn: NpgsqlTransaction) (filter: ListInstancesFilter) : ObligationInstance list =
         Log.info "Listing obligation instances" [||]
-        use conn = DataSource.openConnection()
-        use txn = conn.BeginTransaction()
         try
-            let result = ObligationInstanceRepository.list txn filter
-            txn.Commit()
-            result
+            ObligationInstanceRepository.list txn filter
         with ex ->
             Log.errorExn ex "Failed to list obligation instances" [||]
-            try txn.Rollback() with _ -> ()
             []
 
-    let findUpcoming (today: DateOnly) (days: int) : ObligationInstance list =
+    let findUpcoming (txn: NpgsqlTransaction) (today: DateOnly) (days: int) : ObligationInstance list =
         Log.info "Finding upcoming obligation instances within {Days} days" [| days :> obj |]
         let horizon = today.AddDays(days)
-        use conn = DataSource.openConnection()
-        use txn = conn.BeginTransaction()
         try
-            let result = ObligationInstanceRepository.findUpcoming txn today horizon
-            txn.Commit()
-            result
+            ObligationInstanceRepository.findUpcoming txn today horizon
         with ex ->
             Log.errorExn ex "Failed to find upcoming obligation instances" [||]
-            try txn.Rollback() with _ -> ()
             []
 
-    let transition (cmd: TransitionCommand) : Result<ObligationInstance, string list> =
+    let transition (txn: NpgsqlTransaction) (cmd: TransitionCommand) : Result<ObligationInstance, string list> =
         Log.info "Transitioning instance {InstanceId} to {TargetStatus}"
             [| cmd.instanceId :> obj; InstanceStatus.toString cmd.targetStatus :> obj |]
 
@@ -55,23 +45,18 @@ module ObligationInstanceService =
             Log.warn "Transition command validation failed: {Errors}" [| errs :> obj |]
             Error errs
         | Ok () ->
-            use conn = DataSource.openConnection()
-            use txn = conn.BeginTransaction()
             try
                 match ObligationInstanceRepository.findById txn cmd.instanceId with
                 | None ->
-                    txn.Rollback()
                     let msg = sprintf "Obligation instance with id %d does not exist" cmd.instanceId
                     Log.warn "{Message}" [| msg :> obj |]
                     Error [ msg ]
                 | Some instance ->
                     if not instance.isActive then
-                        txn.Rollback()
                         let msg = sprintf "Obligation instance with id %d is inactive" instance.id
                         Log.warn "{Message}" [| msg :> obj |]
                         Error [ msg ]
                     else if not (StatusTransition.isValidTransition instance.status cmd.targetStatus) then
-                        txn.Rollback()
                         let msg =
                             sprintf "invalid transition from %s to %s"
                                 (InstanceStatus.toString instance.status)
@@ -89,17 +74,14 @@ module ObligationInstanceService =
                             | _ -> cmd.amount
 
                         if cmd.targetStatus = InstanceStatus.Confirmed && effectiveAmount.IsNone then
-                            txn.Rollback()
                             Error [ "amount is required for confirmed transition (not on instance or in command)" ]
                         // Skipped guard: notes must be available
                         elif cmd.targetStatus = InstanceStatus.Skipped && cmd.notes.IsNone && instance.notes.IsNone then
-                            txn.Rollback()
                             Error [ "notes are required for skipped transition" ]
                         else
                             // Posted guard: journal entry must exist
                             match cmd.targetStatus, cmd.journalEntryId with
                             | InstanceStatus.Posted, Some jeId when not (journalEntryExists txn jeId) ->
-                                txn.Rollback()
                                 let msg = sprintf "Journal entry with id %d does not exist" jeId
                                 Log.warn "{Message}" [| msg :> obj |]
                                 Error [ msg ]
@@ -129,8 +111,6 @@ module ObligationInstanceService =
                                         txn instance.id cmd.targetStatus
                                         amountToSet confirmedDateToSet journalEntryIdToSet notesToSet
 
-                                txn.Commit()
-
                                 Log.info "Transitioned instance {InstanceId} from {From} to {To}"
                                     [| instance.id :> obj
                                        InstanceStatus.toString instance.status :> obj
@@ -139,23 +119,17 @@ module ObligationInstanceService =
                                 Ok updated
             with ex ->
                 Log.errorExn ex "Failed to transition instance {InstanceId}" [| cmd.instanceId :> obj |]
-                try txn.Rollback() with _ -> ()
                 Error [ sprintf "Persistence error: %s" ex.Message ]
 
-    let detectOverdue (referenceDate: DateOnly) : OverdueDetectionResult =
+    let detectOverdue (txn: NpgsqlTransaction) (referenceDate: DateOnly) : OverdueDetectionResult =
         Log.info "Running overdue detection with reference date {ReferenceDate}" [| referenceDate :> obj |]
 
-        // Find candidates in a read-only transaction
         let candidatesResult =
-            use conn = DataSource.openConnection()
-            use txn = conn.BeginTransaction()
             try
                 let result = ObligationInstanceRepository.findOverdueCandidates txn referenceDate
-                txn.Commit()
                 Ok result
             with ex ->
                 Log.errorExn ex "Failed to query overdue candidates" [||]
-                try txn.Rollback() with _ -> ()
                 Error ex.Message
 
         match candidatesResult with
@@ -176,7 +150,7 @@ module ObligationInstanceService =
                       targetStatus = Overdue
                       amount = None; confirmedDate = None
                       journalEntryId = None; notes = None }
-                match transition cmd with
+                match transition txn cmd with
                 | Ok _ -> transitioned <- transitioned + 1
                 | Error errs ->
                     let msg = System.String.Join("; ", errs)
@@ -191,7 +165,7 @@ module ObligationInstanceService =
 
             result
 
-    let spawn (cmd: SpawnObligationInstancesCommand) : Result<SpawnResult, string list> =
+    let spawn (txn: NpgsqlTransaction) (cmd: SpawnObligationInstancesCommand) : Result<SpawnResult, string list> =
         Log.info "Spawning obligation instances for agreement {AgreementId} from {Start} to {End}"
             [| cmd.obligationAgreementId :> obj; cmd.startDate :> obj; cmd.endDate :> obj |]
 
@@ -200,18 +174,14 @@ module ObligationInstanceService =
             Log.warn "Spawn command validation failed: {Errors}" [| errs :> obj |]
             Error errs
         | Ok () ->
-            use conn = DataSource.openConnection()
-            use txn = conn.BeginTransaction()
             try
                 match ObligationAgreementRepository.findById txn cmd.obligationAgreementId with
                 | None ->
-                    txn.Rollback()
                     let msg = sprintf "Obligation agreement with id %d does not exist" cmd.obligationAgreementId
                     Log.warn "{Message}" [| msg :> obj |]
                     Error [ msg ]
                 | Some agreement ->
                     if not agreement.isActive then
-                        txn.Rollback()
                         let msg = sprintf "Obligation agreement with id %d is inactive" agreement.id
                         Log.warn "{Message}" [| msg :> obj |]
                         Error [ msg ]
@@ -235,8 +205,6 @@ module ObligationInstanceService =
                                 ObligationInstanceRepository.insert
                                     txn agreement.id name Expected agreement.amount date)
 
-                        txn.Commit()
-
                         let skippedCount = allDates.Length - newDates.Length
 
                         Log.info "Spawned {Created} instances, skipped {Skipped} for agreement {AgreementId}"
@@ -246,5 +214,4 @@ module ObligationInstanceService =
             with ex ->
                 Log.errorExn ex "Failed to spawn obligation instances for agreement {AgreementId}"
                     [| cmd.obligationAgreementId :> obj |]
-                try txn.Rollback() with _ -> ()
                 Error [ sprintf "Persistence error: %s" ex.Message ]

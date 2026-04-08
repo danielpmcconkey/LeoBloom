@@ -17,43 +17,80 @@ module TransferCliEnv =
     type Env =
         { FromAccountId: int
           ToAccountId: int
+          FromAccountTypeId: int
           FiscalPeriodId: int
           Prefix: string
-          Tracker: TestCleanup.Tracker }
+          Connection: NpgsqlConnection }
 
     let create () =
         let conn = DataSource.openConnection()
-        let tracker = TestCleanup.create conn
         let prefix = TestData.uniquePrefix()
-        let assetTypeId = 1 // pre-seeded "asset" type
-        let fromId = InsertHelpers.insertAccount conn tracker $"{prefix}FR" $"{prefix}_from" assetTypeId true
-        let toId = InsertHelpers.insertAccount conn tracker $"{prefix}TO" $"{prefix}_to" assetTypeId true
-        let fpId = InsertHelpers.insertFiscalPeriod conn tracker (prefix + "FP") (DateOnly(2093, 1, 1)) (DateOnly(2093, 12, 31)) true
+        let (atId, fromId, toId, fpId) =
+            use txn = conn.BeginTransaction()
+            // Use account type 1 (pre-seeded "asset") for accounts
+            let fr = InsertHelpers.insertAccount txn $"{prefix}FR" $"{prefix}_from" 1 true
+            let to_ = InsertHelpers.insertAccount txn $"{prefix}TO" $"{prefix}_to" 1 true
+            let fp  = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2093, 1, 1)) (DateOnly(2093, 12, 31)) true
+            txn.Commit()
+            (1, fr, to_, fp)
         { FromAccountId = fromId
           ToAccountId = toId
+          FromAccountTypeId = atId
           FiscalPeriodId = fpId
           Prefix = prefix
-          Tracker = tracker }
+          Connection = conn }
 
     let cleanup (env: Env) =
-        // Before standard cleanup, find any journal entries linked to transfers
-        // for our accounts and track them so JE lines + JEs get cleaned
+        // Find JEs linked to transfers, delete transfers first (FK: transfer.journal_entry_id), then JEs
         try
-            use cmd = new NpgsqlCommand(
+            use cmdJeIds = new NpgsqlCommand(
                 "SELECT journal_entry_id FROM ops.transfer \
                  WHERE (from_account_id = @from OR to_account_id = @to) \
                  AND journal_entry_id IS NOT NULL",
-                env.Tracker.Connection)
-            cmd.Parameters.AddWithValue("@from", env.FromAccountId) |> ignore
-            cmd.Parameters.AddWithValue("@to", env.ToAccountId) |> ignore
-            use reader = cmd.ExecuteReader()
-            while reader.Read() do
-                TestCleanup.trackJournalEntry (reader.GetInt32(0)) env.Tracker
+                env.Connection)
+            cmdJeIds.Parameters.AddWithValue("@from", env.FromAccountId) |> ignore
+            cmdJeIds.Parameters.AddWithValue("@to", env.ToAccountId) |> ignore
+            use reader = cmdJeIds.ExecuteReader()
+            let jeIds = [ while reader.Read() do yield reader.GetInt32(0) ]
             reader.Close()
+            // Delete transfers before JEs — transfer.journal_entry_id FK would block JE deletion
+            use cmdTrFirst = new NpgsqlCommand(
+                "DELETE FROM ops.transfer WHERE from_account_id = @from OR to_account_id = @to",
+                env.Connection)
+            cmdTrFirst.Parameters.AddWithValue("@from", env.FromAccountId) |> ignore
+            cmdTrFirst.Parameters.AddWithValue("@to", env.ToAccountId) |> ignore
+            cmdTrFirst.ExecuteNonQuery() |> ignore
+            for jeId in jeIds do
+                use cmd1 = new NpgsqlCommand("DELETE FROM ledger.journal_entry_line WHERE journal_entry_id = @id", env.Connection)
+                cmd1.Parameters.AddWithValue("@id", jeId) |> ignore
+                cmd1.ExecuteNonQuery() |> ignore
+                use cmd1b = new NpgsqlCommand("DELETE FROM ledger.journal_entry_reference WHERE journal_entry_id = @id", env.Connection)
+                cmd1b.Parameters.AddWithValue("@id", jeId) |> ignore
+                cmd1b.ExecuteNonQuery() |> ignore
+                use cmd2 = new NpgsqlCommand("DELETE FROM ledger.journal_entry WHERE id = @id", env.Connection)
+                cmd2.Parameters.AddWithValue("@id", jeId) |> ignore
+                cmd2.ExecuteNonQuery() |> ignore
         with ex ->
-            eprintfn "TransferCliEnv.cleanup: failed to find JE IDs: %s" ex.Message
-        TestCleanup.deleteAll env.Tracker
-        env.Tracker.Connection.Dispose()
+            eprintfn "TransferCliEnv.cleanup: error during JE cleanup: %s" ex.Message
+        // Safety-net: delete any remaining transfers not already removed in the try block
+        use cmdTr = new NpgsqlCommand(
+            "DELETE FROM ops.transfer WHERE from_account_id = @from OR to_account_id = @to",
+            env.Connection)
+        cmdTr.Parameters.AddWithValue("@from", env.FromAccountId) |> ignore
+        cmdTr.Parameters.AddWithValue("@to", env.ToAccountId) |> ignore
+        cmdTr.ExecuteNonQuery() |> ignore
+        // Delete fiscal period
+        use cmdFp = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", env.Connection)
+        cmdFp.Parameters.AddWithValue("@id", env.FiscalPeriodId) |> ignore
+        cmdFp.ExecuteNonQuery() |> ignore
+        // Delete accounts
+        use cmdA1 = new NpgsqlCommand("DELETE FROM ledger.account WHERE id = @id", env.Connection)
+        cmdA1.Parameters.AddWithValue("@id", env.FromAccountId) |> ignore
+        cmdA1.ExecuteNonQuery() |> ignore
+        use cmdA2 = new NpgsqlCommand("DELETE FROM ledger.account WHERE id = @id", env.Connection)
+        cmdA2.Parameters.AddWithValue("@id", env.ToAccountId) |> ignore
+        cmdA2.ExecuteNonQuery() |> ignore
+        env.Connection.Dispose()
 
     /// Initiate a transfer via CLI (human mode) and return the transfer ID.
     let initiateTransferViaCli (env: Env) (amount: decimal) (dateStr: string) : int =

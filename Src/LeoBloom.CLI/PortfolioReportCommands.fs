@@ -2,6 +2,7 @@ module LeoBloom.CLI.PortfolioReportCommands
 
 open Argu
 open LeoBloom.Portfolio
+open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 
 // --- Argu DU definitions ---
@@ -49,24 +50,60 @@ type GainsArgs =
 let handleAllocation (args: ParseResults<AllocationArgs>) : int =
     let isJson = args.Contains AllocationArgs.Json
     let dim    = args.TryGetResult AllocationArgs.By |> Option.defaultValue "account-group"
-    let result = PortfolioReportService.getAllocation dim
-    writeAllocationReport isJson result
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = PortfolioReportService.getAllocation txn dim
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        writeAllocationReport isJson result
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let handlePortfolioSummary (args: ParseResults<PortfolioSummaryArgs>) : int =
     let isJson = args.Contains PortfolioSummaryArgs.Json
-    let result = PortfolioReportService.getPortfolioSummary ()
-    writePortfolioSummary isJson result
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = PortfolioReportService.getPortfolioSummary txn
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        writePortfolioSummary isJson result
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let handlePortfolioHistory (args: ParseResults<PortfolioHistoryArgs>) : int =
     let isJson  = args.Contains PortfolioHistoryArgs.Json
     let dim     = args.TryGetResult PortfolioHistoryArgs.By   |> Option.defaultValue "tax-bucket"
     let fromRaw = args.TryGetResult PortfolioHistoryArgs.From
     let toRaw   = args.TryGetResult PortfolioHistoryArgs.To
-    let result  = PortfolioReportService.getPortfolioHistory dim fromRaw toRaw
-    writePortfolioHistoryReport isJson result
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = PortfolioReportService.getPortfolioHistory txn dim fromRaw toRaw
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        writePortfolioHistoryReport isJson result
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let handleGains (args: ParseResults<GainsArgs>) : int =
     let isJson    = args.Contains GainsArgs.Json
     let accountId = args.TryGetResult GainsArgs.Account
-    let result    = PortfolioReportService.getGains accountId
-    writeGainsReport isJson result
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = PortfolioReportService.getGains txn accountId
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        writeGainsReport isJson result
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()

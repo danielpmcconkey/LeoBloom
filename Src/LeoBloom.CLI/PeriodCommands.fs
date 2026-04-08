@@ -2,8 +2,10 @@ module LeoBloom.CLI.PeriodCommands
 
 open System
 open Argu
+open Npgsql
 open LeoBloom.Domain.Ledger
 open LeoBloom.Ledger
+open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 
 // --- Argu DU definitions ---
@@ -75,11 +77,11 @@ let private parseDate (raw: string) : Result<DateOnly, string> =
 
 /// Resolves a period arg (id or key) to a period ID.
 /// On key input, calls findPeriodByKey. On id input, passes through.
-let private resolvePeriodId (raw: string) : Result<int, string list> =
+let private resolvePeriodId (txn: NpgsqlTransaction) (raw: string) : Result<int, string list> =
     match parsePeriodArg raw with
     | Choice1Of2 id -> Ok id
     | Choice2Of2 key ->
-        match FiscalPeriodService.findPeriodByKey key with
+        match FiscalPeriodService.findPeriodByKey txn key with
         | Ok period -> Ok period.id
         | Error errs -> Error errs
 
@@ -87,33 +89,65 @@ let private resolvePeriodId (raw: string) : Result<int, string list> =
 
 let private handleList (isJson: bool) (args: ParseResults<PeriodListArgs>) : int =
     let isJson = isJson || args.Contains PeriodListArgs.Json
-    match FiscalPeriodService.listPeriods () with
-    | Ok periods -> writePeriodList isJson periods
-    | Error errs -> write isJson (Error errs)
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        let result = FiscalPeriodService.listPeriods txn ()
+        match result with
+        | Ok _ -> txn.Commit()
+        | Error _ -> txn.Rollback()
+        match result with
+        | Ok periods -> writePeriodList isJson periods
+        | Error errs -> write isJson (Error errs)
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleClose (isJson: bool) (args: ParseResults<PeriodCloseArgs>) : int =
     let isJson = isJson || args.Contains PeriodCloseArgs.Json
     let periodRaw = args.GetResult PeriodCloseArgs.Period
 
-    match resolvePeriodId periodRaw with
-    | Error errs -> write isJson (Error errs)
-    | Ok periodId ->
-        let cmd : CloseFiscalPeriodCommand = { fiscalPeriodId = periodId }
-        let result = FiscalPeriodService.closePeriod cmd
-        write isJson (result |> Result.map (fun v -> v :> obj))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        match resolvePeriodId txn periodRaw with
+        | Error errs ->
+            txn.Rollback()
+            write isJson (Error errs)
+        | Ok periodId ->
+            let cmd : CloseFiscalPeriodCommand = { fiscalPeriodId = periodId }
+            let result = FiscalPeriodService.closePeriod txn cmd
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleReopen (isJson: bool) (args: ParseResults<PeriodReopenArgs>) : int =
     let isJson = isJson || args.Contains PeriodReopenArgs.Json
     let periodRaw = args.GetResult PeriodReopenArgs.Period
     let reason = args.GetResult PeriodReopenArgs.Reason
 
-    match resolvePeriodId periodRaw with
-    | Error errs -> write isJson (Error errs)
-    | Ok periodId ->
-        let cmd : ReopenFiscalPeriodCommand =
-            { fiscalPeriodId = periodId; reason = reason }
-        let result = FiscalPeriodService.reopenPeriod cmd
-        write isJson (result |> Result.map (fun v -> v :> obj))
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        match resolvePeriodId txn periodRaw with
+        | Error errs ->
+            txn.Rollback()
+            write isJson (Error errs)
+        | Ok periodId ->
+            let cmd : ReopenFiscalPeriodCommand =
+                { fiscalPeriodId = periodId; reason = reason }
+            let result = FiscalPeriodService.reopenPeriod txn cmd
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj))
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
 
 let private handleCreate (isJson: bool) (args: ParseResults<PeriodCreateArgs>) : int =
     let isJson = isJson || args.Contains PeriodCreateArgs.Json
@@ -127,8 +161,17 @@ let private handleCreate (isJson: bool) (args: ParseResults<PeriodCreateArgs>) :
     | Error e, _ | _, Error e ->
         write isJson (Error [e])
     | Ok startDate, Ok endDate ->
-        let result = FiscalPeriodService.createPeriod key startDate endDate
-        write isJson (result |> Result.map (fun v -> v :> obj))
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = FiscalPeriodService.createPeriod txn key startDate endDate
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
 
 // --- Dispatch ---
 
