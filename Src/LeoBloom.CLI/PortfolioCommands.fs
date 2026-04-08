@@ -6,6 +6,7 @@ open LeoBloom.Domain.Portfolio
 open LeoBloom.Portfolio
 open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
+open LeoBloom.CLI.CliHelpers
 
 // --- PortfolioAccountArgs ---
 
@@ -198,11 +199,6 @@ type PortfolioArgs =
             | Dimensions _ -> "List all portfolio dimension tables"
 
 // --- Helpers ---
-
-let private parseDate (raw: string) : Result<DateOnly, string> =
-    match DateOnly.TryParseExact(raw, "yyyy-MM-dd") with
-    | true, d  -> Ok d
-    | false, _ -> Error (sprintf "Invalid date format '%s' -- expected yyyy-MM-dd" raw)
 
 // --- Account handlers ---
 

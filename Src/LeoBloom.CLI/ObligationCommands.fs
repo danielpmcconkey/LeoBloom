@@ -6,6 +6,7 @@ open LeoBloom.Domain.Ops
 open LeoBloom.Ops
 open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
+open LeoBloom.CLI.CliHelpers
 
 // --- Agreement leaf arg types ---
 
@@ -216,11 +217,6 @@ type ObligationArgs =
             | Upcoming _ -> "List upcoming instances"
 
 // --- Parse helpers ---
-
-let private parseDate (raw: string) : Result<DateOnly, string> =
-    match DateOnly.TryParseExact(raw, "yyyy-MM-dd") with
-    | true, d -> Ok d
-    | false, _ -> Error (sprintf "Invalid date format '%s' -- expected yyyy-MM-dd" raw)
 
 let private parseObligationType (raw: string) : Result<ObligationDirection, string> =
     match ObligationDirection.fromString (raw.ToLowerInvariant()) with

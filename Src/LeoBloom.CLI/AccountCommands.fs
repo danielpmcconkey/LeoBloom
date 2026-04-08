@@ -6,6 +6,7 @@ open Npgsql
 open LeoBloom.Ledger
 open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
+open LeoBloom.CLI.CliHelpers
 
 // --- Argu DU definitions ---
 
@@ -60,11 +61,6 @@ let private resolveAccount (txn: NpgsqlTransaction) (raw: string) =
         match Int32.TryParse(raw) with
         | true, id -> AccountBalanceService.showAccountById txn id
         | false, _ -> Error (sprintf "Account '%s' does not exist" raw)
-
-let private parseDate (raw: string) : Result<DateOnly, string> =
-    match DateOnly.TryParseExact(raw, "yyyy-MM-dd") with
-    | true, d -> Ok d
-    | false, _ -> Error (sprintf "Invalid date format '%s' -- expected yyyy-MM-dd" raw)
 
 let private validAccountTypes =
     Set.ofList [ "asset"; "liability"; "equity"; "revenue"; "expense" ]

@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="CliHelpers.fs" />
     <Compile Include="ExitCodes.fs" />
     <Compile Include="OutputFormatter.fs" />
     <Compile Include="ErrorHandler.fs" />

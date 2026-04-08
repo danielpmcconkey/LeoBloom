@@ -6,6 +6,7 @@ open LeoBloom.Domain.Ops
 open LeoBloom.Ops
 open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
+open LeoBloom.CLI.CliHelpers
 
 // --- Argu DU definitions for transfer subcommands ---
 
@@ -74,13 +75,6 @@ type TransferArgs =
             | List _ -> "List transfers with optional filters"
             | Show _ -> "Show a transfer by ID"
 
-// --- Parsing helpers ---
-
-let private parseDateOnly (raw: string) : Result<DateOnly, string> =
-    match DateOnly.TryParse(raw) with
-    | true, d -> Ok d
-    | false, _ -> Error (sprintf "Invalid date format '%s' -- expected yyyy-MM-dd" raw)
-
 // --- Command handlers ---
 
 let private handleInitiate (isJson: bool) (args: ParseResults<TransferInitiateArgs>) : int =
@@ -92,13 +86,13 @@ let private handleInitiate (isJson: bool) (args: ParseResults<TransferInitiateAr
     let expectedSettlementRaw = args.TryGetResult TransferInitiateArgs.Expected_Settlement
     let description = args.TryGetResult TransferInitiateArgs.Description
 
-    match parseDateOnly dateRaw with
+    match parseDate dateRaw with
     | Error e ->
         write isJson (Error [e])
     | Ok initiatedDate ->
         match expectedSettlementRaw with
         | Some esRaw ->
-            match parseDateOnly esRaw with
+            match parseDate esRaw with
             | Error e ->
                 write isJson (Error [e])
             | Ok esDate ->
@@ -145,7 +139,7 @@ let private handleConfirm (isJson: bool) (args: ParseResults<TransferConfirmArgs
     let transferId = args.GetResult TransferConfirmArgs.Transfer_Id
     let dateRaw = args.GetResult TransferConfirmArgs.Date
 
-    match parseDateOnly dateRaw with
+    match parseDate dateRaw with
     | Error e ->
         write isJson (Error [e])
     | Ok confirmedDate ->
@@ -184,7 +178,7 @@ let private handleList (isJson: bool) (args: ParseResults<TransferListArgs>) : i
         match fromRaw with
         | None -> Ok None
         | Some s ->
-            match parseDateOnly s with
+            match parseDate s with
             | Ok d -> Ok (Some d)
             | Error msg -> Error msg
 
@@ -193,7 +187,7 @@ let private handleList (isJson: bool) (args: ParseResults<TransferListArgs>) : i
         match toRaw with
         | None -> Ok None
         | Some s ->
-            match parseDateOnly s with
+            match parseDate s with
             | Ok d -> Ok (Some d)
             | Error msg -> Error msg
 

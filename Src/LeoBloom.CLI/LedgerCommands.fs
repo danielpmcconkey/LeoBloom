@@ -7,6 +7,7 @@ open LeoBloom.Domain.Ledger
 open LeoBloom.Ledger
 open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
+open LeoBloom.CLI.CliHelpers
 
 // --- Argu DU definitions for ledger subcommands ---
 
@@ -91,11 +92,6 @@ let private parseRef (raw: string) : Result<PostReferenceCommand, string> =
             Error (sprintf "Reference value cannot be empty in '%s'" raw)
         else
             Ok { referenceType = refType; referenceValue = refValue }
-
-let private parseDate (raw: string) : Result<DateOnly, string> =
-    match DateOnly.TryParseExact(raw, "yyyy-MM-dd") with
-    | true, d -> Ok d
-    | false, _ -> Error (sprintf "Invalid date format '%s' -- expected yyyy-MM-dd" raw)
 
 // --- Command handlers ---
 
