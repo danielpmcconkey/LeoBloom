@@ -192,6 +192,15 @@ module Ledger =
           entries: OpeningBalanceEntry list
           description: string option }
 
+    type CreateAccountCommand =
+        { code: string; name: string; accountTypeId: int; parentId: int option }
+
+    type UpdateAccountNameCommand =
+        { accountId: int; name: string }
+
+    type DeactivateAccountCommand =
+        { accountId: int }
+
     type CloseFiscalPeriodCommand =
         { fiscalPeriodId: int }
 

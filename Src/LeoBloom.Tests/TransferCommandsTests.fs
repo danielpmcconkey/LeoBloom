@@ -10,7 +10,7 @@ open LeoBloom.Tests.CliFrameworkTests
 
 // =====================================================================
 // Shared setup: create a "CLI-testable transfer environment"
-// -- two active asset accounts + a fiscal period for confirm (year 2093)
+// -- two active asset accounts + a fiscal period for confirm (year 2097)
 // =====================================================================
 
 module TransferCliEnv =
@@ -30,7 +30,7 @@ module TransferCliEnv =
             // Use account type 1 (pre-seeded "asset") for accounts
             let fr = InsertHelpers.insertAccount txn $"{prefix}FR" $"{prefix}_from" 1 true
             let to_ = InsertHelpers.insertAccount txn $"{prefix}TO" $"{prefix}_to" 1 true
-            let fp  = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2093, 1, 1)) (DateOnly(2093, 12, 31)) true
+            let fp  = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2097, 1, 1)) (DateOnly(2097, 12, 31)) true
             txn.Commit()
             (1, fr, to_, fp)
         { FromAccountId = fromId
@@ -130,7 +130,7 @@ let ``initiate a transfer with all required args`` () =
     let env = TransferCliEnv.create()
     try
         let args =
-            sprintf "transfer initiate --from-account %d --to-account %d --amount 500.00 --date 2093-04-01"
+            sprintf "transfer initiate --from-account %d --to-account %d --amount 500.00 --date 2097-04-01"
                 env.FromAccountId env.ToAccountId
         let result = CliRunner.run args
         Assert.Equal(0, result.ExitCode)
@@ -147,13 +147,13 @@ let ``initiate with optional args includes them in output`` () =
     let env = TransferCliEnv.create()
     try
         let args =
-            sprintf "transfer initiate --from-account %d --to-account %d --amount 500.00 --date 2093-04-01 --expected-settlement 2093-04-03 --description \"Savings top-up\""
+            sprintf "transfer initiate --from-account %d --to-account %d --amount 500.00 --date 2097-04-01 --expected-settlement 2097-04-03 --description \"Savings top-up\""
                 env.FromAccountId env.ToAccountId
         let result = CliRunner.run args
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
         Assert.Contains("Savings top-up", stdout)
-        Assert.Contains("2093-04-03", stdout)
+        Assert.Contains("2097-04-03", stdout)
     finally TransferCliEnv.cleanup env
 
 [<Fact>]
@@ -162,7 +162,7 @@ let ``initiate with --json flag outputs valid JSON`` () =
     let env = TransferCliEnv.create()
     try
         let args =
-            sprintf "--json transfer initiate --from-account %d --to-account %d --amount 500.00 --date 2093-04-01"
+            sprintf "--json transfer initiate --from-account %d --to-account %d --amount 500.00 --date 2097-04-01"
                 env.FromAccountId env.ToAccountId
         let result = CliRunner.run args
         Assert.Equal(0, result.ExitCode)
@@ -185,7 +185,7 @@ let ``initiate with no arguments prints error to stderr`` () =
 [<Fact>]
 [<Trait("GherkinId", "@FT-TRC-005a")>]
 let ``initiate missing --from-account is rejected`` () =
-    let result = CliRunner.run "transfer initiate --to-account 1020 --amount 500.00 --date 2093-04-01"
+    let result = CliRunner.run "transfer initiate --to-account 1020 --amount 500.00 --date 2097-04-01"
     Assert.True(result.ExitCode = 1 || result.ExitCode = 2,
                 sprintf "Expected exit code 1 or 2, got %d" result.ExitCode)
     Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
@@ -193,7 +193,7 @@ let ``initiate missing --from-account is rejected`` () =
 [<Fact>]
 [<Trait("GherkinId", "@FT-TRC-005b")>]
 let ``initiate missing --to-account is rejected`` () =
-    let result = CliRunner.run "transfer initiate --from-account 1010 --amount 500.00 --date 2093-04-01"
+    let result = CliRunner.run "transfer initiate --from-account 1010 --amount 500.00 --date 2097-04-01"
     Assert.True(result.ExitCode = 1 || result.ExitCode = 2,
                 sprintf "Expected exit code 1 or 2, got %d" result.ExitCode)
     Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
@@ -201,7 +201,7 @@ let ``initiate missing --to-account is rejected`` () =
 [<Fact>]
 [<Trait("GherkinId", "@FT-TRC-005c")>]
 let ``initiate missing --amount is rejected`` () =
-    let result = CliRunner.run "transfer initiate --from-account 1010 --to-account 1020 --date 2093-04-01"
+    let result = CliRunner.run "transfer initiate --from-account 1010 --to-account 1020 --date 2097-04-01"
     Assert.True(result.ExitCode = 1 || result.ExitCode = 2,
                 sprintf "Expected exit code 1 or 2, got %d" result.ExitCode)
     Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
@@ -225,7 +225,7 @@ let ``initiate that triggers a service validation error surfaces it to stderr`` 
     try
         // same from and to account triggers "Cannot transfer to the same account"
         let args =
-            sprintf "transfer initiate --from-account %d --to-account %d --amount 500.00 --date 2093-04-01"
+            sprintf "transfer initiate --from-account %d --to-account %d --amount 500.00 --date 2097-04-01"
                 env.FromAccountId env.FromAccountId
         let result = CliRunner.run args
         Assert.Equal(1, result.ExitCode)
@@ -258,8 +258,8 @@ let ``initiate with invalid date format prints error to stderr`` () =
 let ``confirm an initiated transfer via CLI`` () =
     let env = TransferCliEnv.create()
     try
-        let transferId = TransferCliEnv.initiateTransferViaCli env 500.00m "2093-04-01"
-        let args = sprintf "transfer confirm %d --date 2093-04-15" transferId
+        let transferId = TransferCliEnv.initiateTransferViaCli env 500.00m "2097-04-01"
+        let args = sprintf "transfer confirm %d --date 2097-04-15" transferId
         let result = CliRunner.run args
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -272,8 +272,8 @@ let ``confirm an initiated transfer via CLI`` () =
 let ``confirm with --json flag outputs valid JSON`` () =
     let env = TransferCliEnv.create()
     try
-        let transferId = TransferCliEnv.initiateTransferViaCliJson env 500.00m "2093-04-01"
-        let args = sprintf "--json transfer confirm %d --date 2093-04-15" transferId
+        let transferId = TransferCliEnv.initiateTransferViaCliJson env 500.00m "2097-04-01"
+        let args = sprintf "--json transfer confirm %d --date 2097-04-15" transferId
         let result = CliRunner.run args
         Assert.Equal(0, result.ExitCode)
         let cleanStdout = CliRunner.stripLogLines result.Stdout
@@ -315,7 +315,7 @@ let ``confirm with invalid date format prints error to stderr`` () =
 let ``confirm a nonexistent transfer prints error to stderr`` () =
     let env = TransferCliEnv.create()
     try
-        let result = CliRunner.run "transfer confirm 999999 --date 2093-04-15"
+        let result = CliRunner.run "transfer confirm 999999 --date 2097-04-15"
         Assert.Equal(1, result.ExitCode)
         Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
     finally TransferCliEnv.cleanup env
@@ -329,7 +329,7 @@ let ``confirm a nonexistent transfer prints error to stderr`` () =
 let ``show an existing transfer via CLI`` () =
     let env = TransferCliEnv.create()
     try
-        let transferId = TransferCliEnv.initiateTransferViaCli env 500.00m "2093-04-01"
+        let transferId = TransferCliEnv.initiateTransferViaCli env 500.00m "2097-04-01"
         let args = sprintf "transfer show %d" transferId
         let result = CliRunner.run args
         Assert.Equal(0, result.ExitCode)
@@ -343,7 +343,7 @@ let ``show an existing transfer via CLI`` () =
 let ``show with --json flag outputs valid JSON`` () =
     let env = TransferCliEnv.create()
     try
-        let transferId = TransferCliEnv.initiateTransferViaCliJson env 500.00m "2093-04-01"
+        let transferId = TransferCliEnv.initiateTransferViaCliJson env 500.00m "2097-04-01"
         let args = sprintf "--json transfer show %d" transferId
         let result = CliRunner.run args
         Assert.Equal(0, result.ExitCode)
@@ -379,8 +379,8 @@ let ``show with no transfer ID prints error to stderr`` () =
 let ``list all transfers with no filters`` () =
     let env = TransferCliEnv.create()
     try
-        TransferCliEnv.initiateTransferViaCli env 500.00m "2093-04-01" |> ignore
-        TransferCliEnv.initiateTransferViaCli env 250.00m "2093-04-02" |> ignore
+        TransferCliEnv.initiateTransferViaCli env 500.00m "2097-04-01" |> ignore
+        TransferCliEnv.initiateTransferViaCli env 250.00m "2097-04-02" |> ignore
         let result = CliRunner.run "transfer list"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
@@ -394,10 +394,10 @@ let ``list transfers filtered by status`` () =
     let env = TransferCliEnv.create()
     try
         // Create two initiated transfers; confirm one
-        let t1 = TransferCliEnv.initiateTransferViaCli env 500.00m "2093-05-01"
-        TransferCliEnv.initiateTransferViaCli env 250.00m "2093-05-02" |> ignore
+        let t1 = TransferCliEnv.initiateTransferViaCli env 500.00m "2097-05-01"
+        TransferCliEnv.initiateTransferViaCli env 250.00m "2097-05-02" |> ignore
         // Confirm t1
-        let confirmResult = CliRunner.run (sprintf "transfer confirm %d --date 2093-05-15" t1)
+        let confirmResult = CliRunner.run (sprintf "transfer confirm %d --date 2097-05-15" t1)
         Assert.Equal(0, confirmResult.ExitCode)
         // List only initiated
         let result = CliRunner.run "transfer list --status initiated"
@@ -417,14 +417,14 @@ let ``list transfers filtered by date range`` () =
     let env = TransferCliEnv.create()
     try
         // Create transfers on different dates
-        TransferCliEnv.initiateTransferViaCli env 500.00m "2093-06-01" |> ignore
-        TransferCliEnv.initiateTransferViaCli env 250.00m "2093-07-15" |> ignore
+        TransferCliEnv.initiateTransferViaCli env 500.00m "2097-06-01" |> ignore
+        TransferCliEnv.initiateTransferViaCli env 250.00m "2097-07-15" |> ignore
         // Filter to June only
-        let result = CliRunner.run "transfer list --from 2093-06-01 --to 2093-06-30"
+        let result = CliRunner.run "transfer list --from 2097-06-01 --to 2097-06-30"
         Assert.Equal(0, result.ExitCode)
         let stdout = CliRunner.stripLogLines result.Stdout
-        Assert.Contains("2093-06-01", stdout)
-        Assert.DoesNotContain("2093-07-15", stdout)
+        Assert.Contains("2097-06-01", stdout)
+        Assert.DoesNotContain("2097-07-15", stdout)
     finally TransferCliEnv.cleanup env
 
 [<Fact>]
@@ -432,7 +432,7 @@ let ``list transfers filtered by date range`` () =
 let ``list with --json flag outputs valid JSON`` () =
     let env = TransferCliEnv.create()
     try
-        TransferCliEnv.initiateTransferViaCli env 500.00m "2093-04-01" |> ignore
+        TransferCliEnv.initiateTransferViaCli env 500.00m "2097-04-01" |> ignore
         let result = CliRunner.run "--json transfer list"
         Assert.Equal(0, result.ExitCode)
         let cleanStdout = CliRunner.stripLogLines result.Stdout
@@ -493,7 +493,7 @@ let ``transfer with no subcommand prints usage to stderr`` () =
 let ``--json transfer show produces valid JSON`` () =
     let env = TransferCliEnv.create()
     try
-        let transferId = TransferCliEnv.initiateTransferViaCliJson env 500.00m "2093-04-01"
+        let transferId = TransferCliEnv.initiateTransferViaCliJson env 500.00m "2097-04-01"
         let args = sprintf "--json transfer show %d" transferId
         let result = CliRunner.run args
         let cleanStdout = CliRunner.stripLogLines result.Stdout
@@ -506,8 +506,8 @@ let ``--json transfer show produces valid JSON`` () =
 let ``--json transfer confirm produces valid JSON`` () =
     let env = TransferCliEnv.create()
     try
-        let transferId = TransferCliEnv.initiateTransferViaCliJson env 500.00m "2093-08-01"
-        let args = sprintf "--json transfer confirm %d --date 2093-08-15" transferId
+        let transferId = TransferCliEnv.initiateTransferViaCliJson env 500.00m "2097-08-01"
+        let args = sprintf "--json transfer confirm %d --date 2097-08-15" transferId
         let result = CliRunner.run args
         Assert.Equal(0, result.ExitCode)
         let cleanStdout = CliRunner.stripLogLines result.Stdout
@@ -520,7 +520,7 @@ let ``--json transfer confirm produces valid JSON`` () =
 let ``--json transfer list produces valid JSON`` () =
     let env = TransferCliEnv.create()
     try
-        TransferCliEnv.initiateTransferViaCli env 500.00m "2093-04-01" |> ignore
+        TransferCliEnv.initiateTransferViaCli env 500.00m "2097-04-01" |> ignore
         let result = CliRunner.run "--json transfer list"
         Assert.Equal(0, result.ExitCode)
         let cleanStdout = CliRunner.stripLogLines result.Stdout
