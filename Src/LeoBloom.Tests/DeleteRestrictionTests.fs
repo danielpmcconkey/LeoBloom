@@ -4,6 +4,7 @@ open Npgsql
 open Xunit
 open LeoBloom.Utilities
 open LeoBloom.Tests.TestHelpers
+open LeoBloom.Tests.PortfolioTestHelpers
 
 // =====================================================================
 // account_type → account
@@ -297,4 +298,206 @@ let ``cannot delete obligation_agreement with dependent instance`` () =
     let ex = ConstraintAssert.tryExecTxn txn
                 "DELETE FROM ops.obligation_agreement WHERE id = @id"
                 (fun cmd -> cmd.Parameters.AddWithValue("@id", oaId) |> ignore)
+    ConstraintAssert.assertFk ex "Expected FK violation"
+
+// =====================================================================
+// portfolio schema
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-DR-019")>]
+let ``cannot delete tax_bucket with dependent investment_account`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let tbId  = PortfolioInsertHelpers.insertTaxBucket txn $"{prefix}_tb"
+    let agId  = PortfolioInsertHelpers.insertAccountGroup txn $"{prefix}_ag"
+    PortfolioInsertHelpers.insertInvestmentAccount txn $"{prefix}_ia" tbId agId |> ignore
+    let ex = ConstraintAssert.tryExecTxn txn
+                "DELETE FROM portfolio.tax_bucket WHERE id = @id"
+                (fun cmd -> cmd.Parameters.AddWithValue("@id", tbId) |> ignore)
+    ConstraintAssert.assertFk ex "Expected FK violation"
+
+[<Fact>]
+[<Trait("GherkinId", "FT-DR-020")>]
+let ``cannot delete account_group with dependent investment_account`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let tbId  = PortfolioInsertHelpers.insertTaxBucket txn $"{prefix}_tb"
+    let agId  = PortfolioInsertHelpers.insertAccountGroup txn $"{prefix}_ag"
+    PortfolioInsertHelpers.insertInvestmentAccount txn $"{prefix}_ia" tbId agId |> ignore
+    let ex = ConstraintAssert.tryExecTxn txn
+                "DELETE FROM portfolio.account_group WHERE id = @id"
+                (fun cmd -> cmd.Parameters.AddWithValue("@id", agId) |> ignore)
+    ConstraintAssert.assertFk ex "Expected FK violation"
+
+[<Fact>]
+[<Trait("GherkinId", "FT-DR-021")>]
+let ``cannot delete investment_account with dependent position`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let tbId   = PortfolioInsertHelpers.insertTaxBucket txn $"{prefix}_tb"
+    let agId   = PortfolioInsertHelpers.insertAccountGroup txn $"{prefix}_ag"
+    let iaId   = PortfolioInsertHelpers.insertInvestmentAccount txn $"{prefix}_ia" tbId agId
+    let sym    = PortfolioInsertHelpers.insertFund txn $"{prefix}F" $"{prefix} Fund"
+    PortfolioInsertHelpers.insertPosition txn iaId sym (System.DateOnly(2026, 1, 1)) 100m 10m 1000m 900m |> ignore
+    let ex = ConstraintAssert.tryExecTxn txn
+                "DELETE FROM portfolio.investment_account WHERE id = @id"
+                (fun cmd -> cmd.Parameters.AddWithValue("@id", iaId) |> ignore)
+    ConstraintAssert.assertFk ex "Expected FK violation"
+
+[<Fact>]
+[<Trait("GherkinId", "FT-DR-022")>]
+let ``cannot delete fund with dependent position`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let tbId   = PortfolioInsertHelpers.insertTaxBucket txn $"{prefix}_tb"
+    let agId   = PortfolioInsertHelpers.insertAccountGroup txn $"{prefix}_ag"
+    let iaId   = PortfolioInsertHelpers.insertInvestmentAccount txn $"{prefix}_ia" tbId agId
+    let sym    = PortfolioInsertHelpers.insertFund txn $"{prefix}F" $"{prefix} Fund"
+    PortfolioInsertHelpers.insertPosition txn iaId sym (System.DateOnly(2026, 1, 1)) 100m 10m 1000m 900m |> ignore
+    let ex = ConstraintAssert.tryExecTxn txn
+                "DELETE FROM portfolio.fund WHERE symbol = @s"
+                (fun cmd -> cmd.Parameters.AddWithValue("@s", sym) |> ignore)
+    ConstraintAssert.assertFk ex "Expected FK violation"
+
+[<Fact>]
+[<Trait("GherkinId", "FT-DR-023")>]
+let ``cannot delete dim_investment_type with dependent fund`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    use dimCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.dim_investment_type (name) VALUES (@n) RETURNING id", txn.Connection)
+    dimCmd.Transaction <- txn
+    dimCmd.Parameters.AddWithValue("@n", $"{prefix}_it") |> ignore
+    let dimId = dimCmd.ExecuteScalar() :?> int
+    use fundCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.fund (symbol, name, investment_type_id) VALUES (@s, @n, @d)", txn.Connection)
+    fundCmd.Transaction <- txn
+    fundCmd.Parameters.AddWithValue("@s", $"{prefix}F") |> ignore
+    fundCmd.Parameters.AddWithValue("@n", $"{prefix} Fund") |> ignore
+    fundCmd.Parameters.AddWithValue("@d", dimId) |> ignore
+    fundCmd.ExecuteNonQuery() |> ignore
+    let ex = ConstraintAssert.tryExecTxn txn
+                "DELETE FROM portfolio.dim_investment_type WHERE id = @id"
+                (fun cmd -> cmd.Parameters.AddWithValue("@id", dimId) |> ignore)
+    ConstraintAssert.assertFk ex "Expected FK violation"
+
+[<Fact>]
+[<Trait("GherkinId", "FT-DR-024")>]
+let ``cannot delete dim_market_cap with dependent fund`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    use dimCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.dim_market_cap (name) VALUES (@n) RETURNING id", txn.Connection)
+    dimCmd.Transaction <- txn
+    dimCmd.Parameters.AddWithValue("@n", $"{prefix}_mc") |> ignore
+    let dimId = dimCmd.ExecuteScalar() :?> int
+    use fundCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.fund (symbol, name, market_cap_id) VALUES (@s, @n, @d)", txn.Connection)
+    fundCmd.Transaction <- txn
+    fundCmd.Parameters.AddWithValue("@s", $"{prefix}F") |> ignore
+    fundCmd.Parameters.AddWithValue("@n", $"{prefix} Fund") |> ignore
+    fundCmd.Parameters.AddWithValue("@d", dimId) |> ignore
+    fundCmd.ExecuteNonQuery() |> ignore
+    let ex = ConstraintAssert.tryExecTxn txn
+                "DELETE FROM portfolio.dim_market_cap WHERE id = @id"
+                (fun cmd -> cmd.Parameters.AddWithValue("@id", dimId) |> ignore)
+    ConstraintAssert.assertFk ex "Expected FK violation"
+
+[<Fact>]
+[<Trait("GherkinId", "FT-DR-025")>]
+let ``cannot delete dim_index_type with dependent fund`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    use dimCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.dim_index_type (name) VALUES (@n) RETURNING id", txn.Connection)
+    dimCmd.Transaction <- txn
+    dimCmd.Parameters.AddWithValue("@n", $"{prefix}_idx") |> ignore
+    let dimId = dimCmd.ExecuteScalar() :?> int
+    use fundCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.fund (symbol, name, index_type_id) VALUES (@s, @n, @d)", txn.Connection)
+    fundCmd.Transaction <- txn
+    fundCmd.Parameters.AddWithValue("@s", $"{prefix}F") |> ignore
+    fundCmd.Parameters.AddWithValue("@n", $"{prefix} Fund") |> ignore
+    fundCmd.Parameters.AddWithValue("@d", dimId) |> ignore
+    fundCmd.ExecuteNonQuery() |> ignore
+    let ex = ConstraintAssert.tryExecTxn txn
+                "DELETE FROM portfolio.dim_index_type WHERE id = @id"
+                (fun cmd -> cmd.Parameters.AddWithValue("@id", dimId) |> ignore)
+    ConstraintAssert.assertFk ex "Expected FK violation"
+
+[<Fact>]
+[<Trait("GherkinId", "FT-DR-026")>]
+let ``cannot delete dim_sector with dependent fund`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    use dimCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.dim_sector (name) VALUES (@n) RETURNING id", txn.Connection)
+    dimCmd.Transaction <- txn
+    dimCmd.Parameters.AddWithValue("@n", $"{prefix}_sec") |> ignore
+    let dimId = dimCmd.ExecuteScalar() :?> int
+    use fundCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.fund (symbol, name, sector_id) VALUES (@s, @n, @d)", txn.Connection)
+    fundCmd.Transaction <- txn
+    fundCmd.Parameters.AddWithValue("@s", $"{prefix}F") |> ignore
+    fundCmd.Parameters.AddWithValue("@n", $"{prefix} Fund") |> ignore
+    fundCmd.Parameters.AddWithValue("@d", dimId) |> ignore
+    fundCmd.ExecuteNonQuery() |> ignore
+    let ex = ConstraintAssert.tryExecTxn txn
+                "DELETE FROM portfolio.dim_sector WHERE id = @id"
+                (fun cmd -> cmd.Parameters.AddWithValue("@id", dimId) |> ignore)
+    ConstraintAssert.assertFk ex "Expected FK violation"
+
+[<Fact>]
+[<Trait("GherkinId", "FT-DR-027")>]
+let ``cannot delete dim_region with dependent fund`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    use dimCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.dim_region (name) VALUES (@n) RETURNING id", txn.Connection)
+    dimCmd.Transaction <- txn
+    dimCmd.Parameters.AddWithValue("@n", $"{prefix}_reg") |> ignore
+    let dimId = dimCmd.ExecuteScalar() :?> int
+    use fundCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.fund (symbol, name, region_id) VALUES (@s, @n, @d)", txn.Connection)
+    fundCmd.Transaction <- txn
+    fundCmd.Parameters.AddWithValue("@s", $"{prefix}F") |> ignore
+    fundCmd.Parameters.AddWithValue("@n", $"{prefix} Fund") |> ignore
+    fundCmd.Parameters.AddWithValue("@d", dimId) |> ignore
+    fundCmd.ExecuteNonQuery() |> ignore
+    let ex = ConstraintAssert.tryExecTxn txn
+                "DELETE FROM portfolio.dim_region WHERE id = @id"
+                (fun cmd -> cmd.Parameters.AddWithValue("@id", dimId) |> ignore)
+    ConstraintAssert.assertFk ex "Expected FK violation"
+
+[<Fact>]
+[<Trait("GherkinId", "FT-DR-028")>]
+let ``cannot delete dim_objective with dependent fund`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    use dimCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.dim_objective (name) VALUES (@n) RETURNING id", txn.Connection)
+    dimCmd.Transaction <- txn
+    dimCmd.Parameters.AddWithValue("@n", $"{prefix}_obj") |> ignore
+    let dimId = dimCmd.ExecuteScalar() :?> int
+    use fundCmd = new NpgsqlCommand(
+        "INSERT INTO portfolio.fund (symbol, name, objective_id) VALUES (@s, @n, @d)", txn.Connection)
+    fundCmd.Transaction <- txn
+    fundCmd.Parameters.AddWithValue("@s", $"{prefix}F") |> ignore
+    fundCmd.Parameters.AddWithValue("@n", $"{prefix} Fund") |> ignore
+    fundCmd.Parameters.AddWithValue("@d", dimId) |> ignore
+    fundCmd.ExecuteNonQuery() |> ignore
+    let ex = ConstraintAssert.tryExecTxn txn
+                "DELETE FROM portfolio.dim_objective WHERE id = @id"
+                (fun cmd -> cmd.Parameters.AddWithValue("@id", dimId) |> ignore)
     ConstraintAssert.assertFk ex "Expected FK violation"

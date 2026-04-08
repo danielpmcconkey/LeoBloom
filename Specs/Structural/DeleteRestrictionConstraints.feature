@@ -101,3 +101,65 @@ Feature: ON DELETE RESTRICT constraints
     Given an obligation_agreement with a dependent instance exists
     When I delete the parent record
     Then the delete is rejected with a FK violation
+
+  # --- portfolio schema ---
+
+  @FT-DR-019
+  Scenario: cannot delete tax_bucket with dependent investment_account
+    Given a tax_bucket with a dependent investment_account exists
+    When I delete the parent record
+    Then the delete is rejected with a FK violation
+
+  @FT-DR-020
+  Scenario: cannot delete account_group with dependent investment_account
+    Given an account_group with a dependent investment_account exists
+    When I delete the parent record
+    Then the delete is rejected with a FK violation
+
+  @FT-DR-021
+  Scenario: cannot delete investment_account with dependent position
+    Given an investment_account with a dependent position exists
+    When I delete the parent record
+    Then the delete is rejected with a FK violation
+
+  @FT-DR-022
+  Scenario: cannot delete fund with dependent position
+    Given a fund with a dependent position exists
+    When I delete the parent record
+    Then the delete is rejected with a FK violation
+
+  @FT-DR-023
+  Scenario: cannot delete dim_investment_type with dependent fund
+    Given a dim_investment_type with a dependent fund exists
+    When I delete the parent record
+    Then the delete is rejected with a FK violation
+
+  @FT-DR-024
+  Scenario: cannot delete dim_market_cap with dependent fund
+    Given a dim_market_cap with a dependent fund exists
+    When I delete the parent record
+    Then the delete is rejected with a FK violation
+
+  @FT-DR-025
+  Scenario: cannot delete dim_index_type with dependent fund
+    Given a dim_index_type with a dependent fund exists
+    When I delete the parent record
+    Then the delete is rejected with a FK violation
+
+  @FT-DR-026
+  Scenario: cannot delete dim_sector with dependent fund
+    Given a dim_sector with a dependent fund exists
+    When I delete the parent record
+    Then the delete is rejected with a FK violation
+
+  @FT-DR-027
+  Scenario: cannot delete dim_region with dependent fund
+    Given a dim_region with a dependent fund exists
+    When I delete the parent record
+    Then the delete is rejected with a FK violation
+
+  @FT-DR-028
+  Scenario: cannot delete dim_objective with dependent fund
+    Given a dim_objective with a dependent fund exists
+    When I delete the parent record
+    Then the delete is rejected with a FK violation

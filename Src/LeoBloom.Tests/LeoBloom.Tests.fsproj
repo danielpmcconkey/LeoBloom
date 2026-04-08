@@ -12,6 +12,7 @@
     <Compile Include="AccountSubTypeTests.fs" />
     <Compile Include="LedgerConstraintTests.fs" />
     <Compile Include="OpsConstraintTests.fs" />
+    <Compile Include="PortfolioTestHelpers.fs" />
     <Compile Include="DeleteRestrictionTests.fs" />
     <Compile Include="PostJournalEntryTests.fs" />
     <Compile Include="VoidJournalEntryTests.fs" />
@@ -48,7 +49,6 @@
     <Compile Include="OrphanedPostingDetectionTests.fs" />
     <Compile Include="BalanceProjectionTests.fs" />
     <Compile Include="PortfolioStructuralConstraintsTests.fs" />
-    <Compile Include="PortfolioTestHelpers.fs" />
     <Compile Include="InvestmentAccountTests.fs" />
     <Compile Include="FundTests.fs" />
     <Compile Include="PositionTests.fs" />
