@@ -91,7 +91,7 @@ let ``list positions filtered by date range`` () =
     | Error errs -> Assert.Fail(sprintf "Setup (date1) failed: %A" errs)
     let sym2 = (prefix + "SY2").ToUpper()
     PortfolioInsertHelpers.insertFund txn sym2 (prefix + " Fund2") |> ignore
-    match PositionService.recordPosition txn acctId sym2 (DateOnly(2026, 4, 15)) 80m 3m 240m 210m with
+    match PositionService.recordPosition txn acctId sym2 (DateOnly(2026, 4, 7)) 80m 3m 240m 210m with
     | Ok _ -> ()
     | Error errs -> Assert.Fail(sprintf "Setup (date2) failed: %A" errs)
 
@@ -210,10 +210,11 @@ let ``list positions filtered by account returns empty when account has no posit
 [<Theory>]
 [<Trait("Category", "Portfolio")>]
 [<Trait("GherkinId", "FT-PF-021")>]
-[<InlineData("price",         -1.0, 10.0, 100.0)>]
-[<InlineData("quantity",       1.0, -1.0, 100.0)>]
-[<InlineData("current_value",  1.0, 10.0, -1.0)>]
-let ``negative value fields rejected at service layer`` (fieldName: string, price: float, qty: float, cv: float) =
+[<InlineData("price",         -1.0, 10.0, 100.0, 200.0)>]
+[<InlineData("quantity",       1.0, -1.0, 100.0, 200.0)>]
+[<InlineData("current_value",  1.0, 10.0,  -1.0, 200.0)>]
+[<InlineData("cost_basis",   100.0, 10.0, 1000.0, -5000.0)>]
+let ``negative value fields rejected at service layer`` (fieldName: string, price: float, qty: float, cv: float, cb: float) =
     Log.initialize()
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
@@ -221,7 +222,7 @@ let ``negative value fields rejected at service layer`` (fieldName: string, pric
     let (acctId, sym) = setupAccountAndFund txn prefix
     let result =
         PositionService.recordPosition txn acctId sym (DateOnly(2026, 4, 1))
-            (decimal price) (decimal qty) (decimal cv) 200m
+            (decimal price) (decimal qty) (decimal cv) (decimal cb)
     match result with
     | Ok _ -> Assert.Fail(sprintf "Expected Error for negative %s" fieldName)
     | Error errs ->
@@ -253,3 +254,26 @@ let ``latestAll returns most recent position per account and symbol`` () =
         Assert.Equal(1, matching.Length)
         Assert.Equal(DateOnly(2026, 4, 1), matching.[0].positionDate)
     | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+
+// =====================================================================
+// @FT-PF-029 -- Future position date rejected (AC-B9b)
+// =====================================================================
+
+[<Fact>]
+[<Trait("Category", "Portfolio")>]
+[<Trait("GherkinId", "FT-PF-029")>]
+let ``position with future date is rejected`` () =
+    Log.initialize()
+    // Pure validation — fires before any DB call, so no setup needed.
+    // Use a throwaway transaction to satisfy the signature.
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let result =
+        PositionService.recordPosition txn 0 "DUMMY" (DateOnly(2099, 1, 1))
+            100m 10m 1000m 900m
+    match result with
+    | Ok _ -> Assert.Fail("Expected Error for future position date")
+    | Error errs ->
+        Assert.True(
+            errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("date")),
+            sprintf "Expected error containing 'date': %A" errs)

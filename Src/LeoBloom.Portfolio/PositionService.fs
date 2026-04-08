@@ -10,7 +10,8 @@ open LeoBloom.Utilities
 module PositionService =
 
     /// Record a position. Validates:
-    ///   AC-B9: price, quantity, current_value must be >= 0
+    ///   AC-B9: price, quantity, current_value, cost_basis must be >= 0
+    ///   AC-B9b: position date must not be in the future
     ///   AC-B10: fund symbol must exist
     ///   AC-B4: duplicate (account, symbol, date) returns friendly error
     let recordPosition
@@ -31,6 +32,10 @@ module PositionService =
             errors.Add("Quantity must not be negative")
         if currentValue < 0m then
             errors.Add("Current value must not be negative")
+        if costBasis < 0m then
+            errors.Add("cost_basis must not be negative")
+        if positionDate > DateOnly.FromDateTime(DateTime.UtcNow) then
+            errors.Add("Position date must not be in the future")
         if errors.Count > 0 then
             Error (errors |> Seq.toList)
         else

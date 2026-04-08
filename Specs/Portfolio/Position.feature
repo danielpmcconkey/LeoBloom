@@ -30,6 +30,17 @@ Feature: Position Recording, Querying, and Validation
             | price         | -0.01    |
             | quantity      | -1.0000  |
             | current_value | -100.00  |
+            | cost_basis    | -5000.00 |
+
+    # --- Record: Date Validation ---
+
+    @FT-PF-029
+    Scenario: Record position with a future date is rejected
+        Given the portfolio schema exists for position management
+        And a portfolio investment account "Vanguard IRA" exists
+        And a portfolio fund "VTI" exists
+        When I record a position for account "Vanguard IRA", symbol "VTI", dated 2099-01-01, with price 245.10, quantity 100.0000, current_value 24510.00, cost_basis 20000.00
+        Then the record fails with error containing "date"
 
     # --- Record: DB Validation ---
 
