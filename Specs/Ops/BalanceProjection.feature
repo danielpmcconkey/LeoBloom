@@ -171,3 +171,43 @@ Feature: Balance Projection
     Scenario: Nonexistent account returns error
         When I compute the balance projection for account code "ZZZZ" through 2026-04-10
         Then the projection fails with error containing "does not exist"
+
+    # ===================================================================
+    # Status Filter — Excluded Statuses
+    # ===================================================================
+
+    @FT-BP-015
+    Scenario: Confirmed obligation instance is excluded from balance projection
+        Given a projection-test account "checking" with current balance 5000.00
+        And a receivable obligation instance for "checking" of 800.00 expected on 2026-04-09
+        And a receivable obligation instance for "checking" of 600.00 in status "confirmed" on 2026-04-09
+        When I compute the balance projection for "checking" through 2026-04-10
+        Then the projection succeeds
+        And the series entry for 2026-04-09 shows balance 5800.00
+
+    @FT-BP-016
+    Scenario: Posted obligation instance is excluded from balance projection
+        Given a projection-test account "checking" with current balance 3000.00
+        And a payable obligation instance for "checking" of 400.00 expected on 2026-04-09
+        And a payable obligation instance for "checking" of 250.00 in status "posted" on 2026-04-09
+        When I compute the balance projection for "checking" through 2026-04-10
+        Then the projection succeeds
+        And the series entry for 2026-04-09 shows balance 2600.00
+
+    @FT-BP-017
+    Scenario: Confirmed transfer is excluded from balance projection
+        Given a projection-test account "checking" with current balance 4000.00
+        And an initiated transfer of 500.00 from "checking" with expected_settlement 2026-04-09
+        And a confirmed transfer of 300.00 from "checking" with expected_settlement 2026-04-09
+        When I compute the balance projection for "checking" through 2026-04-10
+        Then the projection succeeds
+        And the series entry for 2026-04-09 shows balance 3500.00
+
+    @FT-BP-018
+    Scenario: Skipped obligation instance is excluded from balance projection
+        Given a projection-test account "checking" with current balance 2000.00
+        And a receivable obligation instance for "checking" of 1000.00 expected on 2026-04-09
+        And a payable obligation instance for "checking" of 350.00 in status "skipped" on 2026-04-09
+        When I compute the balance projection for "checking" through 2026-04-10
+        Then the projection succeeds
+        And the series entry for 2026-04-09 shows balance 3000.00

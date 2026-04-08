@@ -121,6 +121,43 @@ module ProjectionEnv =
         | Ok t -> t.id
         | Error errs -> failwith (sprintf "Failed to initiate transfer in: %A" errs)
 
+    /// Insert an obligation instance with an explicit status (for excluded-status scenarios).
+    let insertInstanceWithStatus (env: Env) (agreementId: int) (expectedDate: DateOnly) (amount: decimal option) (status: string) : int =
+        use cmd = new NpgsqlCommand(
+            "INSERT INTO ops.obligation_instance \
+             (obligation_agreement_id, name, status, expected_date, amount, is_active) \
+             VALUES (@aid, 'Test instance', @status, @ed, @amt, true) RETURNING id",
+            env.Txn.Connection)
+        cmd.Transaction <- env.Txn
+        cmd.Parameters.AddWithValue("@aid", agreementId) |> ignore
+        cmd.Parameters.AddWithValue("@status", status) |> ignore
+        cmd.Parameters.AddWithValue("@ed", expectedDate) |> ignore
+        match amount with
+        | Some a -> cmd.Parameters.AddWithValue("@amt", a) |> ignore
+        | None -> cmd.Parameters.AddWithValue("@amt", DBNull.Value) |> ignore
+        cmd.ExecuteScalar() :?> int
+
+    /// Initiate and then confirm a transfer out FROM checking.
+    /// Uses the test's own fiscal period (created in ProjectionEnv.create) via findByDate.
+    let insertConfirmedTransferOut (env: Env) (amount: decimal) (initiatedDate: DateOnly) (expectedSettlement: DateOnly) : int =
+        let initiateCmd : InitiateTransferCommand =
+            { fromAccountId = env.CheckingId
+              toAccountId = env.CounterId
+              amount = amount
+              initiatedDate = initiatedDate
+              expectedSettlement = Some expectedSettlement
+              description = Some "Test confirmed transfer out" }
+        let transferId =
+            match TransferService.initiate env.Txn initiateCmd with
+            | Ok t -> t.id
+            | Error errs -> failwith (sprintf "Failed to initiate transfer for confirm: %A" errs)
+        let confirmCmd : ConfirmTransferCommand =
+            { transferId = transferId
+              confirmedDate = initiatedDate }
+        match TransferService.confirm env.Txn confirmCmd with
+        | Ok t -> t.id
+        | Error errs -> failwith (sprintf "Failed to confirm transfer: %A" errs)
+
     let cleanup (env: Env) =
         env.Txn.Dispose()
         env.Connection.Dispose()
@@ -422,3 +459,92 @@ let ``nonexistent account returns error`` () =
     | Error errs ->
         Assert.True(errs |> List.exists (fun e -> e.ToLower().Contains("does not exist")),
             sprintf "Expected error containing 'does not exist', got: %A" errs)
+
+// =====================================================================
+// FT-BP-015: Confirmed obligation instance excluded from projection
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-BP-015")>]
+let ``confirmed obligation instance is excluded from balance projection`` () =
+    let env = ProjectionEnv.create 5000m
+    try
+        let agExpected = ProjectionEnv.insertReceivableAgreement env "Rcv expected BP015" None
+        let agConfirmed = ProjectionEnv.insertReceivableAgreement env "Rcv confirmed BP015" None
+        ProjectionEnv.insertInstance env agExpected (dayAfter) (Some 800m) |> ignore
+        ProjectionEnv.insertInstanceWithStatus env agConfirmed (dayAfter) (Some 600m) "confirmed" |> ignore
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode (day3)
+        match result with
+        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+        | Ok projection ->
+            let day = getDay projection (dayAfter)
+            // 5000 + 800 (expected receivable) = 5800; confirmed 600 excluded
+            Assert.Equal(5800m, day.closingBalance)
+    finally ProjectionEnv.cleanup env
+
+// =====================================================================
+// FT-BP-016: Posted obligation instance excluded from projection
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-BP-016")>]
+let ``posted obligation instance is excluded from balance projection`` () =
+    let env = ProjectionEnv.create 3000m
+    try
+        let agExpected = ProjectionEnv.insertPayableAgreement env "Pay expected BP016" None
+        let agPosted = ProjectionEnv.insertPayableAgreement env "Pay posted BP016" None
+        ProjectionEnv.insertInstance env agExpected (dayAfter) (Some 400m) |> ignore
+        ProjectionEnv.insertInstanceWithStatus env agPosted (dayAfter) (Some 250m) "posted" |> ignore
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode (day3)
+        match result with
+        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+        | Ok projection ->
+            let day = getDay projection (dayAfter)
+            // 3000 - 400 (expected payable) = 2600; posted 250 excluded
+            Assert.Equal(2600m, day.closingBalance)
+    finally ProjectionEnv.cleanup env
+
+// =====================================================================
+// FT-BP-017: Confirmed transfer excluded from projection
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-BP-017")>]
+let ``confirmed transfer is excluded from balance projection`` () =
+    // Start at 4300 so that after confirming the 300 transfer (which posts a JE),
+    // the effective current balance is 4000 — matching the Gherkin scenario.
+    let env = ProjectionEnv.create 4300m
+    try
+        ProjectionEnv.insertConfirmedTransferOut env 300m (today) (dayAfter) |> ignore
+        ProjectionEnv.insertTransferOut env 500m (today) (Some (dayAfter)) |> ignore
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode (day3)
+        match result with
+        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+        | Ok projection ->
+            let day = getDay projection (dayAfter)
+            // Effective current balance: 4300 - 300 (confirmed JE) = 4000
+            // Projected: 4000 - 500 (initiated transfer out) = 3500; confirmed not a future item
+            Assert.Equal(3500m, day.closingBalance)
+    finally ProjectionEnv.cleanup env
+
+// =====================================================================
+// FT-BP-018: Skipped obligation instance excluded from projection
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-BP-018")>]
+let ``skipped obligation instance is excluded from balance projection`` () =
+    let env = ProjectionEnv.create 2000m
+    try
+        let agExpected = ProjectionEnv.insertReceivableAgreement env "Rcv expected BP018" None
+        let agSkipped = ProjectionEnv.insertPayableAgreement env "Pay skipped BP018" None
+        ProjectionEnv.insertInstance env agExpected (dayAfter) (Some 1000m) |> ignore
+        ProjectionEnv.insertInstanceWithStatus env agSkipped (dayAfter) (Some 350m) "skipped" |> ignore
+        let result = BalanceProjectionService.project env.Txn env.CheckingCode (day3)
+        match result with
+        | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+        | Ok projection ->
+            let day = getDay projection (dayAfter)
+            // 2000 + 1000 (expected receivable) = 3000; skipped 350 excluded
+            Assert.Equal(3000m, day.closingBalance)
+    finally ProjectionEnv.cleanup env
