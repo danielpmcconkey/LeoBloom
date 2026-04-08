@@ -9,7 +9,8 @@ open LeoBloom.Utilities
 module AccountService =
 
     /// Create an account. Validates code/name non-blank, account_type_id exists,
-    /// parent (if given) exists and is active. Catches 23505 for duplicate code.
+    /// subtype is valid for the given type, parent (if given) exists and is active.
+    /// Catches 23505 for duplicate code.
     let createAccount (txn: NpgsqlTransaction) (cmd: CreateAccountCommand) : Result<Account, string list> =
         let errors = ResizeArray<string>()
         if String.IsNullOrWhiteSpace cmd.code then
@@ -21,32 +22,37 @@ module AccountService =
         else
             Log.info "Creating account {Code}" [| cmd.code :> obj |]
             try
-                if not (AccountRepository.accountTypeExists txn cmd.accountTypeId) then
+                match AccountRepository.findAccountTypeNameById txn cmd.accountTypeId with
+                | None ->
                     Error [ sprintf "account type with id %d does not exist" cmd.accountTypeId ]
-                else
-                    match cmd.parentId with
-                    | Some pid ->
-                        match AccountRepository.findById txn pid with
+                | Some typeName ->
+                    if not (AccountSubType.isValidSubType typeName cmd.subType) then
+                        let subTypeName = cmd.subType |> Option.map AccountSubType.toDbString |> Option.defaultValue ""
+                        Error [ sprintf "subtype '%s' is not valid for account type '%s'" subTypeName typeName ]
+                    else
+                        match cmd.parentId with
+                        | Some pid ->
+                            match AccountRepository.findById txn pid with
+                            | None ->
+                                Error [ sprintf "parent account with id %d does not exist" pid ]
+                            | Some parent when not parent.isActive ->
+                                Error [ sprintf "parent account with id %d is inactive" pid ]
+                            | Some _ ->
+                                try
+                                    let acct = AccountRepository.create txn cmd.code cmd.name cmd.accountTypeId cmd.parentId cmd.subType
+                                    Log.info "Created account {AccountId}" [| acct.id :> obj |]
+                                    Ok acct
+                                with
+                                | :? PostgresException as ex when ex.SqlState = "23505" ->
+                                    Error [ sprintf "account with code '%s' already exists" cmd.code ]
                         | None ->
-                            Error [ sprintf "parent account with id %d does not exist" pid ]
-                        | Some parent when not parent.isActive ->
-                            Error [ sprintf "parent account with id %d is inactive" pid ]
-                        | Some _ ->
                             try
-                                let acct = AccountRepository.create txn cmd.code cmd.name cmd.accountTypeId cmd.parentId
+                                let acct = AccountRepository.create txn cmd.code cmd.name cmd.accountTypeId cmd.parentId cmd.subType
                                 Log.info "Created account {AccountId}" [| acct.id :> obj |]
                                 Ok acct
                             with
                             | :? PostgresException as ex when ex.SqlState = "23505" ->
                                 Error [ sprintf "account with code '%s' already exists" cmd.code ]
-                    | None ->
-                        try
-                            let acct = AccountRepository.create txn cmd.code cmd.name cmd.accountTypeId cmd.parentId
-                            Log.info "Created account {AccountId}" [| acct.id :> obj |]
-                            Ok acct
-                        with
-                        | :? PostgresException as ex when ex.SqlState = "23505" ->
-                            Error [ sprintf "account with code '%s' already exists" cmd.code ]
             with ex ->
                 Log.errorExn ex "Failed to create account {Code}" [| cmd.code :> obj |]
                 Error [ sprintf "Persistence error: %s" ex.Message ]

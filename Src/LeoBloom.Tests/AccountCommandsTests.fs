@@ -333,3 +333,111 @@ let ``--json flag produces valid JSON for account balance`` () =
     let cleanStdout = CliRunner.stripLogLines result.Stdout
     let doc = JsonDocument.Parse(cleanStdout)
     Assert.NotNull(doc)
+
+// =====================================================================
+// account create -- Happy Path
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-ACT-060")>]
+let ``create account with all flags returns exit 0 and displays details`` () =
+    let prefix = TestData.uniquePrefix()
+    let code = prefix + "CRT"
+    let conn = DataSource.openConnection()
+    try
+        let result = CliRunner.run (sprintf "account create --code %s --name \"Create Test Acct\" --type 1 --subtype Cash" code)
+        Assert.Equal(0, result.ExitCode)
+        let stdout = CliRunner.stripLogLines result.Stdout
+        Assert.Contains(code, stdout)
+    finally
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.account WHERE code = @c", conn)
+        cmd.Parameters.AddWithValue("@c", code) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
+        conn.Dispose()
+
+[<Fact>]
+[<Trait("GherkinId", "FT-ACT-061")>]
+let ``create account with --json flag returns exit 0 and valid JSON`` () =
+    let prefix = TestData.uniquePrefix()
+    let code = prefix + "JSN"
+    let conn = DataSource.openConnection()
+    try
+        let result = CliRunner.run (sprintf "account create --code %s --name \"JSON Create Test\" --type 1 --json" code)
+        Assert.Equal(0, result.ExitCode)
+        let cleanStdout = CliRunner.stripLogLines result.Stdout
+        let doc = JsonDocument.Parse(cleanStdout)
+        Assert.NotNull(doc)
+    finally
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.account WHERE code = @c", conn)
+        cmd.Parameters.AddWithValue("@c", code) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
+        conn.Dispose()
+
+[<Fact>]
+[<Trait("GherkinId", "FT-ACT-062")>]
+let ``create account without --parent succeeds`` () =
+    let prefix = TestData.uniquePrefix()
+    let code = prefix + "NOP"
+    let conn = DataSource.openConnection()
+    try
+        let result = CliRunner.run (sprintf "account create --code %s --name \"No Parent Test\" --type 1" code)
+        Assert.Equal(0, result.ExitCode)
+    finally
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.account WHERE code = @c", conn)
+        cmd.Parameters.AddWithValue("@c", code) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
+        conn.Dispose()
+
+// =====================================================================
+// account create -- Error Paths
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-ACT-063")>]
+let ``create account with invalid subtype for type returns exit 1 and stderr error`` () =
+    let prefix = TestData.uniquePrefix()
+    let code = prefix + "BAD"
+    // Cash is not valid for Expense (type 5)
+    let result = CliRunner.run (sprintf "account create --code %s --name \"Bad Subtype\" --type 5 --subtype Cash" code)
+    Assert.Equal(1, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-ACT-064a")>]
+let ``create account without --code returns exit 2`` () =
+    let result = CliRunner.run "account create --name \"Missing Code\" --type 1"
+    Assert.Equal(2, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-ACT-064b")>]
+let ``create account without --name returns exit 2`` () =
+    let result = CliRunner.run "account create --code XCDE --type 1"
+    Assert.Equal(2, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-ACT-064c")>]
+let ``create account without --type returns exit 2`` () =
+    let result = CliRunner.run "account create --code XCDF --name \"Missing Type\""
+    Assert.Equal(2, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-ACT-065")>]
+let ``create account with duplicate code returns exit 1 and stderr error`` () =
+    let prefix = TestData.uniquePrefix()
+    let code = prefix + "DUP"
+    let conn = DataSource.openConnection()
+    // Create once via CLI, then attempt duplicate
+    let firstResult = CliRunner.run (sprintf "account create --code %s --name \"First Account\" --type 1" code)
+    try
+        Assert.Equal(0, firstResult.ExitCode)
+        let dupResult = CliRunner.run (sprintf "account create --code %s --name \"Duplicate Account\" --type 1" code)
+        Assert.Equal(1, dupResult.ExitCode)
+        Assert.False(String.IsNullOrWhiteSpace(dupResult.Stderr), "Expected error message on stderr")
+    finally
+        use cmd = new NpgsqlCommand("DELETE FROM ledger.account WHERE code = @c", conn)
+        cmd.Parameters.AddWithValue("@c", code) |> ignore
+        cmd.ExecuteNonQuery() |> ignore
+        conn.Dispose()

@@ -25,6 +25,7 @@
     <Compile Include="FiscalPeriodTests.fs" />
     <Compile Include="FiscalPeriodManagementTests.fs" />
     <Compile Include="AccountCrudTests.fs" />
+    <Compile Include="AccountCreateTests.fs" />
     <Compile Include="DataSourceEncapsulationTests.fs" />
     <Compile Include="LogModuleStructureTests.fs" />
     <Compile Include="ObligationAgreementTests.fs" />

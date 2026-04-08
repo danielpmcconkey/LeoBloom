@@ -69,6 +69,21 @@ module AccountRepository =
         reader.Close()
         found
 
+    /// Look up the name of an account type by ID. Returns None if not found.
+    let findAccountTypeNameById (txn: NpgsqlTransaction) (accountTypeId: int) : string option =
+        use sql = new NpgsqlCommand(
+            "SELECT name FROM ledger.account_type WHERE id = @id",
+            txn.Connection, txn)
+        sql.Parameters.AddWithValue("@id", accountTypeId) |> ignore
+        use reader = sql.ExecuteReader()
+        if reader.Read() then
+            let name = reader.GetString(0)
+            reader.Close()
+            Some name
+        else
+            reader.Close()
+            None
+
     /// Check whether an account has active child accounts.
     let hasChildren (txn: NpgsqlTransaction) (accountId: int) : bool =
         use sql = new NpgsqlCommand(
@@ -99,17 +114,28 @@ module AccountRepository =
         (name: string)
         (accountTypeId: int)
         (parentId: int option)
+        (subType: AccountSubType option)
         : Account =
         let sql =
-            match parentId with
-            | None ->
+            match parentId, subType with
+            | None, None ->
                 "INSERT INTO ledger.account (code, name, account_type_id)
                  VALUES (@code, @name, @typeId)
                  RETURNING id, code, name, account_type_id, parent_id, account_subtype,
                            is_active, created_at, modified_at"
-            | Some _ ->
+            | None, Some _ ->
+                "INSERT INTO ledger.account (code, name, account_type_id, account_subtype)
+                 VALUES (@code, @name, @typeId, @subType)
+                 RETURNING id, code, name, account_type_id, parent_id, account_subtype,
+                           is_active, created_at, modified_at"
+            | Some _, None ->
                 "INSERT INTO ledger.account (code, name, account_type_id, parent_id)
                  VALUES (@code, @name, @typeId, @parentId)
+                 RETURNING id, code, name, account_type_id, parent_id, account_subtype,
+                           is_active, created_at, modified_at"
+            | Some _, Some _ ->
+                "INSERT INTO ledger.account (code, name, account_type_id, parent_id, account_subtype)
+                 VALUES (@code, @name, @typeId, @parentId, @subType)
                  RETURNING id, code, name, account_type_id, parent_id, account_subtype,
                            is_active, created_at, modified_at"
         use cmd = new NpgsqlCommand(sql, txn.Connection, txn)
@@ -118,6 +144,9 @@ module AccountRepository =
         cmd.Parameters.AddWithValue("@typeId", accountTypeId) |> ignore
         match parentId with
         | Some pid -> cmd.Parameters.AddWithValue("@parentId", pid) |> ignore
+        | None -> ()
+        match subType with
+        | Some st -> cmd.Parameters.AddWithValue("@subType", AccountSubType.toDbString st) |> ignore
         | None -> ()
         use reader = cmd.ExecuteReader()
         reader.Read() |> ignore

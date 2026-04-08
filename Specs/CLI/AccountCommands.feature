@@ -205,3 +205,59 @@ Feature: Account CLI Commands
             | list --json                     |
             | show 1110 --json                |
             | balance 1110 --json             |
+
+    # ===================================================================
+    # account create
+    # ===================================================================
+
+    # --- Happy Path ---
+
+    @FT-ACT-060
+    Scenario: Create an account with all flags outputs account details
+        Given a CLI-testable account environment with seeded data
+        When I run the CLI with "account create --code crud-cli-001 --name CLI Cash --type 1 --subtype Cash"
+        Then stdout contains the account details
+        And the exit code is 0
+
+    @FT-ACT-061
+    Scenario: Create an account with --json flag outputs valid JSON
+        Given a CLI-testable account environment with seeded data
+        When I run the CLI with "account create --code crud-cli-002 --name CLI Cash JSON --type 1 --subtype Cash --json"
+        Then stdout is valid JSON
+        And the exit code is 0
+
+    @FT-ACT-062
+    Scenario: Create an account without --parent succeeds
+        Given a CLI-testable account environment with seeded data
+        When I run the CLI with "account create --code crud-cli-003 --name No Parent Account --type 1"
+        Then stdout contains the account details
+        And the exit code is 0
+
+    # --- Error Paths ---
+
+    @FT-ACT-063
+    Scenario: Create with invalid subtype for account type prints error to stderr
+        Given a CLI-testable account environment with seeded data
+        When I run the CLI with "account create --code crud-cli-004 --name Bad Subtype --type 5 --subtype Cash"
+        Then stderr contains an error message
+        And the exit code is 1
+
+    @FT-ACT-064
+    Scenario Outline: Create with missing mandatory flag prints error to stderr
+        When I run the CLI with "account create <args>"
+        Then stderr contains an error message
+        And the exit code is 2
+
+        Examples:
+            | args                                        |
+            | --name No Code Here --type 1                |
+            | --code crud-cli-005 --type 1                |
+            | --code crud-cli-006 --name No Type Here     |
+
+    @FT-ACT-065
+    Scenario: Create with a duplicate account code prints error to stderr
+        Given a CLI-testable account environment with seeded data
+        And a crud-test active account with code "crud-cli-dup" and name "Original"
+        When I run the CLI with "account create --code crud-cli-dup --name Duplicate --type 1"
+        Then stderr contains an error message
+        And the exit code is 1
