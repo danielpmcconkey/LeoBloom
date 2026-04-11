@@ -42,18 +42,18 @@ module DataSource =
         builder.ConnectionStringBuilder.CommandTimeout <- 5
         let ds = builder.Build()
 
-#if DEBUG
-        // Debug-only safety guard: verify we're talking to leobloom_dev.
-        // Compiled out of release builds entirely.
         use guardConn = ds.OpenConnection()
         use cmd = guardConn.CreateCommand()
         cmd.CommandText <- "SELECT current_database()"
         let dbName = cmd.ExecuteScalar() :?> string
+#if DEBUG
+        // Debug-only safety guard: verify we're talking to leobloom_dev.
+        // Compiled out of release builds entirely.
         if dbName <> "leobloom_dev" then
             failwith $"SAFETY GUARD: Expected database 'leobloom_dev' but connected to '{dbName}'. Aborting."
 #endif
 
-        Log.info "DataSource initialized, connected to {Database}" [| "leobloom_dev" :> obj |]
+        Log.info "DataSource initialized, connected to {Database}" [| dbName :> obj |]
 
         ds
 
