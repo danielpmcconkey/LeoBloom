@@ -24,7 +24,8 @@ let private postEntry (txn: NpgsqlTransaction) acct1 acct2 fpId (entryDate: Date
           lines =
             [ { accountId = acct1; amount = amount; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = amount; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     match JournalEntryService.post txn cmd with
     | Ok posted -> posted.entry.id
     | Error errs -> failwith (sprintf "Setup post failed: %A" errs)
@@ -36,7 +37,8 @@ let private postMultiLineEntry (txn: NpgsqlTransaction) fpId (entryDate: DateOnl
           source = Some "manual"
           fiscalPeriodId = fpId
           lines = lines
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     match JournalEntryService.post txn cmd with
     | Ok posted -> posted.entry.id
     | Error errs -> failwith (sprintf "Setup post failed: %A" errs)

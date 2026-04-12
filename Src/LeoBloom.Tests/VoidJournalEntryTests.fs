@@ -22,7 +22,8 @@ let private postSetupEntry (txn: NpgsqlTransaction) (prefix: string) =
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     match JournalEntryService.post txn cmd with
     | Ok posted -> (posted.entry.id, fpId, acct1, acct2)
     | Error errs -> failwith (sprintf "Setup post failed: %A" errs)
@@ -86,7 +87,8 @@ let ``lines and references intact after void`` () =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
           references =
-            [ { referenceType = "cheque"; referenceValue = "5678" } ] }
+            [ { referenceType = "cheque"; referenceValue = "5678" } ]
+          adjustmentForPeriodId = None }
     let entryId =
         match JournalEntryService.post txn postCmd with
         | Ok posted -> posted.entry.id
@@ -110,24 +112,22 @@ let ``lines and references intact after void`` () =
 
 [<Fact>]
 [<Trait("GherkinId", "FT-VJE-004")>]
-let ``void already-voided entry is idempotent`` () =
+let ``void already-voided entry is rejected`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
     let prefix = TestData.uniquePrefix()
     let (entryId, _, _, _) = postSetupEntry txn prefix
     let voidCmd1 = { journalEntryId = entryId; voidReason = "First void" }
-    let firstVoidedAt, firstModifiedAt =
-        match JournalEntryService.voidEntry txn voidCmd1 with
-        | Ok entry -> (entry.voidedAt, entry.modifiedAt)
-        | Error errs -> failwith (sprintf "First void failed: %A" errs)
+    match JournalEntryService.voidEntry txn voidCmd1 with
+    | Ok _ -> ()
+    | Error errs -> failwith (sprintf "First void failed: %A" errs)
     let voidCmd2 = { journalEntryId = entryId; voidReason = "Second void" }
     let result2 = JournalEntryService.voidEntry txn voidCmd2
     match result2 with
-    | Ok entry ->
-        Assert.Equal(firstVoidedAt, entry.voidedAt)
-        Assert.Equal(firstModifiedAt, entry.modifiedAt)
-        Assert.Equal(Some "First void", entry.voidReason)
-    | Error errs -> Assert.Fail(sprintf "Second void failed unexpectedly: %A" errs)
+    | Ok _ -> Assert.Fail("Expected Error: second void of same entry should be rejected")
+    | Error errs ->
+        Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("already voided")),
+                    sprintf "Expected error containing 'already voided': %A" errs)
 
 [<Fact>]
 [<Trait("GherkinId", "FT-VJE-005")>]
@@ -172,9 +172,10 @@ let ``nonexistent entry ID rejected`` () =
         Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("does not exist")),
                     sprintf "Expected error containing 'does not exist': %A" errs)
 
+// FT-VJE-008 replaced by FT-CPE-001: void is now blocked on closed periods (P083).
 [<Fact>]
-[<Trait("GherkinId", "FT-VJE-008")>]
-let ``void succeeds in closed fiscal period`` () =
+[<Trait("GherkinId", "FT-CPE-001")>]
+let ``void is rejected when fiscal period is closed`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
     let prefix = TestData.uniquePrefix()
@@ -184,9 +185,12 @@ let ``void succeeds in closed fiscal period`` () =
     closeCmd.Transaction <- txn
     closeCmd.Parameters.AddWithValue("@id", fpId) |> ignore
     closeCmd.ExecuteNonQuery() |> ignore
-    let voidCmd = { journalEntryId = entryId; voidReason = "Void in closed period" }
+    let voidCmd = { journalEntryId = entryId; voidReason = "Should be rejected" }
     let result = JournalEntryService.voidEntry txn voidCmd
     match result with
-    | Ok entry ->
-        Assert.True(entry.voidedAt.IsSome, "voidedAt should be Some")
-    | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+    | Ok _ -> Assert.Fail("Expected Error: void in closed period should be rejected")
+    | Error errs ->
+        Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("closed period")),
+                    sprintf "Expected error containing 'closed period': %A" errs)
+        Assert.True(errs |> List.exists (fun e -> e.Contains("leobloom ledger reverse")),
+                    sprintf "Expected error to suggest 'leobloom ledger reverse': %A" errs)

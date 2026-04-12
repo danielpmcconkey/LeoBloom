@@ -80,7 +80,8 @@ module ReportCliEnv =
               lines =
                 [ { accountId = debitAcctId; amount = amount; entryType = EntryType.Debit; memo = None }
                   { accountId = creditAcctId; amount = amount; entryType = EntryType.Credit; memo = None } ]
-              references = [] }
+              references = []
+              adjustmentForPeriodId = None }
         use txn = env.Connection.BeginTransaction()
         match JournalEntryService.post txn cmd with
         | Ok posted ->

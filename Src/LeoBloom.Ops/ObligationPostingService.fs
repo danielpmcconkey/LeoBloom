@@ -76,7 +76,8 @@ module ObligationPostingService =
                                             memo = None } ]
                                       references =
                                         [ { referenceType = "obligation"
-                                            referenceValue = string inst.id } ] }
+                                            referenceValue = string inst.id } ]
+                                      adjustmentForPeriodId = None }
 
                                 // Idempotency guard: check for existing non-voided journal entry
                                 let existingJeId =

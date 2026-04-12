@@ -113,6 +113,7 @@ module Ledger =
           fiscalPeriodId: int
           voidedAt: DateTimeOffset option
           voidReason: string option
+          adjustmentForPeriodId: int option
           createdAt: DateTimeOffset
           modifiedAt: DateTimeOffset }
 
@@ -180,7 +181,8 @@ module Ledger =
           source: string option
           fiscalPeriodId: int
           lines: PostLineCommand list
-          references: PostReferenceCommand list }
+          references: PostReferenceCommand list
+          adjustmentForPeriodId: int option }
 
     type PostedJournalEntry =
         { entry: JournalEntry

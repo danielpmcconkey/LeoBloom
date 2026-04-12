@@ -139,6 +139,7 @@ module OpeningBalanceService =
                       source = Some "opening_balance"
                       fiscalPeriodId = cmd.fiscalPeriodId
                       lines = allLines
-                      references = [] }
+                      references = []
+                      adjustmentForPeriodId = None }
 
                 JournalEntryService.post txn jeCmd

@@ -16,6 +16,9 @@
     <Compile Include="DeleteRestrictionTests.fs" />
     <Compile Include="PostJournalEntryTests.fs" />
     <Compile Include="VoidJournalEntryTests.fs" />
+    <Compile Include="ClosedPeriodEnforcementTests.fs" />
+    <Compile Include="ReversingEntryTests.fs" />
+    <Compile Include="PostCloseAdjustmentTests.fs" />
     <Compile Include="AccountBalanceTests.fs" />
     <Compile Include="TrialBalanceTests.fs" />
     <Compile Include="IncomeStatementTests.fs" />

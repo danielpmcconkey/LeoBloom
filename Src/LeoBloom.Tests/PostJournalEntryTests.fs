@@ -25,7 +25,8 @@ let ``simple two-line entry posts successfully`` () =
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok posted ->
@@ -56,7 +57,8 @@ let ``compound three-line entry posts successfully`` () =
             [ { accountId = expense; amount = 500m; entryType = EntryType.Debit; memo = None }
               { accountId = liability; amount = 300m; entryType = EntryType.Debit; memo = None }
               { accountId = asset; amount = 800m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok posted ->
@@ -83,7 +85,8 @@ let ``entry with references posts successfully`` () =
               { accountId = acct2; amount = 500m; entryType = EntryType.Credit; memo = None } ]
           references =
             [ { referenceType = "cheque"; referenceValue = "12345" }
-              { referenceType = "zelle_confirmation"; referenceValue = "ZEL-9876" } ] }
+              { referenceType = "zelle_confirmation"; referenceValue = "ZEL-9876" } ]
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok posted ->
@@ -108,7 +111,8 @@ let ``null source accepted`` () =
           lines =
             [ { accountId = acct1; amount = 250m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 250m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok posted ->
@@ -133,7 +137,8 @@ let ``memo on lines preserved`` () =
           lines =
             [ { accountId = acct1; amount = 750m; entryType = EntryType.Debit; memo = Some "Debit memo" }
               { accountId = acct2; amount = 750m; entryType = EntryType.Credit; memo = Some "Credit memo" } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok posted ->
@@ -158,7 +163,8 @@ let ``unbalanced entry rejected`` () =
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 500m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for unbalanced entry")
@@ -184,7 +190,8 @@ let ``zero amount rejected`` () =
           lines =
             [ { accountId = acct1; amount = 0m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 0m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for zero amount")
@@ -210,7 +217,8 @@ let ``negative amount rejected`` () =
           lines =
             [ { accountId = acct1; amount = -100m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = -100m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for negative amount")
@@ -234,7 +242,8 @@ let ``single line rejected`` () =
           fiscalPeriodId = fpId
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for single line")
@@ -260,7 +269,8 @@ let ``empty description rejected`` () =
           lines =
             [ { accountId = acct1; amount = 100m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 100m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for empty description")
@@ -295,7 +305,8 @@ let ``empty source string rejected`` () =
           lines =
             [ { accountId = acct1; amount = 200m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 200m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for empty source")
@@ -321,7 +332,8 @@ let ``closed fiscal period rejected`` () =
           lines =
             [ { accountId = acct1; amount = 100m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 100m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for closed fiscal period")
@@ -347,7 +359,8 @@ let ``entry date outside period range rejected`` () =
           lines =
             [ { accountId = acct1; amount = 100m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 100m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for date outside period")
@@ -373,7 +386,8 @@ let ``inactive account rejected`` () =
           lines =
             [ { accountId = acct1; amount = 100m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 100m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for inactive account")
@@ -398,7 +412,8 @@ let ``nonexistent fiscal period rejected`` () =
           lines =
             [ { accountId = acct1; amount = 100m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 100m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for nonexistent fiscal period")
@@ -425,7 +440,8 @@ let ``empty reference type rejected`` () =
             [ { accountId = acct1; amount = 100m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 100m; entryType = EntryType.Credit; memo = None } ]
           references =
-            [ { referenceType = ""; referenceValue = "some-value" } ] }
+            [ { referenceType = ""; referenceValue = "some-value" } ]
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for empty reference type")
@@ -452,7 +468,8 @@ let ``empty reference value rejected`` () =
             [ { accountId = acct1; amount = 100m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 100m; entryType = EntryType.Credit; memo = None } ]
           references =
-            [ { referenceType = "cheque"; referenceValue = "" } ] }
+            [ { referenceType = "cheque"; referenceValue = "" } ]
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for empty reference value")
@@ -479,7 +496,8 @@ let ``validation failure leaves no persisted rows`` () =
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 500m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for unbalanced entry")
@@ -514,7 +532,8 @@ let ``duplicate references across entries allowed`` () =
           lines =
             [ { accountId = acct1; amount = 100m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 100m; entryType = EntryType.Credit; memo = None } ]
-          references = [ sharedRef ] }
+          references = [ sharedRef ]
+          adjustmentForPeriodId = None }
     match JournalEntryService.post txn cmd1 with
     | Ok _ -> ()
     | Error errs -> Assert.Fail(sprintf "First entry failed: %A" errs)
@@ -527,7 +546,8 @@ let ``duplicate references across entries allowed`` () =
           lines =
             [ { accountId = acct1; amount = 200m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 200m; entryType = EntryType.Credit; memo = None } ]
-          references = [ sharedRef ] }
+          references = [ sharedRef ]
+          adjustmentForPeriodId = None }
     let result2 = JournalEntryService.post txn cmd2
     match result2 with
     | Ok _ ->
@@ -552,7 +572,8 @@ let ``future entry date with valid open period succeeds`` () =
           lines =
             [ { accountId = acct1; amount = 500m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 500m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn cmd
     match result with
     | Ok posted ->

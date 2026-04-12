@@ -116,7 +116,8 @@ module TransferService =
                                     memo = None } ]
                               references =
                                 [ { referenceType = "transfer"
-                                    referenceValue = string t.id } ] }
+                                    referenceValue = string t.id } ]
+                              adjustmentForPeriodId = None }
 
                         // Idempotency guard: check for existing non-voided journal entry
                         let existingJeId =

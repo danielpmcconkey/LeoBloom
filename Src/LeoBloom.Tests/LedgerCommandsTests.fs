@@ -69,6 +69,30 @@ module CliTestEnv =
         use cmd4 = new NpgsqlCommand("DELETE FROM ledger.journal_entry WHERE fiscal_period_id = @fp", env.Connection)
         cmd4.Parameters.AddWithValue("@fp", env.FiscalPeriodId) |> ignore
         cmd4.ExecuteNonQuery() |> ignore
+        // Catch reversal JEs posted to a different (today's) period.
+        // Identify them by: journal_entry_reference.reference_type = 'reversal'
+        // pointing to one of our tracked JEs. Clean in FK order.
+        for trackedId in env.TrackedJournalEntryIds do
+            use cmdFindRev = new NpgsqlCommand(
+                "SELECT journal_entry_id FROM ledger.journal_entry_reference \
+                 WHERE reference_type = 'reversal' AND reference_value = @v",
+                env.Connection)
+            cmdFindRev.Parameters.AddWithValue("@v", string trackedId) |> ignore
+            use reader = cmdFindRev.ExecuteReader()
+            let revIds = ResizeArray<int>()
+            while reader.Read() do
+                revIds.Add(reader.GetInt32(0))
+            reader.Close()
+            for revId in revIds do
+                use cmdRR = new NpgsqlCommand("DELETE FROM ledger.journal_entry_reference WHERE journal_entry_id = @id", env.Connection)
+                cmdRR.Parameters.AddWithValue("@id", revId) |> ignore
+                cmdRR.ExecuteNonQuery() |> ignore
+                use cmdRL = new NpgsqlCommand("DELETE FROM ledger.journal_entry_line WHERE journal_entry_id = @id", env.Connection)
+                cmdRL.Parameters.AddWithValue("@id", revId) |> ignore
+                cmdRL.ExecuteNonQuery() |> ignore
+                use cmdRJ = new NpgsqlCommand("DELETE FROM ledger.journal_entry WHERE id = @id", env.Connection)
+                cmdRJ.Parameters.AddWithValue("@id", revId) |> ignore
+                cmdRJ.ExecuteNonQuery() |> ignore
         use cmd5 = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", env.Connection)
         cmd5.Parameters.AddWithValue("@id", env.FiscalPeriodId) |> ignore
         cmd5.ExecuteNonQuery() |> ignore
@@ -245,13 +269,9 @@ let ``post missing --description is rejected`` () =
                 sprintf "Expected exit code 1 or 2, got %d" result.ExitCode)
     Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
 
-[<Fact>]
-[<Trait("GherkinId", "FT-LCD-006e")>]
-let ``post missing --fiscal-period-id is rejected`` () =
-    let result = CliRunner.run "ledger post --debit 1010:1000.00 --credit 4010:1000.00 --date 2026-03-15 --description \"X\""
-    Assert.True(result.ExitCode = 1 || result.ExitCode = 2,
-                sprintf "Expected exit code 1 or 2, got %d" result.ExitCode)
-    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+// FT-LCD-006e removed by P083: --fiscal-period-id is now optional (see FT-LCD-053).
+// When omitted, the period is derived from the entry_date.
+// The old scenario "# no --fp-id" is no longer a required-argument error case.
 
 // --- Service Error Surfacing ---
 
@@ -390,4 +410,171 @@ let ``--json flag produces valid JSON for void`` () =
         let cleanStdout = CliRunner.stripLogLines result.Stdout
         let doc = JsonDocument.Parse(cleanStdout)
         Assert.NotNull(doc)
+    finally CliTestEnv.cleanup env
+
+[<Fact>]
+[<Trait("GherkinId", "FT-LCD-030c")>]
+let ``--json flag produces valid JSON for reverse`` () =
+    let env = CliTestEnv.create()
+    try
+        let entryId = CliTestEnv.postEntryViaCliJson env
+        let args = sprintf "--json ledger reverse --journal-entry-id %d" entryId
+        let result = CliRunner.run args
+        Assert.Equal(0, result.ExitCode)
+        let cleanStdout = CliRunner.stripLogLines result.Stdout
+        let doc = JsonDocument.Parse(cleanStdout)
+        Assert.NotNull(doc)
+    finally CliTestEnv.cleanup env
+
+// =====================================================================
+// ledger reverse — Tests (FT-LCD-040 through FT-LCD-044)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-LCD-040")>]
+let ``reverse an existing entry via CLI`` () =
+    let env = CliTestEnv.create()
+    try
+        let entryId = CliTestEnv.postEntryViaCli env
+        let args = sprintf "ledger reverse --journal-entry-id %d" entryId
+        let result = CliRunner.run args
+        Assert.Equal(0, result.ExitCode)
+        Assert.Contains("Journal Entry #", result.Stdout)
+        Assert.Contains("POSTED", result.Stdout)
+    finally CliTestEnv.cleanup env
+
+[<Fact>]
+[<Trait("GherkinId", "FT-LCD-041")>]
+let ``reverse with --json flag outputs JSON to stdout`` () =
+    let env = CliTestEnv.create()
+    try
+        let entryId = CliTestEnv.postEntryViaCliJson env
+        let args = sprintf "--json ledger reverse --journal-entry-id %d" entryId
+        let result = CliRunner.run args
+        Assert.Equal(0, result.ExitCode)
+        let cleanStdout = CliRunner.stripLogLines result.Stdout
+        let doc = JsonDocument.Parse(cleanStdout)
+        Assert.NotNull(doc)
+    finally CliTestEnv.cleanup env
+
+[<Fact>]
+[<Trait("GherkinId", "FT-LCD-042")>]
+let ``reverse with --date flag uses the provided date`` () =
+    let env = CliTestEnv.create()
+    try
+        let entryId = CliTestEnv.postEntryViaCli env
+        let args = sprintf "ledger reverse --journal-entry-id %d --date 2026-03-20" entryId
+        let result = CliRunner.run args
+        Assert.Equal(0, result.ExitCode)
+        Assert.Contains("Journal Entry #", result.Stdout)
+    finally CliTestEnv.cleanup env
+
+[<Fact>]
+[<Trait("GherkinId", "FT-LCD-043")>]
+let ``reverse a nonexistent entry prints error to stderr`` () =
+    let result = CliRunner.run "ledger reverse --journal-entry-id 999999"
+    Assert.Equal(1, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+[<Fact>]
+[<Trait("GherkinId", "FT-LCD-044")>]
+let ``reverse with no arguments prints error to stderr`` () =
+    let result = CliRunner.run "ledger reverse"
+    Assert.Equal(2, result.ExitCode)
+    Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+
+// =====================================================================
+// FT-PCA-005: --json output includes adjustmentForPeriodId
+// (Belongs here because CliRunner is defined before this file in compile order)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-PCA-005")>]
+let ``post with adjustment-for-period and json flag includes adjustmentForPeriodId in output`` () =
+    let env = CliTestEnv.create()
+    try
+        let args =
+            sprintf "--json ledger post --debit %d:500.00 --credit %d:500.00 --date 2026-03-15 --description \"Dec correction\" --source \"manual\" --fiscal-period-id %d --adjustment-for-period %d"
+                env.DebitAccountId env.CreditAccountId env.FiscalPeriodId env.FiscalPeriodId
+        let result = CliRunner.run args
+        Assert.Equal(0, result.ExitCode)
+        let cleanStdout = CliRunner.stripLogLines result.Stdout
+        Assert.Contains("adjustmentForPeriodId", cleanStdout)
+        let doc = JsonDocument.Parse(cleanStdout)
+        let entryId = doc.RootElement.GetProperty("entry").GetProperty("id").GetInt32()
+        env.TrackedJournalEntryIds <- entryId :: env.TrackedJournalEntryIds
+    finally CliTestEnv.cleanup env
+
+// =====================================================================
+// ledger post — new optional flags (FT-LCD-050 through FT-LCD-053)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-LCD-050")>]
+let ``post with --adjustment-for-period flag includes adjustmentForPeriodId in JSON output`` () =
+    let env = CliTestEnv.create()
+    try
+        let args =
+            sprintf "--json ledger post --debit %d:500.00 --credit %d:500.00 --date 2026-03-15 --description \"Adj entry\" --fiscal-period-id %d --adjustment-for-period %d"
+                env.DebitAccountId env.CreditAccountId env.FiscalPeriodId env.FiscalPeriodId
+        let result = CliRunner.run args
+        Assert.Equal(0, result.ExitCode)
+        let cleanStdout = CliRunner.stripLogLines result.Stdout
+        Assert.Contains("adjustmentForPeriodId", cleanStdout)
+        let doc = JsonDocument.Parse(cleanStdout)
+        let entryId = doc.RootElement.GetProperty("entry").GetProperty("id").GetInt32()
+        env.TrackedJournalEntryIds <- entryId :: env.TrackedJournalEntryIds
+    finally CliTestEnv.cleanup env
+
+[<Fact>]
+[<Trait("GherkinId", "FT-LCD-051")>]
+let ``post with --adjustment-for-period referencing a nonexistent period is rejected`` () =
+    let env = CliTestEnv.create()
+    try
+        let args =
+            sprintf "ledger post --debit %d:500.00 --credit %d:500.00 --date 2026-03-15 --description \"Bad adj\" --fiscal-period-id %d --adjustment-for-period 999999"
+                env.DebitAccountId env.CreditAccountId env.FiscalPeriodId
+        let result = CliRunner.run args
+        Assert.Equal(1, result.ExitCode)
+        Assert.False(String.IsNullOrWhiteSpace(result.Stderr), "Expected error message on stderr")
+    finally CliTestEnv.cleanup env
+
+[<Fact>]
+[<Trait("GherkinId", "FT-LCD-052")>]
+let ``post with --fiscal-period-id override routes entry to the specified period`` () =
+    let env = CliTestEnv.create()
+    try
+        let args =
+            sprintf "ledger post --debit %d:1000.00 --credit %d:1000.00 --date 2026-03-15 --description \"Override\" --fiscal-period-id %d"
+                env.DebitAccountId env.CreditAccountId env.FiscalPeriodId
+        let result = CliRunner.run args
+        Assert.Equal(0, result.ExitCode)
+        Assert.Contains("Journal Entry #", result.Stdout)
+        if result.Stdout.Contains("Journal Entry #") then
+            let line = result.Stdout.Split('\n') |> Array.find (fun l -> l.Contains("Journal Entry #"))
+            let hashIdx = line.IndexOf('#')
+            let spaceIdx = line.IndexOf(' ', hashIdx)
+            let idStr = line.Substring(hashIdx + 1, spaceIdx - hashIdx - 1)
+            env.TrackedJournalEntryIds <- Int32.Parse(idStr) :: env.TrackedJournalEntryIds
+    finally CliTestEnv.cleanup env
+
+[<Fact>]
+[<Trait("GherkinId", "FT-LCD-053")>]
+let ``post without --fiscal-period-id derives the period from entry-date`` () =
+    let env = CliTestEnv.create()
+    try
+        // The fiscal period in the env covers 2026-03-01 to 2026-03-31.
+        // Posting without --fiscal-period-id should auto-derive the period from the date.
+        let args =
+            sprintf "ledger post --debit %d:1000.00 --credit %d:1000.00 --date 2026-03-15 --description \"Auto-period\""
+                env.DebitAccountId env.CreditAccountId
+        let result = CliRunner.run args
+        Assert.Equal(0, result.ExitCode)
+        Assert.Contains("Journal Entry #", result.Stdout)
+        if result.Stdout.Contains("Journal Entry #") then
+            let line = result.Stdout.Split('\n') |> Array.find (fun l -> l.Contains("Journal Entry #"))
+            let hashIdx = line.IndexOf('#')
+            let spaceIdx = line.IndexOf(' ', hashIdx)
+            let idStr = line.Substring(hashIdx + 1, spaceIdx - hashIdx - 1)
+            env.TrackedJournalEntryIds <- Int32.Parse(idStr) :: env.TrackedJournalEntryIds
     finally CliTestEnv.cleanup env

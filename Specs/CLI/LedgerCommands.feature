@@ -61,7 +61,7 @@ Feature: Ledger CLI Commands
             | --debit 1010:1000.00 --date 2026-03-15 --description "X" --fiscal-period-id 1   | # no --credit    |
             | --debit 1010:1000.00 --credit 4010:1000.00 --description "X" --fiscal-period-id 1 | # no --date    |
             | --debit 1010:1000.00 --credit 4010:1000.00 --date 2026-03-15 --fiscal-period-id 1 | # no --desc    |
-            | --debit 1010:1000.00 --credit 4010:1000.00 --date 2026-03-15 --description "X"  | # no --fp-id     |
+            # last row ("# no --fp-id") removed by P083: --fiscal-period-id is now optional (see FT-LCD-053)
 
     # --- Service Error Surfacing ---
 
@@ -159,3 +159,84 @@ Feature: Ledger CLI Commands
             | subcommand                                          |
             | show <entry-id>                                     |
             | void <entry-id> --reason "JSON test"                |
+            | reverse --journal-entry-id <entry-id>               |
+
+    # ===================================================================
+    # ledger reverse
+    # ===================================================================
+
+    # --- Happy Path ---
+
+    @FT-LCD-040
+    Scenario: Reverse an existing entry via CLI
+        Given a CLI-testable ledger environment
+        And a posted journal entry with known ID
+        When I run the CLI with "ledger reverse --journal-entry-id <entry-id>"
+        Then stdout contains the reversed entry details
+        And the exit code is 0
+
+    @FT-LCD-041
+    Scenario: Reverse with --json flag outputs JSON to stdout
+        Given a CLI-testable ledger environment
+        And a posted journal entry with known ID
+        When I run the CLI with "--json ledger reverse --journal-entry-id <entry-id>"
+        Then stdout is valid JSON
+        And the exit code is 0
+
+    @FT-LCD-042
+    Scenario: Reverse with --date flag uses the provided date
+        Given a CLI-testable ledger environment
+        And a posted journal entry with known ID
+        When I run the CLI with "ledger reverse --journal-entry-id <entry-id> --date 2026-03-20"
+        Then stdout contains the reversed entry details
+        And the exit code is 0
+
+    # --- Error Paths ---
+
+    @FT-LCD-043
+    Scenario: Reverse a nonexistent entry prints error to stderr
+        When I run the CLI with "ledger reverse --journal-entry-id 999999"
+        Then stderr contains an error message
+        And the exit code is 1
+
+    @FT-LCD-044
+    Scenario: Reverse with no arguments prints error to stderr
+        When I run the CLI with "ledger reverse"
+        Then stderr contains an error message
+        And the exit code is 2
+
+    # ===================================================================
+    # ledger post — new optional flags
+    # ===================================================================
+
+    @FT-LCD-050
+    Scenario: Post with --adjustment-for-period flag includes adjustmentForPeriodId in output
+        Given a CLI-testable ledger environment
+        When I run the CLI with "--json ledger post --debit 1010:500.00 --credit 4010:500.00 --date 2026-03-15 --description "Adj entry" --adjustment-for-period <prior-period-id>"
+        Then stdout is valid JSON
+        And stdout contains "adjustmentForPeriodId"
+        And the exit code is 0
+
+    @FT-LCD-051
+    Scenario: Post with --adjustment-for-period referencing a nonexistent period is rejected
+        Given a CLI-testable ledger environment
+        When I run the CLI with "ledger post --debit 1010:500.00 --credit 4010:500.00 --date 2026-03-15 --description "Bad adj" --adjustment-for-period 999999"
+        Then stderr contains an error message
+        And the exit code is 1
+
+    @FT-LCD-052
+    Scenario: Post with --fiscal-period-id override routes entry to the specified period
+        Given a CLI-testable ledger environment
+        When I run the CLI with "ledger post --debit 1010:1000.00 --credit 4010:1000.00 --date 2026-03-15 --description "Override" --fiscal-period-id <period-id>"
+        Then stdout contains the posted entry details
+        And the exit code is 0
+
+    @FT-LCD-053
+    Scenario: Post without --fiscal-period-id derives the period from entry_date
+        Given a CLI-testable ledger environment
+        When I run the CLI with "ledger post --debit 1010:1000.00 --credit 4010:1000.00 --date 2026-03-15 --description "Auto-period""
+        Then stdout contains the posted entry details
+        And the exit code is 0
+
+    # Note: FT-LCD-006 last example row ("# no --fp-id") must be removed by the Builder
+    # because --fiscal-period-id is now optional (derives from entry_date when omitted).

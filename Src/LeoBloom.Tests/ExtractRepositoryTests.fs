@@ -73,7 +73,8 @@ let ``balances excludes voided entries`` () =
           lines =
             [ { accountId = acct1; amount = 500m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 500m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     JournalEntryService.post txn goodCmd |> ignore
 
     // Post and void another entry: 200 debit
@@ -85,7 +86,8 @@ let ``balances excludes voided entries`` () =
           lines =
             [ { accountId = acct1; amount = 200m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 200m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let postedId =
         match JournalEntryService.post txn voidCmd with
         | Ok posted -> posted.entry.id
@@ -118,7 +120,8 @@ let ``balances excludes account when all entries are voided`` () =
           lines =
             [ { accountId = acct1; amount = 300m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 300m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let postedId =
         match JournalEntryService.post txn cmd with
         | Ok posted -> posted.entry.id
@@ -155,7 +158,8 @@ let ``balances respects as-of date`` () =
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     JournalEntryService.post txn earlyCmd |> ignore
 
     // Later entry: 500 debit
@@ -167,7 +171,8 @@ let ``balances respects as-of date`` () =
           lines =
             [ { accountId = acct1; amount = 500m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 500m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     JournalEntryService.post txn laterCmd |> ignore
 
     // As-of 2026-03-31 should only include the 1000 entry
@@ -270,7 +275,8 @@ let ``je-lines returns only lines for the specified fiscal period`` () =
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     JournalEntryService.post txn period1Cmd |> ignore
 
     let period2Cmd =
@@ -281,7 +287,8 @@ let ``je-lines returns only lines for the specified fiscal period`` () =
           lines =
             [ { accountId = acct1; amount = 500m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 500m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     JournalEntryService.post txn period2Cmd |> ignore
 
     let rows = getJournalEntryLines txn fp1
@@ -309,7 +316,8 @@ let ``je-lines excludes voided entries`` () =
           lines =
             [ { accountId = acct1; amount = 500m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 500m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     JournalEntryService.post txn goodCmd |> ignore
 
     let voidCmd =
@@ -320,7 +328,8 @@ let ``je-lines excludes voided entries`` () =
           lines =
             [ { accountId = acct1; amount = 200m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 200m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let postedId =
         match JournalEntryService.post txn voidCmd with
         | Ok posted -> posted.entry.id
@@ -396,7 +405,8 @@ let ``balances includes entries dated exactly on the as-of date`` () =
           lines =
             [ { accountId = acct1; amount = 750m; entryType = EntryType.Debit;  memo = None }
               { accountId = acct2; amount = 750m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     JournalEntryService.post txn cmd |> ignore
 
     let rows = getBalances txn (DateOnly(2026, 3, 31))
@@ -425,7 +435,8 @@ let ``balances is raw debit-minus-credit regardless of normal balance side`` () 
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit;  memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     JournalEntryService.post txn cmd |> ignore
 
     let rows = getBalances txn (DateOnly(2026, 3, 31))
@@ -457,7 +468,8 @@ let ``account with net-zero balance is omitted from balances output`` () =
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit;  memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     JournalEntryService.post txn income |> ignore
 
     let offset =
@@ -468,7 +480,8 @@ let ``account with net-zero balance is omitted from balances output`` () =
           lines =
             [ { accountId = acct2; amount = 1000m; entryType = EntryType.Debit;  memo = None }
               { accountId = acct1; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     JournalEntryService.post txn offset |> ignore
 
     let rows = getBalances txn (DateOnly(2026, 3, 31))
@@ -565,7 +578,8 @@ let ``je-lines are ordered by account_code ASC then entry_date ASC then journal_
           lines =
             [ { accountId = acctA; amount = 100m; entryType = EntryType.Debit;  memo = None }
               { accountId = acctZ; amount = 100m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let earlyId =
         match JournalEntryService.post txn early with
         | Ok posted -> posted.entry.id
@@ -580,7 +594,8 @@ let ``je-lines are ordered by account_code ASC then entry_date ASC then journal_
           lines =
             [ { accountId = acctA; amount = 200m; entryType = EntryType.Debit;  memo = None }
               { accountId = acctZ; amount = 200m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let lateId =
         match JournalEntryService.post txn late with
         | Ok posted -> posted.entry.id

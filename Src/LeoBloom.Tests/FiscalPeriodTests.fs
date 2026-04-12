@@ -256,7 +256,8 @@ let ``posting rejected after close`` () =
           lines =
             [ { accountId = acct1; amount = 100m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 100m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     let result = JournalEntryService.post txn postCmd
     match result with
     | Ok _ ->
@@ -366,7 +367,8 @@ let ``closing a period does not modify account balances`` () =
           lines =
             [ { accountId = assetAcct; amount = 500m; entryType = EntryType.Debit; memo = None }
               { accountId = revAcct; amount = 500m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
     match JournalEntryService.post txn jeCmd with
     | Ok _ -> ()
     | Error errs -> failwithf "Setup post failed: %A" errs

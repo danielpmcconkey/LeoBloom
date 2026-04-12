@@ -45,7 +45,8 @@ module ProjectionEnv =
                   lines =
                     [ { accountId = checkingId; amount = balance; entryType = LeoBloom.Domain.Ledger.EntryType.Debit; memo = None }
                       { accountId = counterId; amount = balance; entryType = LeoBloom.Domain.Ledger.EntryType.Credit; memo = None } ]
-                  references = [] }
+                  references = []
+                  adjustmentForPeriodId = None }
             match JournalEntryService.post txn jeCmd with
             | Ok _ -> ()
             | Error errs -> failwith (sprintf "Failed to post opening balance entry: %A" errs)

@@ -50,7 +50,8 @@ module ExtractCliEnv =
                   lines =
                     [ { accountId = dAcct; amount = 1000m; entryType = EntryType.Debit;  memo = None }
                       { accountId = cAcct; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-                  references = [] }
+                  references = []
+                  adjustmentForPeriodId = None }
             match JournalEntryService.post txn cmd with
             | Ok _    -> ()
             | Error e -> failwith (sprintf "ExtractCliEnv setup failed: %A" e)

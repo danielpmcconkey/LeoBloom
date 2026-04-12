@@ -98,18 +98,5 @@ Feature: Void Journal Entry
         When I void entry ID 999999 with reason "Does not exist"
         Then the void fails with error containing "does not exist"
 
-    # --- Edge Cases ---
-
-    @FT-VJE-008
-    Scenario: Void succeeds in a closed fiscal period
-        Given the ledger schema exists for voiding
-        And a void-test open fiscal period from 2025-12-01 to 2025-12-31
-        And a void-test active account 1010 of type asset
-        And a void-test active account 4010 of type revenue
-        And a posted entry dated 2025-12-15 described as "Old entry" with source "manual" and lines:
-            | account | amount | entry_type |
-            | 1010    | 300.00 | debit      |
-            | 4010    | 300.00 | credit     |
-        And the fiscal period is now closed
-        When I void the entry with reason "Late correction"
-        Then the void succeeds with voided_at set and void_reason "Late correction"
+    # FT-VJE-008 removed by P083: voiding in a closed period is now blocked.
+    # See FT-CPE-001 in Specs/Behavioral/ClosedPeriodEnforcement.feature.

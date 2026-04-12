@@ -36,6 +36,26 @@ module FiscalPeriodRepository =
             reader.Close()
             None
 
+    /// Look up the open fiscal period that covers a given date.
+    /// Returns None if no open period covers the date.
+    let findOpenPeriodForDate (txn: NpgsqlTransaction) (date: DateOnly) : FiscalPeriod option =
+        use sql = new NpgsqlCommand(
+            "SELECT id, period_key, start_date, end_date, is_open,
+                    closed_at, closed_by, reopened_count, created_at
+             FROM ledger.fiscal_period
+             WHERE @date >= start_date AND @date <= end_date AND is_open = true
+             ORDER BY start_date LIMIT 1",
+            txn.Connection, txn)
+        sql.Parameters.AddWithValue("@date", date) |> ignore
+        use reader = sql.ExecuteReader()
+        if reader.Read() then
+            let period = readPeriod reader
+            reader.Close()
+            Some period
+        else
+            reader.Close()
+            None
+
     /// Look up a fiscal period by date. Returns None if no period covers the date.
     let findByDate (txn: NpgsqlTransaction) (date: DateOnly) : FiscalPeriod option =
         use sql = new NpgsqlCommand(

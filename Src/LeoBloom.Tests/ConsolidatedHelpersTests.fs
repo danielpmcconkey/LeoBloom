@@ -33,7 +33,8 @@ let ``Journal entry with null source persists correctly via consolidated optPara
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
 
     let result = JournalEntryService.post txn cmd
     match result with
@@ -66,7 +67,8 @@ let ``Journal entry with non-null source persists correctly via consolidated opt
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
 
     let result = JournalEntryService.post txn cmd
     match result with
@@ -99,7 +101,8 @@ let ``Journal entry with null memo on lines persists correctly via consolidated 
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
 
     let result = JournalEntryService.post txn cmd
     match result with
@@ -133,7 +136,8 @@ let ``Journal entry with non-null memo on lines persists correctly via consolida
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = Some "Cash received" }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = Some "Rent income" } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
 
     let result = JournalEntryService.post txn cmd
     match result with

@@ -17,20 +17,22 @@ module JournalEntryRepository =
           fiscalPeriodId = reader.GetInt32(4)
           voidedAt = if reader.IsDBNull(5) then None else Some (reader.GetFieldValue<DateTimeOffset>(5))
           voidReason = if reader.IsDBNull(6) then None else Some (reader.GetString(6))
-          createdAt = reader.GetFieldValue<DateTimeOffset>(7)
-          modifiedAt = reader.GetFieldValue<DateTimeOffset>(8) }
+          adjustmentForPeriodId = if reader.IsDBNull(7) then None else Some (reader.GetInt32(7))
+          createdAt = reader.GetFieldValue<DateTimeOffset>(8)
+          modifiedAt = reader.GetFieldValue<DateTimeOffset>(9) }
 
     let insertEntry (txn: NpgsqlTransaction) (cmd: PostJournalEntryCommand) : JournalEntry =
         use sql = new NpgsqlCommand(
-            "INSERT INTO ledger.journal_entry (entry_date, description, source, fiscal_period_id)
-             VALUES (@entry_date, @description, @source, @fp_id)
+            "INSERT INTO ledger.journal_entry (entry_date, description, source, fiscal_period_id, adjustment_for_period_id)
+             VALUES (@entry_date, @description, @source, @fp_id, @adj_fp_id)
              RETURNING id, entry_date, description, source, fiscal_period_id,
-                       voided_at, void_reason, created_at, modified_at",
+                       voided_at, void_reason, adjustment_for_period_id, created_at, modified_at",
             txn.Connection, txn)
         sql.Parameters.AddWithValue("@entry_date", cmd.entryDate) |> ignore
         sql.Parameters.AddWithValue("@description", cmd.description) |> ignore
         DataHelpers.optParam "@source" (cmd.source |> Option.map box) sql
         sql.Parameters.AddWithValue("@fp_id", cmd.fiscalPeriodId) |> ignore
+        DataHelpers.optParam "@adj_fp_id" (cmd.adjustmentForPeriodId |> Option.map box) sql
 
         use reader = sql.ExecuteReader()
         reader.Read() |> ignore
@@ -82,7 +84,7 @@ module JournalEntryRepository =
         // Return current state (whether we just updated or it was already voided)
         use sel = new NpgsqlCommand(
             "SELECT id, entry_date, description, source, fiscal_period_id,
-                    voided_at, void_reason, created_at, modified_at
+                    voided_at, void_reason, adjustment_for_period_id, created_at, modified_at
              FROM ledger.journal_entry WHERE id = @id",
             txn.Connection, txn)
         sel.Parameters.AddWithValue("@id", entryId) |> ignore
@@ -122,7 +124,7 @@ module JournalEntryRepository =
         // Fetch the entry header
         use entrySql = new NpgsqlCommand(
             "SELECT id, entry_date, description, source, fiscal_period_id,
-                    voided_at, void_reason, created_at, modified_at
+                    voided_at, void_reason, adjustment_for_period_id, created_at, modified_at
              FROM ledger.journal_entry WHERE id = @id",
             txn.Connection, txn)
         entrySql.Parameters.AddWithValue("@id", entryId) |> ignore

@@ -87,7 +87,8 @@ let ``Posting a journal entry emits Info-level log entries`` () =
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
 
     let result = JournalEntryService.post txn cmd
     match result with
@@ -125,7 +126,8 @@ let ``Voiding a journal entry emits Info-level log entries`` () =
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 1000m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
 
     let entryId =
         match JournalEntryService.post txn postCmd with
@@ -224,7 +226,8 @@ let ``Validation failure emits Warning-level log entry`` () =
           lines =
             [ { accountId = acct1; amount = 1000m; entryType = EntryType.Debit; memo = None }
               { accountId = acct2; amount = 500m; entryType = EntryType.Credit; memo = None } ]
-          references = [] }
+          references = []
+          adjustmentForPeriodId = None }
 
     let result = JournalEntryService.post txn cmd
     match result with

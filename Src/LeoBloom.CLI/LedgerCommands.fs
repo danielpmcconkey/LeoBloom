@@ -17,7 +17,8 @@ type LedgerPostArgs =
     | [<Mandatory>] Date of string
     | [<Mandatory>] Description of string
     | Source of string
-    | [<Mandatory>] Fiscal_Period_Id of int
+    | Fiscal_Period_Id of int
+    | Adjustment_For_Period of int
     | Ref of string
     | Json
     interface IArgParserTemplate with
@@ -28,7 +29,8 @@ type LedgerPostArgs =
             | Date _ -> "Entry date (yyyy-MM-dd)"
             | Description _ -> "Entry description"
             | Source _ -> "Entry source (optional)"
-            | Fiscal_Period_Id _ -> "Fiscal period ID"
+            | Fiscal_Period_Id _ -> "Fiscal period ID (optional, derived from entry date when omitted)"
+            | Adjustment_For_Period _ -> "Tag JE as a post-close adjustment for the given period ID (optional)"
             | Ref _ -> "Reference in type:value format (optional, repeatable)"
             | Json -> "Output in JSON format"
 
@@ -52,16 +54,29 @@ type LedgerShowArgs =
             | Entry_Id _ -> "Journal entry ID to display"
             | Json -> "Output in JSON format"
 
+type LedgerReverseArgs =
+    | [<Mandatory>] Journal_Entry_Id of int
+    | Date of string
+    | Json
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Journal_Entry_Id _ -> "Journal entry ID to reverse"
+            | Date _ -> "Entry date for reversal (yyyy-MM-dd, defaults to today)"
+            | Json -> "Output in JSON format"
+
 type LedgerArgs =
     | [<CliPrefix(CliPrefix.None)>] Post of ParseResults<LedgerPostArgs>
     | [<CliPrefix(CliPrefix.None)>] Void of ParseResults<LedgerVoidArgs>
     | [<CliPrefix(CliPrefix.None)>] Show of ParseResults<LedgerShowArgs>
+    | [<CliPrefix(CliPrefix.None)>] Reverse of ParseResults<LedgerReverseArgs>
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | Post _ -> "Post a new journal entry"
             | Void _ -> "Void an existing journal entry"
             | Show _ -> "Show a journal entry with lines and references"
+            | Reverse _ -> "Post a reversing entry for an existing journal entry"
 
 // --- Parsing helpers ---
 
@@ -97,12 +112,13 @@ let private parseRef (raw: string) : Result<PostReferenceCommand, string> =
 
 let private handlePost (isJson: bool) (args: ParseResults<LedgerPostArgs>) : int =
     let isJson = isJson || args.Contains LedgerPostArgs.Json
-    let debitRaws = args.GetResults Debit
-    let creditRaws = args.GetResults Credit
-    let dateRaw = args.GetResult Date
-    let description = args.GetResult Description
+    let debitRaws = args.GetResults LedgerPostArgs.Debit
+    let creditRaws = args.GetResults LedgerPostArgs.Credit
+    let dateRaw = args.GetResult LedgerPostArgs.Date
+    let description = args.GetResult LedgerPostArgs.Description
     let source = args.TryGetResult Source
-    let fpId = args.GetResult Fiscal_Period_Id
+    let fpIdOpt = args.TryGetResult Fiscal_Period_Id
+    let adjForPeriodOpt = args.TryGetResult Adjustment_For_Period
     let refRaws = args.GetResults Ref
 
     // Parse all inputs, collect errors
@@ -139,19 +155,34 @@ let private handlePost (isJson: bool) (args: ParseResults<LedgerPostArgs>) : int
             let refs =
                 refsParsed |> List.map (fun r -> Result.defaultValue { referenceType = ""; referenceValue = "" } r)
 
-            let cmd : PostJournalEntryCommand =
-                { entryDate = entryDate
-                  description = description
-                  source = source
-                  fiscalPeriodId = fpId
-                  lines = debitLines @ creditLines
-                  references = refs }
+            // Resolve fiscal period: explicit override or derive from entry date
+            let fpIdResult =
+                match fpIdOpt with
+                | Some fpId -> Ok fpId
+                | None ->
+                    match FiscalPeriodRepository.findOpenPeriodForDate txn entryDate with
+                    | Some period -> Ok period.id
+                    | None -> Error [ sprintf "No open fiscal period covers date %O — provide --fiscal-period-id to override" entryDate ]
 
-            let result = JournalEntryService.post txn cmd
-            match result with
-            | Ok _ -> txn.Commit()
-            | Error _ -> txn.Rollback()
-            write isJson (result |> Result.map (fun v -> v :> obj))
+            match fpIdResult with
+            | Error errs ->
+                txn.Rollback()
+                write isJson (Error errs)
+            | Ok fpId ->
+                let cmd : PostJournalEntryCommand =
+                    { entryDate = entryDate
+                      description = description
+                      source = source
+                      fiscalPeriodId = fpId
+                      lines = debitLines @ creditLines
+                      references = refs
+                      adjustmentForPeriodId = adjForPeriodOpt }
+
+                let result = JournalEntryService.post txn cmd
+                match result with
+                | Ok _ -> txn.Commit()
+                | Error _ -> txn.Rollback()
+                write isJson (result |> Result.map (fun v -> v :> obj))
         with ex ->
             try txn.Rollback() with _ -> ()
             reraise()
@@ -193,6 +224,35 @@ let private handleShow (isJson: bool) (args: ParseResults<LedgerShowArgs>) : int
         try txn.Rollback() with _ -> ()
         reraise()
 
+let private handleReverse (isJson: bool) (args: ParseResults<LedgerReverseArgs>) : int =
+    let isJson = isJson || args.Contains LedgerReverseArgs.Json
+    let entryId = args.GetResult LedgerReverseArgs.Journal_Entry_Id
+    let dateRaw = args.TryGetResult LedgerReverseArgs.Date
+
+    let dateResult =
+        match dateRaw with
+        | None -> Ok None
+        | Some raw ->
+            match parseDate raw with
+            | Ok d -> Ok (Some d)
+            | Error e -> Error [e]
+
+    match dateResult with
+    | Error errs ->
+        write isJson (Error errs)
+    | Ok dateOverride ->
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = JournalEntryService.reverseEntry txn entryId dateOverride
+            match result with
+            | Ok _ -> txn.Commit()
+            | Error _ -> txn.Rollback()
+            write isJson (result |> Result.map (fun v -> v :> obj))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
+
 // --- Dispatch ---
 
 let dispatch (isJson: bool) (args: ParseResults<LedgerArgs>) : int =
@@ -200,6 +260,7 @@ let dispatch (isJson: bool) (args: ParseResults<LedgerArgs>) : int =
     | Some (Post postArgs) -> handlePost isJson postArgs
     | Some (Void voidArgs) -> handleVoid isJson voidArgs
     | Some (Show showArgs) -> handleShow isJson showArgs
+    | Some (Reverse reverseArgs) -> handleReverse isJson reverseArgs
     | None ->
         Console.Error.WriteLine(args.Parser.PrintUsage())
         ExitCodes.systemError
