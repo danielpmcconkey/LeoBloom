@@ -64,26 +64,37 @@ module FiscalPeriodService =
             Log.errorExn ex "Failed to find fiscal period by key {PeriodKey}" [| key :> obj |]
             Error [ sprintf "Persistence error: %s" ex.Message ]
 
-    /// Close a fiscal period. Idempotent -- closing an already-closed period succeeds.
+    /// Close a fiscal period. Idempotent -- closing an already-closed period succeeds
+    /// without writing another audit row. On transition, writes an audit row.
     let closePeriod (txn: NpgsqlTransaction) (cmd: CloseFiscalPeriodCommand) : Result<FiscalPeriod, string list> =
         Log.info "Closing fiscal period {PeriodId}" [| cmd.fiscalPeriodId :> obj |]
         try
             match FiscalPeriodRepository.findById txn cmd.fiscalPeriodId with
             | None ->
                 Error [ sprintf "Fiscal period with id %d does not exist" cmd.fiscalPeriodId ]
+            | Some existing when not existing.isOpen ->
+                // Already closed — idempotent, no audit row
+                Log.info "Fiscal period {PeriodId} already closed (idempotent)" [| cmd.fiscalPeriodId :> obj |]
+                Ok existing
             | Some _ ->
-                match FiscalPeriodRepository.setIsOpen txn cmd.fiscalPeriodId false with
-                | Some period ->
-                    Log.info "Closed fiscal period {PeriodId}" [| period.id :> obj |]
-                    Ok period
+                match FiscalPeriodRepository.closePeriod txn cmd.fiscalPeriodId cmd.actor with
                 | None ->
                     Error [ sprintf "Fiscal period with id %d does not exist" cmd.fiscalPeriodId ]
+                | Some period ->
+                    FiscalPeriodAuditRepository.insert txn
+                        {| fiscalPeriodId = period.id
+                           action = "closed"
+                           actor = cmd.actor
+                           note = cmd.note |} |> ignore
+                    Log.info "Closed fiscal period {PeriodId}" [| period.id :> obj |]
+                    Ok period
         with ex ->
             Log.errorExn ex "Failed to close fiscal period {PeriodId}" [| cmd.fiscalPeriodId :> obj |]
             Error [ sprintf "Persistence error: %s" ex.Message ]
 
-    /// Reopen a fiscal period. Requires a non-empty reason. Idempotent.
-    /// Logs the reason via Log.info.
+    /// Reopen a fiscal period. Requires a non-empty reason. Idempotent -- reopening an
+    /// already-open period succeeds without writing an audit row. On transition, writes
+    /// an audit row and increments reopened_count.
     let reopenPeriod (txn: NpgsqlTransaction) (cmd: ReopenFiscalPeriodCommand) : Result<FiscalPeriod, string list> =
         match validateReopenReason cmd.reason with
         | Error errs ->
@@ -95,13 +106,36 @@ module FiscalPeriodService =
                 match FiscalPeriodRepository.findById txn cmd.fiscalPeriodId with
                 | None ->
                     Error [ sprintf "Fiscal period with id %d does not exist" cmd.fiscalPeriodId ]
+                | Some existing when existing.isOpen ->
+                    // Already open — idempotent, no audit row
+                    Log.info "Fiscal period {PeriodId} already open (idempotent)" [| cmd.fiscalPeriodId :> obj |]
+                    Ok existing
                 | Some _ ->
-                    match FiscalPeriodRepository.setIsOpen txn cmd.fiscalPeriodId true with
-                    | Some period ->
-                        Log.info "Reopened fiscal period {PeriodId}. Reason: {Reason}" [| period.id :> obj; cmd.reason :> obj |]
-                        Ok period
+                    match FiscalPeriodRepository.reopenPeriod txn cmd.fiscalPeriodId with
                     | None ->
                         Error [ sprintf "Fiscal period with id %d does not exist" cmd.fiscalPeriodId ]
+                    | Some period ->
+                        FiscalPeriodAuditRepository.insert txn
+                            {| fiscalPeriodId = period.id
+                               action = "reopened"
+                               actor = cmd.actor
+                               note = Some cmd.reason |} |> ignore
+                        Log.info "Reopened fiscal period {PeriodId}. Reason: {Reason}" [| period.id :> obj; cmd.reason :> obj |]
+                        Ok period
             with ex ->
                 Log.errorExn ex "Failed to reopen fiscal period {PeriodId}" [| cmd.fiscalPeriodId :> obj |]
                 Error [ sprintf "Persistence error: %s" ex.Message ]
+
+    /// List all audit entries for the given fiscal period. Returns error if period does not exist.
+    let listAudit (txn: NpgsqlTransaction) (periodId: int) : Result<FiscalPeriodAuditEntry list, string list> =
+        Log.info "Listing audit trail for fiscal period {PeriodId}" [| periodId :> obj |]
+        try
+            match FiscalPeriodRepository.findById txn periodId with
+            | None ->
+                Error [ sprintf "Fiscal period with id %d does not exist" periodId ]
+            | Some _ ->
+                let entries = FiscalPeriodAuditRepository.listByPeriod txn periodId
+                Ok entries
+        with ex ->
+            Log.errorExn ex "Failed to list audit for fiscal period {PeriodId}" [| periodId :> obj |]
+            Error [ sprintf "Persistence error: %s" ex.Message ]

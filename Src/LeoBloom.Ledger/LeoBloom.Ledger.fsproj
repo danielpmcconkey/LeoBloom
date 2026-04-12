@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="JournalEntryRepository.fs" />
     <Compile Include="FiscalPeriodRepository.fs" />
+    <Compile Include="FiscalPeriodAuditRepository.fs" />
     <Compile Include="FiscalPeriodService.fs" />
     <Compile Include="AccountRepository.fs" />
     <Compile Include="AccountService.fs" />

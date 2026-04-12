@@ -52,6 +52,9 @@ module PeriodCliEnv =
         { PeriodId = periodId; PeriodKey = key; Connection = conn }
 
     let cleanup (env: Env) =
+        use auditCmd = new NpgsqlCommand("DELETE FROM ledger.fiscal_period_audit WHERE fiscal_period_id = @id", env.Connection)
+        auditCmd.Parameters.AddWithValue("@id", env.PeriodId) |> ignore
+        auditCmd.ExecuteNonQuery() |> ignore
         use cmd = new NpgsqlCommand("DELETE FROM ledger.fiscal_period WHERE id = @id", env.Connection)
         cmd.Parameters.AddWithValue("@id", env.PeriodId) |> ignore
         cmd.ExecuteNonQuery() |> ignore

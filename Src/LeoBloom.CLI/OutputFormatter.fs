@@ -295,27 +295,61 @@ let private formatFiscalPeriod (fp: FiscalPeriod) : string =
     let statusStr = if fp.isOpen then "Open" else "Closed"
     let lines = ResizeArray<string>()
     lines.Add(sprintf "Fiscal Period %s (ID: %d)" fp.periodKey fp.id)
-    lines.Add(sprintf "  Start Date:    %s" (fp.startDate.ToString("yyyy-MM-dd")))
-    lines.Add(sprintf "  End Date:      %s" (fp.endDate.ToString("yyyy-MM-dd")))
-    lines.Add(sprintf "  Status:        %s" statusStr)
-    lines.Add(sprintf "  Created:       %s" (fp.createdAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    lines.Add(sprintf "  Start Date:      %s" (fp.startDate.ToString("yyyy-MM-dd")))
+    lines.Add(sprintf "  End Date:        %s" (fp.endDate.ToString("yyyy-MM-dd")))
+    lines.Add(sprintf "  Status:          %s" statusStr)
+    if not fp.isOpen then
+        lines.Add(sprintf "  Closed At:       %s" (fp.closedAt |> Option.map (fun d -> d.ToString("yyyy-MM-dd HH:mm:ss")) |> Option.defaultValue "(unknown)"))
+        lines.Add(sprintf "  Closed By:       %s" (fp.closedBy |> Option.defaultValue "(unknown)"))
+    lines.Add(sprintf "  Reopened Count:  %d" fp.reopenedCount)
+    lines.Add(sprintf "  Created:         %s" (fp.createdAt.ToString("yyyy-MM-dd HH:mm:ss")))
     String.Join(Environment.NewLine, lines)
 
 let private formatFiscalPeriodList (periods: FiscalPeriod list) : string =
     if periods.IsEmpty then "(no fiscal periods found)"
     else
         let lines = ResizeArray<string>()
-        lines.Add(sprintf "  %-6s  %-10s  %-12s  %-12s  %-8s" "ID" "Key" "Start" "End" "Status")
-        lines.Add(sprintf "  %s  %s  %s  %s  %s"
+        lines.Add(sprintf "  %-6s  %-10s  %-12s  %-12s  %-8s  %-22s  %-7s" "ID" "Key" "Start" "End" "Status" "Closed At" "Reopen#")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s  %s  %s"
             (String.replicate 6 "-") (String.replicate 10 "-")
-            (String.replicate 12 "-") (String.replicate 12 "-") (String.replicate 8 "-"))
+            (String.replicate 12 "-") (String.replicate 12 "-") (String.replicate 8 "-")
+            (String.replicate 22 "-") (String.replicate 7 "-"))
         for fp in periods do
             let status = if fp.isOpen then "Open" else "Closed"
-            lines.Add(sprintf "  %-6d  %-10s  %-12s  %-12s  %-8s"
+            let closedAt = fp.closedAt |> Option.map (fun d -> d.ToString("yyyy-MM-dd HH:mm:ss")) |> Option.defaultValue ""
+            lines.Add(sprintf "  %-6d  %-10s  %-12s  %-12s  %-8s  %-22s  %-7d"
                 fp.id fp.periodKey
                 (fp.startDate.ToString("yyyy-MM-dd"))
                 (fp.endDate.ToString("yyyy-MM-dd"))
-                status)
+                status closedAt fp.reopenedCount)
+        String.Join(Environment.NewLine, lines)
+
+// --- Fiscal Period Audit formatting ---
+
+let private formatAuditEntry (entry: FiscalPeriodAuditEntry) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Audit Entry #%d" entry.id)
+    lines.Add(sprintf "  Period ID:   %d" entry.fiscalPeriodId)
+    lines.Add(sprintf "  Action:      %s" entry.action)
+    lines.Add(sprintf "  Actor:       %s" entry.actor)
+    lines.Add(sprintf "  Occurred At: %s" (entry.occurredAt.ToString("yyyy-MM-dd HH:mm:ss")))
+    lines.Add(sprintf "  Note:        %s" (entry.note |> Option.defaultValue "(none)"))
+    String.Join(Environment.NewLine, lines)
+
+let private formatAuditList (entries: FiscalPeriodAuditEntry list) : string =
+    if entries.IsEmpty then "(no audit entries found)"
+    else
+        let lines = ResizeArray<string>()
+        lines.Add(sprintf "  %-6s  %-10s  %-12s  %-22s  %s" "ID" "Action" "Actor" "Occurred At" "Note")
+        lines.Add(sprintf "  %s  %s  %s  %s  %s"
+            (String.replicate 6 "-") (String.replicate 10 "-")
+            (String.replicate 12 "-") (String.replicate 22 "-") (String.replicate 40 "-"))
+        for e in entries do
+            let note = e.note |> Option.defaultValue ""
+            lines.Add(sprintf "  %-6d  %-10s  %-12s  %-22s  %s"
+                e.id e.action e.actor
+                (e.occurredAt.ToString("yyyy-MM-dd HH:mm:ss"))
+                note)
         String.Join(Environment.NewLine, lines)
 
 // --- Account Balance formatting ---
@@ -629,6 +663,7 @@ let formatHuman (value: obj) : string =
     | :? AccountBalance as b -> formatAccountBalance b
     | :? Account as a -> formatAccount a
     | :? FiscalPeriod as fp -> formatFiscalPeriod fp
+    | :? FiscalPeriodAuditEntry as e -> formatAuditEntry e
     | :? ObligationAgreement as a -> formatObligationAgreement a
     | :? ObligationInstance as i -> formatObligationInstance i
     | :? InvestmentAccount as a -> formatInvestmentAccount a
@@ -737,6 +772,16 @@ let writePeriodList (isJson: bool) (periods: FiscalPeriod list) : int =
         Console.Out.WriteLine(output)
     else
         let output = formatFiscalPeriodList periods
+        Console.Out.WriteLine(output)
+    ExitCodes.success
+
+/// Dedicated write function for FiscalPeriodAuditEntry list.
+let writeAuditList (isJson: bool) (entries: FiscalPeriodAuditEntry list) : int =
+    if isJson then
+        let output = formatJson entries
+        Console.Out.WriteLine(output)
+    else
+        let output = formatAuditList entries
         Console.Out.WriteLine(output)
     ExitCodes.success
 

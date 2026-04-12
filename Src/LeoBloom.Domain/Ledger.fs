@@ -92,7 +92,18 @@ module Ledger =
           startDate: DateOnly
           endDate: DateOnly
           isOpen: bool
+          closedAt: DateTimeOffset option
+          closedBy: string option
+          reopenedCount: int
           createdAt: DateTimeOffset }
+
+    type FiscalPeriodAuditEntry =
+        { id: int
+          fiscalPeriodId: int
+          action: string
+          actor: string
+          occurredAt: DateTimeOffset
+          note: string option }
 
     type JournalEntry =
         { id: int
@@ -211,11 +222,14 @@ module Ledger =
         { accountId: int }
 
     type CloseFiscalPeriodCommand =
-        { fiscalPeriodId: int }
+        { fiscalPeriodId: int
+          actor: string
+          note: string option }
 
     type ReopenFiscalPeriodCommand =
         { fiscalPeriodId: int
-          reason: string }
+          reason: string
+          actor: string }
 
     let validateReopenReason (reason: string) : Result<unit, string list> =
         if String.IsNullOrWhiteSpace reason then

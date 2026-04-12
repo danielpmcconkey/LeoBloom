@@ -50,6 +50,7 @@
     <Compile Include="AccountCommandsTests.fs" />
     <Compile Include="AccountUpdateTests.fs" />
     <Compile Include="PeriodCommandsTests.fs" />
+    <Compile Include="FiscalPeriodCloseMetadataTests.fs" />
     <Compile Include="ObligationCommandsTests.fs" />
     <Compile Include="OrphanedPostingDetectionTests.fs" />
     <Compile Include="BalanceProjectionTests.fs" />
