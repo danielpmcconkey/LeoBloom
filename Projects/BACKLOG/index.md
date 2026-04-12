@@ -84,6 +84,7 @@
 | **077** | **Account create CLI command** | **Not started** |
 | 078 | Transaction import stage schema | Not started (Hobson, not Nightshift) |
 | **079** | **Add `irregular` recurrence cadence** | **Not started** |
+| **080** | **Reporting data extracts (JSON CLI)** | **Not started** |
 
 ---
 
@@ -117,12 +118,10 @@
 | 077 | `077-account-create-cli.md` | Not started |
 | 078 | `078-stage-schema.md` | Not started |
 | 079 | `079-irregular-cadence.md` | Not started |
+| 080 | `080-reporting-data-extracts.md` | Not started |
 
 P028 (write-level ledger validation) has no spec file — it exists only in
 this index (status: Done, covered by 005/006).
-
-Also in this directory: `remediation-stories.md` (GAAP remediation sub-backlog
-from P034).
 
 ## Done/Cancelled Items
 
