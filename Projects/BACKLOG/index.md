@@ -39,7 +39,7 @@
 | 032 | Test Author Agent Blueprint | Done |
 | 033 | Seal DataSource internals | Done |
 | 034 | GAAP remediation | Done |
-| **035** | **Orphaned posting detection** | **Not started** |
+| 035 | Orphaned posting detection | Done |
 | 036 | CLI framework + ledger commands | Done |
 | 037 | CLI reporting commands (accounting) | Done |
 | **038** | **CLI obligation commands** | **Not started** |
@@ -83,8 +83,8 @@
 | 076 | Account update CLI command | Done |
 | 077 | Account create CLI command | Done |
 | 078 | Transaction import stage schema | Done (Hobson) |
-| **079** | **Add `irregular` recurrence cadence** | **Not started** |
-| **080** | **Reporting data extracts (JSON CLI)** | **Not started** |
+| 079 | Add `irregular` recurrence cadence | Done |
+| 080 | Reporting data extracts (JSON CLI) | Done |
 
 ---
 
@@ -92,18 +92,15 @@
 
 | # | File | Status | Notes |
 |---|------|--------|-------|
-| 022 | `022-balance-projection.md` | Not started | Lowest priority |
-| 035 | `035-orphaned-posting-detection.md` | Not started | Standalone diagnostic |
-| 038 | `038-cli-obligation-commands.md` | Not started | |
-| 079 | `079-irregular-cadence.md` | Not started | Hobson blocked — CLI crashes on `obligation agreement list` |
-| 080 | `080-reporting-data-extracts.md` | Not started | Hobson blocked — needs JSON extracts for report scripts |
+| 022 | `022-balance-projection.md` | Not started | Lowest priority, needs BA pass |
+| 038 | `038-cli-obligation-commands.md` | Not started | Held for Dan's input on open questions |
 
 P028 (write-level ledger validation) has no spec file — it exists only in
 this index (status: Done, covered by 005/006).
 
 ## Done/Cancelled Items
 
-All spec files for done and cancelled items are in `Done/`. 53 files total.
+All spec files for done and cancelled items are in `Done/`. 56 files total.
 
 ---
 
@@ -120,14 +117,9 @@ Completed epics: core ledger (001–019), API cancelled/CLI replacement
 ### Remaining Work
 
 **Nightshift candidates (BD pipeline):**
-- **079 (irregular cadence)** — Hobson is blocked. CLI crashes on
-  `obligation agreement list` without this. Priority candidate.
-- **080 (reporting data extracts)** — Hobson needs JSON extracts to build
-  PDF report scripts. Four generic extracts: account tree, balances,
-  portfolio positions, JE lines by period.
-- **038 (CLI obligation commands)** — Gap in the CLI layer.
-- **035 (orphaned posting detection)** — Standalone diagnostic. Slot wherever.
-- **022 (balance projection)** — Lowest priority.
+- **038 (CLI obligation commands)** — Gap in the CLI layer. Held for Dan's
+  input on open questions.
+- **022 (balance projection)** — Lowest priority. Needs BA pass.
 
 **Hobson-only (complete):**
 - **060** — Portfolio data migration. Done.
