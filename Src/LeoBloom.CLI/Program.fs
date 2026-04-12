@@ -11,6 +11,7 @@ open LeoBloom.CLI.PeriodCommands
 open LeoBloom.CLI.ObligationCommands
 open LeoBloom.CLI.DiagnosticCommands
 open LeoBloom.CLI.PortfolioCommands
+open LeoBloom.CLI.ExtractCommands
 open LeoBloom.CLI.ErrorHandler
 open LeoBloom.Utilities
 
@@ -26,6 +27,7 @@ type LeoBloomArgs =
     | [<CliPrefix(CliPrefix.None)>] Obligation of ParseResults<ObligationArgs>
     | [<CliPrefix(CliPrefix.None)>] Diagnostic of ParseResults<DiagnosticArgs>
     | [<CliPrefix(CliPrefix.None)>] Portfolio  of ParseResults<PortfolioArgs>
+    | [<CliPrefix(CliPrefix.None)>] Extract    of ParseResults<ExtractArgs>
     | Json
     interface IArgParserTemplate with
         member this.Usage =
@@ -39,6 +41,7 @@ type LeoBloomArgs =
             | Obligation _ -> "Obligation commands (agreement, instance, overdue, upcoming)"
             | Diagnostic _ -> "Diagnostic commands (orphaned-postings)"
             | Portfolio _  -> "Portfolio commands (account, fund, position)"
+            | Extract _    -> "Extract commands (account-tree, balances, positions, je-lines)"
             | Json -> "Output in JSON format"
 
 [<EntryPoint>]
@@ -72,6 +75,8 @@ let main (argv: string array) =
                 DiagnosticCommands.dispatch isJson diagnosticResults
             | Some (Portfolio portfolioResults) ->
                 PortfolioCommands.dispatch isJson portfolioResults
+            | Some (Extract extractResults) ->
+                ExtractCommands.dispatch isJson extractResults
             | _ ->
                 Console.Error.WriteLine(parser.PrintUsage())
                 ExitCodes.systemError

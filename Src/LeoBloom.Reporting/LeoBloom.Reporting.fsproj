@@ -7,6 +7,8 @@
 
   <ItemGroup>
     <Compile Include="ReportingTypes.fs" />
+    <Compile Include="ExtractTypes.fs" />
+    <Compile Include="ExtractRepository.fs" />
     <Compile Include="ScheduleEMapping.fs" />
     <Compile Include="ScheduleERepository.fs" />
     <Compile Include="GeneralLedgerRepository.fs" />
