@@ -26,7 +26,7 @@
 | 019 | Transfers | Done |
 | 020 | Invoice readiness | Cancelled |
 | 021 | Invoice record persistence | Done |
-| **022** | **Balance projection** | **Not started** |
+| 022 | Balance projection | Done |
 | 023 | Journal entry endpoints | Cancelled |
 | 024 | Reporting endpoints | Cancelled |
 | 025 | Obligation endpoints | Cancelled |
@@ -42,7 +42,7 @@
 | 035 | Orphaned posting detection | Done |
 | 036 | CLI framework + ledger commands | Done |
 | 037 | CLI reporting commands (accounting) | Done |
-| **038** | **CLI obligation commands** | **Not started** |
+| 038 | CLI obligation commands | Done |
 | 039 | CLI transfer commands | Done |
 | 040 | CLI tax reports | Done |
 | 041 | CLI account + period commands | Done |
@@ -90,17 +90,18 @@
 
 ## Active Items (files in this directory)
 
-| # | File | Status | Notes |
-|---|------|--------|-------|
-| 022 | `022-balance-projection.md` | Not started | Lowest priority, needs BA pass |
-| 038 | `038-cli-obligation-commands.md` | Not started | Held for Dan's input on open questions |
+All 80 numbered backlog items are done or cancelled.
+
+| File | Status | Notes |
+|------|--------|-------|
+| `fiscal-period-closure.md` | Brief (unnumbered) | Hobson brief, awaiting scoping + project number assignment |
 
 P028 (write-level ledger validation) has no spec file — it exists only in
 this index (status: Done, covered by 005/006).
 
 ## Done/Cancelled Items
 
-All spec files for done and cancelled items are in `Done/`. 56 files total.
+All spec files for done and cancelled items are in `Done/`. 58 files total.
 
 ---
 
@@ -112,18 +113,7 @@ All historical sequencing notes for completed work have been trimmed.
 Completed epics: core ledger (001–019), API cancelled/CLI replacement
 (023–027 → 036–042), code audit remediation (043–051), foundation cleanup
 (053–055), investment portfolio module (056–061), GAAP audit remediation
-(062–072), connection injection (073), import pipeline CLI support (074–077).
-
-### Remaining Work
-
-**Nightshift candidates (BD pipeline):**
-- **038 (CLI obligation commands)** — Gap in the CLI layer. Held for Dan's
-  input on open questions.
-- **022 (balance projection)** — Lowest priority. Needs BA pass.
-
-**Hobson-only (complete):**
-- **060** — Portfolio data migration. Done.
-- **078** — Stage schema. Done.
+(062–072), connection injection (073), import pipeline CLI support (074–080).
 
 ---
 
