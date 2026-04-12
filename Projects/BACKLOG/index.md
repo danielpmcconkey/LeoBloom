@@ -85,16 +85,23 @@
 | 078 | Transaction import stage schema | Done (Hobson) |
 | 079 | Add `irregular` recurrence cadence | Done |
 | 080 | Reporting data extracts (JSON CLI) | Done |
+| **081** | **Fiscal period close metadata & audit trail** | **Not started** |
+| **082** | **Pre-close validation** | **Not started** |
+| **083** | **Closed period enforcement, reversing entries & adjustments** | **Not started** |
+| **084** | **Report period disclosure & as-originally-closed mode** | **Not started** |
 
 ---
 
 ## Active Items (files in this directory)
 
-All 80 numbered backlog items are done or cancelled.
+| # | File | Status | Notes |
+|---|------|--------|-------|
+| 081 | `081-fiscal-period-close-metadata.md` | Not started | Schema + audit trail + CLI upgrades |
+| 082 | `082-pre-close-validation.md` | Not started | Pre-close checks, `--force` bypass |
+| 083 | `083-closed-period-enforcement.md` | Not started | Void guard, reversals, adjustments |
+| 084 | `084-report-period-disclosure.md` | Not started | Period headers, adjustment footers, as-originally-closed |
 
-| File | Status | Notes |
-|------|--------|-------|
-| `fiscal-period-closure.md` | Brief (unnumbered) | Hobson brief, awaiting scoping + project number assignment |
+Source brief: `fiscal-period-closure.md` (Hobson, 2026-04-12).
 
 P028 (write-level ledger validation) has no spec file — it exists only in
 this index (status: Done, covered by 005/006).
@@ -114,6 +121,17 @@ Completed epics: core ledger (001–019), API cancelled/CLI replacement
 (023–027 → 036–042), code audit remediation (043–051), foundation cleanup
 (053–055), investment portfolio module (056–061), GAAP audit remediation
 (062–072), connection injection (073), import pipeline CLI support (074–080).
+
+### Epic K — Fiscal Period Closure (081–084)
+
+**Sequencing:** 081 → 082 (depends on 081) → 083 (depends on 081) → 084
+(depends on 083). P082 and P083 can potentially run in parallel since both
+depend only on P081, but P083 is heavier and benefits from having the audit
+trail in place first. P084 requires `adjustment_for_period_id` from P083.
+
+**Hobson dependency:** After P081 ships, Hobson updates his Saturday routine
+procedure. After P083 ships, Hobson writes the post-close adjustment
+procedure doc. After P084 ships, Hobson updates report generation procedures.
 
 ---
 
