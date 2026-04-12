@@ -175,6 +175,7 @@ let ``InstanceStatus.fromString rejects invalid`` () =
 [<InlineData("quarterly")>]
 [<InlineData("annual")>]
 [<InlineData("one_time")>]
+[<InlineData("irregular")>]
 let ``RecurrenceCadence round-trips`` (s: string) =
     match RecurrenceCadence.fromString s with
     | Ok v -> Assert.Equal(s, RecurrenceCadence.toString v)

@@ -30,6 +30,7 @@
     <Compile Include="LogModuleStructureTests.fs" />
     <Compile Include="ObligationAgreementTests.fs" />
     <Compile Include="SpawnObligationInstanceTests.fs" />
+    <Compile Include="IrregularCadenceTests.fs" />
     <Compile Include="StatusTransitionTests.fs" />
     <Compile Include="PostObligationToLedgerTests.fs" />
     <Compile Include="OverdueDetectionTests.fs" />

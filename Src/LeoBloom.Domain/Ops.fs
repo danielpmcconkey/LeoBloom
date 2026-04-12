@@ -16,7 +16,7 @@ module Ops =
         | Overdue
         | Skipped
 
-    type RecurrenceCadence = Monthly | Quarterly | Annual | OneTime
+    type RecurrenceCadence = Monthly | Quarterly | Annual | OneTime | Irregular
 
     type PaymentMethodType =
         | AutopayPull
@@ -65,6 +65,7 @@ module Ops =
             | Quarterly -> "quarterly"
             | Annual -> "annual"
             | OneTime -> "one_time"
+            | Irregular -> "irregular"
 
         let fromString (s: string) =
             match s with
@@ -72,6 +73,7 @@ module Ops =
             | "quarterly" -> Ok Quarterly
             | "annual" -> Ok Annual
             | "one_time" -> Ok OneTime
+            | "irregular" -> Ok Irregular
             | _ -> Error (sprintf "Invalid RecurrenceCadence: '%s'" s)
 
     module PaymentMethodType =
@@ -288,6 +290,7 @@ module Ops =
                         dates <- candidate :: dates
                     year <- year + 1
                 dates |> List.rev
+            | Irregular -> []
 
         let generateInstanceName (cadence: RecurrenceCadence) (date: DateOnly) : string =
             match cadence with
@@ -300,6 +303,8 @@ module Ops =
                 sprintf "%d" date.Year
             | OneTime ->
                 "One-time"
+            | Irregular ->
+                date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
 
         let validateSpawnCommand (cmd: SpawnObligationInstancesCommand) : Result<unit, string list> =
             let errors =

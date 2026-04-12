@@ -19,7 +19,7 @@ type AgreementListArgs =
         member this.Usage =
             match this with
             | Type _ -> "Filter by type (receivable|payable)"
-            | Cadence _ -> "Filter by cadence (monthly|quarterly|annual|one_time)"
+            | Cadence _ -> "Filter by cadence (monthly|quarterly|annual|one_time|irregular)"
             | Inactive -> "Include inactive agreements"
             | Json -> "Output in JSON format"
 
@@ -49,7 +49,7 @@ type AgreementCreateArgs =
             match this with
             | Name _ -> "Agreement name"
             | Type _ -> "Obligation type (receivable|payable)"
-            | Cadence _ -> "Recurrence cadence (monthly|quarterly|annual|one_time)"
+            | Cadence _ -> "Recurrence cadence (monthly|quarterly|annual|one_time|irregular)"
             | Counterparty _ -> "Counterparty name"
             | Amount _ -> "Expected amount"
             | Expected_Day _ -> "Expected day of month (1-31)"
@@ -79,7 +79,7 @@ type AgreementUpdateArgs =
             | Id _ -> "Agreement ID"
             | Name _ -> "Agreement name"
             | Type _ -> "Obligation type (receivable|payable)"
-            | Cadence _ -> "Recurrence cadence (monthly|quarterly|annual|one_time)"
+            | Cadence _ -> "Recurrence cadence (monthly|quarterly|annual|one_time|irregular)"
             | Counterparty _ -> "Counterparty name"
             | Amount _ -> "Expected amount"
             | Expected_Day _ -> "Expected day of month (1-31)"
@@ -226,7 +226,7 @@ let private parseObligationType (raw: string) : Result<ObligationDirection, stri
 let private parseCadence (raw: string) : Result<RecurrenceCadence, string> =
     match RecurrenceCadence.fromString (raw.ToLowerInvariant()) with
     | Ok v -> Ok v
-    | Error _ -> Error (sprintf "Invalid cadence '%s' -- expected monthly, quarterly, annual, or one_time" raw)
+    | Error _ -> Error (sprintf "Invalid cadence '%s' -- expected monthly, quarterly, annual, one_time, or irregular" raw)
 
 let private parseInstanceStatus (raw: string) : Result<InstanceStatus, string> =
     match InstanceStatus.fromString (raw.ToLowerInvariant()) with

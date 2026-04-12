@@ -325,3 +325,15 @@ let ``spawn for nonexistent agreement returns error`` () =
     | Error errs ->
         Assert.True(errs |> List.exists (fun e -> e.ToLowerInvariant().Contains("does not exist")),
                     sprintf "Expected error containing 'does not exist': %A" errs)
+
+// =====================================================================
+// Pure Date Generation: Irregular (FT-IRC-003)
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-IRC-003")>]
+let ``Irregular cadence produces no dates`` () =
+    let dates =
+        ObligationInstanceSpawning.generateExpectedDates
+            Irregular 1 (DateOnly(2026, 1, 1)) (DateOnly(2026, 12, 31))
+    Assert.Equal(0, dates.Length)
