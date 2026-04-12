@@ -148,7 +148,7 @@ let ``Detects dangling status update for obligation`` () =
         Assert.Equal(Some instId, mine.[0].sourceRecordId)
 
 [<Fact>]
-[<Trait("GherkinId", "@FT-OPD-002")>]
+[<Trait("GherkinId", "@FT-OPD-003")>]
 let ``Detects dangling status update for transfer`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
@@ -176,7 +176,7 @@ let ``Detects dangling status update for transfer`` () =
 // =====================================================================
 
 [<Fact>]
-[<Trait("GherkinId", "@FT-OPD-003")>]
+[<Trait("GherkinId", "@FT-OPD-004")>]
 let ``Detects missing source record for obligation`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
@@ -197,7 +197,7 @@ let ``Detects missing source record for obligation`` () =
         Assert.Equal(None, mine.[0].sourceRecordId)
 
 [<Fact>]
-[<Trait("GherkinId", "@FT-OPD-003")>]
+[<Trait("GherkinId", "@FT-OPD-005")>]
 let ``Detects missing source record for transfer`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
@@ -222,7 +222,7 @@ let ``Detects missing source record for transfer`` () =
 // =====================================================================
 
 [<Fact>]
-[<Trait("GherkinId", "@FT-OPD-004")>]
+[<Trait("GherkinId", "@FT-OPD-006")>]
 let ``Detects obligation in posted status backed by a voided journal entry`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
@@ -245,7 +245,7 @@ let ``Detects obligation in posted status backed by a voided journal entry`` () 
         Assert.Equal(Some instId, mine.[0].sourceRecordId)
 
 [<Fact>]
-[<Trait("GherkinId", "@FT-OPD-004")>]
+[<Trait("GherkinId", "@FT-OPD-007")>]
 let ``Detects transfer in confirmed status backed by a voided journal entry`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
@@ -272,7 +272,7 @@ let ``Detects transfer in confirmed status backed by a voided journal entry`` ()
 // =====================================================================
 
 [<Fact>]
-[<Trait("GherkinId", "@FT-OPD-005")>]
+[<Trait("GherkinId", "@FT-OPD-008")>]
 let ``Properly completed obligation posting is not reported as an orphan`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
@@ -299,7 +299,7 @@ let ``Properly completed obligation posting is not reported as an orphan`` () =
 // =====================================================================
 
 [<Fact>]
-[<Trait("GherkinId", "@FT-OPD-006")>]
+[<Trait("GherkinId", "@FT-OPD-010")>]
 let ``Non-numeric reference_value for obligation type is reported as InvalidReference`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
@@ -325,7 +325,7 @@ let ``Non-numeric reference_value for obligation type is reported as InvalidRefe
 // =====================================================================
 
 [<Fact>]
-[<Trait("GherkinId", "@FT-OPD-007")>]
+[<Trait("GherkinId", "@FT-OPD-009")>]
 let ``JSON output mode returns valid JSON containing the orphan data`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
