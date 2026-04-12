@@ -375,7 +375,7 @@ let ``closing a period does not modify account balances`` () =
 
     // Record trial balance before close
     let beforeReport =
-        match TrialBalanceService.getByPeriodId txn fpId with
+        match TrialBalanceService.getByPeriodId txn fpId false with
         | Ok r -> r
         | Error e -> failwithf "Trial balance before close failed: %s" e
 
@@ -386,7 +386,7 @@ let ``closing a period does not modify account balances`` () =
 
     // Record trial balance after close
     let afterReport =
-        match TrialBalanceService.getByPeriodId txn fpId with
+        match TrialBalanceService.getByPeriodId txn fpId false with
         | Ok r -> r
         | Error e -> failwithf "Trial balance after close failed: %s" e
 

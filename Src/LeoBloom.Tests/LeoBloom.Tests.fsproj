@@ -68,6 +68,7 @@
     <Compile Include="PortfolioReportCommandsTests.fs" />
     <Compile Include="ExtractRepositoryTests.fs" />
     <Compile Include="ExtractCommandsTests.fs" />
+    <Compile Include="ReportPeriodDisclosureTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

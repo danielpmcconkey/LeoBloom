@@ -54,7 +54,7 @@ let ``subtree with revenue and expense children produces correct P&L`` () =
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn bankAcct revAcct fpId (DateOnly(2026, 3, 10)) "Service income" 1000m |> ignore
     postEntry txn expAcct bankAcct fpId (DateOnly(2026, 3, 20)) "Office supplies" 400m |> ignore
-    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId
+    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId false
     match result with
     | Ok report ->
         Assert.Equal(parentCode, report.rootAccountCode)
@@ -76,7 +76,7 @@ let ``subtree with only revenue descendants shows empty expense section`` () =
     let bankAcct = InsertHelpers.insertAccount txn (prefix + "BK") "Bank" assetTypeId true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn bankAcct revAcct fpId (DateOnly(2026, 3, 15)) "Revenue only" 750m |> ignore
-    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId
+    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId false
     match result with
     | Ok report ->
         Assert.Equal(750m, report.revenue.sectionTotal)
@@ -98,7 +98,7 @@ let ``subtree with only expense descendants shows empty revenue section`` () =
     let bankAcct = InsertHelpers.insertAccount txn (prefix + "BK") "Bank" assetTypeId true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn expAcct bankAcct fpId (DateOnly(2026, 3, 15)) "Expense only" 300m |> ignore
-    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId
+    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId false
     match result with
     | Ok report ->
         Assert.Equal(300m, report.expenses.sectionTotal)
@@ -118,7 +118,7 @@ let ``root account with no children returns single-account P&L`` () =
     let bankAcct = InsertHelpers.insertAccount txn (prefix + "BK") "Bank" assetTypeId true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn bankAcct revAcct fpId (DateOnly(2026, 3, 15)) "Solo income" 500m |> ignore
-    let result = SubtreePLService.getByAccountCodeAndPeriodId txn revCode fpId
+    let result = SubtreePLService.getByAccountCodeAndPeriodId txn revCode fpId false
     match result with
     | Ok report ->
         Assert.Equal(revCode, report.rootAccountCode)
@@ -138,7 +138,7 @@ let ``root account not revenue or expense with no rev/exp descendants returns em
     // Child is also an asset — no revenue/expense in subtree
     let _childAcct = InsertHelpers.insertAccountWithParent txn (prefix + "CH") "Asset Child" assetTypeId parentAcct true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
-    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId
+    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId false
     match result with
     | Ok report ->
         Assert.Equal(0m, report.revenue.sectionTotal)
@@ -166,7 +166,7 @@ let ``voided entries excluded from subtree P&L`` () =
     match JournalEntryService.voidEntry txn voidCmd with
     | Error errs -> Assert.Fail(sprintf "Void failed: %A" errs)
     | Ok _ -> ()
-    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId
+    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId false
     match result with
     | Ok report ->
         Assert.Equal(500m, report.revenue.sectionTotal)
@@ -189,7 +189,7 @@ let ``accounts outside the subtree are excluded`` () =
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn bankAcct revInSubtree fpId (DateOnly(2026, 3, 10)) "Subtree revenue" 600m |> ignore
     postEntry txn bankAcct revOutside fpId (DateOnly(2026, 3, 15)) "Outside revenue" 400m |> ignore
-    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId
+    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId false
     match result with
     | Ok report ->
         Assert.Equal(600m, report.revenue.sectionTotal)
@@ -214,7 +214,7 @@ let ``multi-level hierarchy includes grandchildren in subtree`` () =
     let bankAcct = InsertHelpers.insertAccount txn (prefix + "BK") "Bank" assetTypeId true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn grandchildAcct bankAcct fpId (DateOnly(2026, 3, 15)) "Deep expense" 250m |> ignore
-    let result = SubtreePLService.getByAccountCodeAndPeriodId txn rootCode fpId
+    let result = SubtreePLService.getByAccountCodeAndPeriodId txn rootCode fpId false
     match result with
     | Ok report ->
         Assert.Equal(1, report.expenses.lines.Length)
@@ -237,8 +237,8 @@ let ``lookup by period key returns same result as by period ID`` () =
     let periodKey = prefix + "FP"
     let fpId = InsertHelpers.insertFiscalPeriod txn periodKey (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn bankAcct revAcct fpId (DateOnly(2026, 3, 15)) "Lookup test" 250m |> ignore
-    let resultById = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId
-    let resultByKey = SubtreePLService.getByAccountCodeAndPeriodKey txn parentCode periodKey
+    let resultById = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId false
+    let resultByKey = SubtreePLService.getByAccountCodeAndPeriodKey txn parentCode periodKey false
     match resultById, resultByKey with
     | Ok reportById, Ok reportByKey ->
         Assert.Equal(reportById.revenue.sectionTotal, reportByKey.revenue.sectionTotal)
@@ -257,7 +257,7 @@ let ``nonexistent account code returns error`` () =
     use txn = conn.BeginTransaction()
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
-    let result = SubtreePLService.getByAccountCodeAndPeriodId txn "ZZZZNOEXIST" fpId
+    let result = SubtreePLService.getByAccountCodeAndPeriodId txn "ZZZZNOEXIST" fpId false
     match result with
     | Ok _ -> Assert.Fail("Expected Error for nonexistent account code")
     | Error err -> Assert.Contains("does not exist", err)
@@ -270,7 +270,7 @@ let ``nonexistent period returns error`` () =
     let prefix = TestData.uniquePrefix()
     let acctCode = prefix + "AC"
     let _acct = InsertHelpers.insertAccount txn acctCode "Test" revenueTypeId true
-    let result = SubtreePLService.getByAccountCodeAndPeriodId txn acctCode 999999
+    let result = SubtreePLService.getByAccountCodeAndPeriodId txn acctCode 999999 false
     match result with
     | Ok _ -> Assert.Fail("Expected Error for nonexistent period")
     | Error err -> Assert.Contains("does not exist", err)
@@ -285,7 +285,7 @@ let ``empty period for subtree produces zero net income`` () =
     let parentAcct = InsertHelpers.insertAccount txn parentCode "Parent" assetTypeId true
     let _revAcct = InsertHelpers.insertAccountWithParent txn (prefix + "RV") "Revenue Child" revenueTypeId parentAcct true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
-    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId
+    let result = SubtreePLService.getByAccountCodeAndPeriodId txn parentCode fpId false
     match result with
     | Ok report ->
         Assert.Equal(0m, report.revenue.sectionTotal)
@@ -308,7 +308,8 @@ let ``SubtreePLReport type has required fields`` () =
           periodKey = "2026-03"
           revenue = { sectionName = "revenue"; lines = []; sectionTotal = 0m }
           expenses = { sectionName = "expense"; lines = []; sectionTotal = 0m }
-          netIncome = 0m }
+          netIncome = 0m
+          disclosure = None }
     Assert.Equal("4000", report.rootAccountCode)
     Assert.Equal("Revenue", report.rootAccountName)
     Assert.Equal(1, report.fiscalPeriodId)
@@ -321,7 +322,7 @@ let ``SubtreePLReport type has required fields`` () =
 let ``getByAccountCodeAndPeriodId returns Result of SubtreePLReport or string`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
-    let result : Result<SubtreePLReport, string> = SubtreePLService.getByAccountCodeAndPeriodId txn "ZZZNOEXIST" 999998
+    let result : Result<SubtreePLReport, string> = SubtreePLService.getByAccountCodeAndPeriodId txn "ZZZNOEXIST" 999998 false
     match result with
     | Error err -> Assert.Contains("does not exist", err)
     | Ok _ -> Assert.Fail("Expected Error for nonexistent account")
@@ -330,7 +331,7 @@ let ``getByAccountCodeAndPeriodId returns Result of SubtreePLReport or string`` 
 let ``getByAccountCodeAndPeriodKey returns Result of SubtreePLReport or string`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
-    let result : Result<SubtreePLReport, string> = SubtreePLService.getByAccountCodeAndPeriodKey txn "ZZZNOEXIST" "0000-00"
+    let result : Result<SubtreePLReport, string> = SubtreePLService.getByAccountCodeAndPeriodKey txn "ZZZNOEXIST" "0000-00" false
     match result with
     | Error err -> Assert.Contains("does not exist", err)
     | Ok _ -> Assert.Fail("Expected Error for nonexistent account")

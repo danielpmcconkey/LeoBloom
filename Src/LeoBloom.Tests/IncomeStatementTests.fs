@@ -46,7 +46,7 @@ let ``period with revenue and expense activity produces correct net income`` () 
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn assetAcct revAcct fpId (DateOnly(2026, 3, 10)) "Service income" 1000m |> ignore
     postEntry txn expAcct assetAcct fpId (DateOnly(2026, 3, 20)) "Office supplies" 400m |> ignore
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.Equal(1000m, report.revenue.sectionTotal)
@@ -64,7 +64,7 @@ let ``revenue only period shows revenue section with empty expenses`` () =
     let revAcct = InsertHelpers.insertAccount txn (prefix + "RV") "Revenue" revenueTypeId true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn assetAcct revAcct fpId (DateOnly(2026, 3, 15)) "Revenue only" 750m |> ignore
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.Equal(750m, report.revenue.sectionTotal)
@@ -83,7 +83,7 @@ let ``expenses only period shows expense section with empty revenue`` () =
     let expAcct = InsertHelpers.insertAccount txn (prefix + "EX") "Expense" expenseTypeId true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn expAcct assetAcct fpId (DateOnly(2026, 3, 15)) "Expense only" 300m |> ignore
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.Equal(300m, report.expenses.sectionTotal)
@@ -107,7 +107,7 @@ let ``voided entries excluded from income statement`` () =
     match JournalEntryService.voidEntry txn voidCmd with
     | Error errs -> Assert.Fail(sprintf "Void failed: %A" errs)
     | Ok _ -> ()
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.Equal(500m, report.revenue.sectionTotal)
@@ -125,7 +125,7 @@ let ``accounts with no activity in the period are omitted from sections`` () =
     let _revAcct2 = InsertHelpers.insertAccount txn (prefix + "R2") "Revenue2" revenueTypeId true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn assetAcct revAcct1 fpId (DateOnly(2026, 3, 15)) "One revenue only" 600m |> ignore
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.Equal(1, report.revenue.lines.Length)
@@ -148,7 +148,7 @@ let ``inactive accounts with activity in the period still appear`` () =
     deactCmd.Transaction <- txn
     deactCmd.Parameters.AddWithValue("@id", revAcct) |> ignore
     deactCmd.ExecuteNonQuery() |> ignore
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         let revLine = report.revenue.lines |> List.tryFind (fun l -> l.accountId = revAcct)
@@ -163,7 +163,7 @@ let ``empty period produces zero net income`` () =
     use txn = conn.BeginTransaction()
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.Equal(0m, report.revenue.sectionTotal)
@@ -187,7 +187,7 @@ let ``net loss when expenses exceed revenue`` () =
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn assetAcct revAcct fpId (DateOnly(2026, 3, 10)) "Small income" 300m |> ignore
     postEntry txn expAcct assetAcct fpId (DateOnly(2026, 3, 20)) "Big expense" 800m |> ignore
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.Equal(-500m, report.netIncome)
@@ -209,7 +209,7 @@ let ``multiple revenue and expense accounts accumulate correctly`` () =
     postEntry txn assetAcct revAcct2 fpId (DateOnly(2026, 3, 10)) "Service revenue" 400m |> ignore
     postEntry txn expAcct1 assetAcct fpId (DateOnly(2026, 3, 15)) "Rent expense" 200m |> ignore
     postEntry txn expAcct2 assetAcct fpId (DateOnly(2026, 3, 20)) "Utility expense" 150m |> ignore
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.Equal(2, report.revenue.lines.Length)
@@ -232,7 +232,7 @@ let ``revenue balance equals credits minus debits`` () =
     postEntry txn assetAcct revAcct fpId (DateOnly(2026, 3, 10)) "Revenue credit" 700m |> ignore
     // Debit revenue 100 (adjustment)
     postEntry txn revAcct assetAcct fpId (DateOnly(2026, 3, 20)) "Revenue debit adjustment" 100m |> ignore
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         let revLine = report.revenue.lines |> List.find (fun l -> l.accountId = revAcct)
@@ -252,7 +252,7 @@ let ``expense balance equals debits minus credits`` () =
     postEntry txn expAcct assetAcct fpId (DateOnly(2026, 3, 10)) "Expense debit" 500m |> ignore
     // Credit expense 150 (adjustment)
     postEntry txn assetAcct expAcct fpId (DateOnly(2026, 3, 20)) "Expense credit adjustment" 150m |> ignore
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         let expLine = report.expenses.lines |> List.find (fun l -> l.accountId = expAcct)
@@ -270,8 +270,8 @@ let ``lookup by period key returns same result as by period ID`` () =
     let periodKey = prefix + "FP"
     let fpId = InsertHelpers.insertFiscalPeriod txn periodKey (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn assetAcct revAcct fpId (DateOnly(2026, 3, 15)) "Lookup test" 250m |> ignore
-    let resultById = IncomeStatementService.getByPeriodId txn fpId
-    let resultByKey = IncomeStatementService.getByPeriodKey txn periodKey
+    let resultById = IncomeStatementService.getByPeriodId txn fpId false
+    let resultByKey = IncomeStatementService.getByPeriodKey txn periodKey false
     match resultById, resultByKey with
     | Ok reportById, Ok reportByKey ->
         Assert.Equal(reportById.revenue.sectionTotal, reportByKey.revenue.sectionTotal)
@@ -289,7 +289,7 @@ let ``lookup by period key returns same result as by period ID`` () =
 let ``nonexistent period ID returns error`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
-    let result = IncomeStatementService.getByPeriodId txn 999999
+    let result = IncomeStatementService.getByPeriodId txn 999999 false
     match result with
     | Ok _ -> Assert.Fail("Expected Error for nonexistent period ID")
     | Error err ->
@@ -300,7 +300,7 @@ let ``nonexistent period ID returns error`` () =
 let ``nonexistent period key returns error`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
-    let result = IncomeStatementService.getByPeriodKey txn "9999-99"
+    let result = IncomeStatementService.getByPeriodKey txn "9999-99" false
     match result with
     | Ok _ -> Assert.Fail("Expected Error for nonexistent period key")
     | Error err ->
@@ -321,7 +321,7 @@ let ``closed period income statement still works`` () =
     closeCmd.Transaction <- txn
     closeCmd.Parameters.AddWithValue("@id", fpId) |> ignore
     closeCmd.ExecuteNonQuery() |> ignore
-    let result = IncomeStatementService.getByPeriodId txn fpId
+    let result = IncomeStatementService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.Equal(800m, report.revenue.sectionTotal)
@@ -348,7 +348,7 @@ let ``income statement for one period excludes another period's activity`` () =
     // April: expense entry
     postEntry txn expAcct assetAcct fpApr (DateOnly(2026, 4, 10)) "April expense" 300m |> ignore
     // Query March only
-    let result = IncomeStatementService.getByPeriodId txn fpMar
+    let result = IncomeStatementService.getByPeriodId txn fpMar false
     match result with
     | Ok report ->
         Assert.Equal(800m, report.revenue.sectionTotal)
@@ -389,7 +389,8 @@ let ``IncomeStatementReport type has required fields`` () =
           periodKey = "2026-03"
           revenue = { sectionName = "revenue"; lines = []; sectionTotal = 0m }
           expenses = { sectionName = "expense"; lines = []; sectionTotal = 0m }
-          netIncome = 0m }
+          netIncome = 0m
+          disclosure = None }
     Assert.Equal(1, report.fiscalPeriodId)
     Assert.Equal("2026-03", report.periodKey)
     Assert.Equal("revenue", report.revenue.sectionName)
@@ -400,7 +401,7 @@ let ``IncomeStatementReport type has required fields`` () =
 let ``getByPeriodId returns Result of IncomeStatementReport or string`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
-    let result : Result<IncomeStatementReport, string> = IncomeStatementService.getByPeriodId txn 999998
+    let result : Result<IncomeStatementReport, string> = IncomeStatementService.getByPeriodId txn 999998 false
     match result with
     | Error err -> Assert.Contains("does not exist", err)
     | Ok _ -> Assert.Fail("Expected Error for nonexistent period")
@@ -409,7 +410,7 @@ let ``getByPeriodId returns Result of IncomeStatementReport or string`` () =
 let ``getByPeriodKey returns Result of IncomeStatementReport or string`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
-    let result : Result<IncomeStatementReport, string> = IncomeStatementService.getByPeriodKey txn "0000-00"
+    let result : Result<IncomeStatementReport, string> = IncomeStatementService.getByPeriodKey txn "0000-00" false
     match result with
     | Error err -> Assert.Contains("does not exist", err)
     | Ok _ -> Assert.Fail("Expected Error for nonexistent period")

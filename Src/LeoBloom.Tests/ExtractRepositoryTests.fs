@@ -291,7 +291,7 @@ let ``je-lines returns only lines for the specified fiscal period`` () =
           adjustmentForPeriodId = None }
     JournalEntryService.post txn period2Cmd |> ignore
 
-    let rows = getJournalEntryLines txn fp1
+    let rows = getJournalEntryLines txn fp1 true None
 
     Assert.Equal(2, rows.Length)
     Assert.True(rows |> List.forall (fun r -> r.entryDate = DateOnly(2026, 3, 15)))
@@ -336,7 +336,7 @@ let ``je-lines excludes voided entries`` () =
         | Error errs -> failwith (sprintf "Post failed: %A" errs)
     JournalEntryService.voidEntry txn { journalEntryId = postedId; voidReason = "test" } |> ignore
 
-    let rows = getJournalEntryLines txn fpId
+    let rows = getJournalEntryLines txn fpId true None
 
     Assert.Equal(2, rows.Length)
     Assert.True(rows |> List.forall (fun r -> r.description = "Good entry"))
@@ -552,7 +552,7 @@ let ``je-lines for a period with no entries returns empty list`` () =
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
 
-    let rows = getJournalEntryLines txn fpId
+    let rows = getJournalEntryLines txn fpId true None
 
     Assert.Empty(rows)
 
@@ -601,7 +601,7 @@ let ``je-lines are ordered by account_code ASC then entry_date ASC then journal_
         | Ok posted -> posted.entry.id
         | Error e -> failwith (sprintf "Post failed: %A" e)
 
-    let rows = getJournalEntryLines txn fpId
+    let rows = getJournalEntryLines txn fpId true None
     let myRows = rows |> List.filter (fun r -> r.accountId = acctA || r.accountId = acctZ)
 
     // Should be 4 lines: (A,03-10), (A,03-20), (Z,03-10), (Z,03-20)

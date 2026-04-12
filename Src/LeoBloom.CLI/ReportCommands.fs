@@ -50,40 +50,50 @@ type CashDisbursementsArgs =
 
 type TrialBalanceArgs =
     | [<Mandatory>] Period of string
+    | As_Originally_Closed
     | Json
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | Period _ -> "Fiscal period ID or period key (e.g. 7 or 2026-01)"
+            | As_Originally_Closed -> "Show period as it was at close (excludes post-close entries)"
             | Json -> "Output in JSON format"
 
 type BalanceSheetArgs =
     | [<Mandatory>] As_Of of string
+    | Period of string
+    | As_Originally_Closed
     | Json
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | As_Of _ -> "As-of date (yyyy-MM-dd)"
+            | Period _ -> "Optional fiscal period for disclosure header"
+            | As_Originally_Closed -> "Show period as it was at close (requires --period)"
             | Json -> "Output in JSON format"
 
 type IncomeStatementArgs =
     | [<Mandatory>] Period of string
+    | As_Originally_Closed
     | Json
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | Period _ -> "Fiscal period ID or period key (e.g. 7 or 2026-01)"
+            | As_Originally_Closed -> "Show period as it was at close (excludes post-close entries)"
             | Json -> "Output in JSON format"
 
 type PnlSubtreeArgs =
     | [<Mandatory>] Account of string
     | [<Mandatory>] Period of string
+    | As_Originally_Closed
     | Json
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | Account _ -> "Root account code (e.g. 5000)"
             | Period _ -> "Fiscal period ID or period key (e.g. 7 or 2026-01)"
+            | As_Originally_Closed -> "Show period as it was at close (excludes post-close entries)"
             | Json -> "Output in JSON format"
 
 type AccountBalanceArgs =
@@ -227,14 +237,15 @@ let private handleCashDisbursements (args: ParseResults<CashDisbursementsArgs>) 
 let private handleTrialBalance (isJson: bool) (args: ParseResults<TrialBalanceArgs>) : int =
     let isJson = isJson || args.Contains TrialBalanceArgs.Json
     let periodRaw = args.GetResult TrialBalanceArgs.Period
+    let asOriginallyClosed = args.Contains TrialBalanceArgs.As_Originally_Closed
 
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
     try
         let result =
             match parsePeriodArg periodRaw with
-            | Choice1Of2 id -> TrialBalanceService.getByPeriodId txn id
-            | Choice2Of2 key -> TrialBalanceService.getByPeriodKey txn key
+            | Choice1Of2 id -> TrialBalanceService.getByPeriodId txn id asOriginallyClosed
+            | Choice2Of2 key -> TrialBalanceService.getByPeriodKey txn key asOriginallyClosed
         match result with
         | Ok _ -> txn.Commit()
         | Error _ -> txn.Rollback()
@@ -246,6 +257,8 @@ let private handleTrialBalance (isJson: bool) (args: ParseResults<TrialBalanceAr
 let private handleBalanceSheet (isJson: bool) (args: ParseResults<BalanceSheetArgs>) : int =
     let isJson = isJson || args.Contains BalanceSheetArgs.Json
     let asOfRaw = args.GetResult BalanceSheetArgs.As_Of
+    let periodRaw = args.TryGetResult BalanceSheetArgs.Period
+    let asOriginallyClosed = args.Contains BalanceSheetArgs.As_Originally_Closed
 
     match parseDate asOfRaw with
     | Error e ->
@@ -254,7 +267,21 @@ let private handleBalanceSheet (isJson: bool) (args: ParseResults<BalanceSheetAr
         use conn = DataSource.openConnection()
         use txn = conn.BeginTransaction()
         try
-            let result = BalanceSheetService.getAsOfDate txn asOfDate
+            let result =
+                match periodRaw with
+                | None ->
+                    if asOriginallyClosed then
+                        Error "--as-originally-closed requires --period"
+                    else
+                        BalanceSheetService.getAsOfDate txn asOfDate
+                | Some periodStr ->
+                    match parsePeriodArg periodStr with
+                    | Choice1Of2 id -> BalanceSheetService.getAsOfDateWithPeriod txn asOfDate id asOriginallyClosed
+                    | Choice2Of2 _key ->
+                        // Balance sheet with period: resolve key to id via disclosure lookup
+                        match LeoBloom.Ledger.PeriodDisclosureRepository.getDisclosureByKey txn periodStr with
+                        | None -> Error (sprintf "Fiscal period with key '%s' does not exist" periodStr)
+                        | Some d -> BalanceSheetService.getAsOfDateWithPeriod txn asOfDate d.fiscalPeriodId asOriginallyClosed
             match result with
             | Ok _ -> txn.Commit()
             | Error _ -> txn.Rollback()
@@ -266,14 +293,15 @@ let private handleBalanceSheet (isJson: bool) (args: ParseResults<BalanceSheetAr
 let private handleIncomeStatement (isJson: bool) (args: ParseResults<IncomeStatementArgs>) : int =
     let isJson = isJson || args.Contains IncomeStatementArgs.Json
     let periodRaw = args.GetResult IncomeStatementArgs.Period
+    let asOriginallyClosed = args.Contains IncomeStatementArgs.As_Originally_Closed
 
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
     try
         let result =
             match parsePeriodArg periodRaw with
-            | Choice1Of2 id -> IncomeStatementService.getByPeriodId txn id
-            | Choice2Of2 key -> IncomeStatementService.getByPeriodKey txn key
+            | Choice1Of2 id -> IncomeStatementService.getByPeriodId txn id asOriginallyClosed
+            | Choice2Of2 key -> IncomeStatementService.getByPeriodKey txn key asOriginallyClosed
         match result with
         | Ok _ -> txn.Commit()
         | Error _ -> txn.Rollback()
@@ -286,14 +314,15 @@ let private handlePnlSubtree (isJson: bool) (args: ParseResults<PnlSubtreeArgs>)
     let isJson = isJson || args.Contains PnlSubtreeArgs.Json
     let account = args.GetResult PnlSubtreeArgs.Account
     let periodRaw = args.GetResult PnlSubtreeArgs.Period
+    let asOriginallyClosed = args.Contains PnlSubtreeArgs.As_Originally_Closed
 
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
     try
         let result =
             match parsePeriodArg periodRaw with
-            | Choice1Of2 id -> SubtreePLService.getByAccountCodeAndPeriodId txn account id
-            | Choice2Of2 key -> SubtreePLService.getByAccountCodeAndPeriodKey txn account key
+            | Choice1Of2 id -> SubtreePLService.getByAccountCodeAndPeriodId txn account id asOriginallyClosed
+            | Choice2Of2 key -> SubtreePLService.getByAccountCodeAndPeriodKey txn account key asOriginallyClosed
         match result with
         | Ok _ -> txn.Commit()
         | Error _ -> txn.Rollback()

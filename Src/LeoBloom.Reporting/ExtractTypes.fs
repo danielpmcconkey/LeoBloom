@@ -50,3 +50,16 @@ module ExtractTypes =
           [<JsonPropertyName("amount")>] amount: decimal
           [<JsonPropertyName("entry_type")>] entryType: string
           [<JsonPropertyName("memo")>] memo: string option }
+
+    [<CLIMutable>]
+    type PeriodMetadataEnvelope =
+        { [<JsonPropertyName("period_key")>] periodKey: string
+          [<JsonPropertyName("start_date")>] startDate: DateOnly
+          [<JsonPropertyName("end_date")>] endDate: DateOnly
+          [<JsonPropertyName("status")>] status: string
+          [<JsonPropertyName("closed_at")>] closedAt: DateTimeOffset option
+          [<JsonPropertyName("closed_by")>] closedBy: string option
+          [<JsonPropertyName("reopened_count")>] reopenedCount: int
+          [<JsonPropertyName("adjustment_count")>] adjustmentCount: int
+          [<JsonPropertyName("adjustment_net_impact")>] adjustmentNetImpact: decimal
+          [<JsonPropertyName("lines")>] lines: JournalEntryLineRow list }

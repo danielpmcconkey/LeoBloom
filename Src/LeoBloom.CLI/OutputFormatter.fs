@@ -153,10 +153,52 @@ let private formatCashDisbursements (report: CashDisbursementsReport) : string =
     lines.Add(sprintf "  %-12s  %-8s  %-30s  %-25s  %12s" "" "" "Total Disbursements" "" (sprintf "%M" report.totalDisbursements))
     String.Join(Environment.NewLine, lines)
 
+// --- Period disclosure formatting helpers ---
+
+let private formatDisclosureHeader (d: PeriodDisclosure) : string list =
+    let status =
+        if d.isOpen then "OPEN as of report generation"
+        else
+            let closedStr =
+                match d.closedAt with
+                | Some dt -> dt.ToString("yyyy-MM-dd HH:mm:ss")
+                | None -> "(no timestamp)"
+            let actor = d.closedBy |> Option.defaultValue "(unknown)"
+            sprintf "CLOSED on %s by %s" closedStr actor
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Period: %s  (%s to %s)" d.periodKey (d.startDate.ToString("yyyy-MM-dd")) (d.endDate.ToString("yyyy-MM-dd")))
+    lines.Add(sprintf "Status: %s" status)
+    if d.reopenedCount > 0 then
+        lines.Add(sprintf "Reopened %d time(s)" d.reopenedCount)
+    if d.adjustmentCount > 0 then
+        lines.Add(sprintf "Adjustments: %d  |  Net Impact: %M" d.adjustmentCount d.adjustmentNetImpact)
+    if d.asOriginallyClosed then
+        lines.Add("** Showing period as of close (pre-adjustment view) **")
+    lines.Add(sprintf "Report generated: %s" (DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC")))
+    lines.Add(String.replicate 70 "-")
+    Seq.toList lines
+
+let private formatDisclosureFooter (d: PeriodDisclosure) : string list =
+    if d.adjustments.IsEmpty then []
+    else
+        let lines = ResizeArray<string>()
+        lines.Add("")
+        lines.Add(String.replicate 70 "-")
+        lines.Add("Adjustment Journal Entries:")
+        lines.Add(sprintf "  %-8s  %-12s  %-35s  %12s" "JE ID" "Date" "Description" "Net Amount")
+        lines.Add(sprintf "  %s  %s  %s  %s" (String.replicate 8 "-") (String.replicate 12 "-") (String.replicate 35 "-") (String.replicate 12 "-"))
+        for adj in d.adjustments do
+            let desc = if adj.description.Length > 35 then adj.description.Substring(0, 32) + "..." else adj.description
+            lines.Add(sprintf "  %-8d  %-12s  %-35s  %12s" adj.journalEntryId (adj.entryDate.ToString("yyyy-MM-dd")) desc (sprintf "%M" adj.netAmount))
+        Seq.toList lines
+
 // --- Trial Balance formatting ---
 
 let private formatTrialBalance (report: TrialBalanceReport) : string =
     let lines = ResizeArray<string>()
+    match report.disclosure with
+    | Some d -> for l in formatDisclosureHeader d do lines.Add(l)
+    | None -> ()
     lines.Add(sprintf "Trial Balance -- Period %s (ID: %d)" report.periodKey report.fiscalPeriodId)
     lines.Add("")
     for group in report.groups do
@@ -174,12 +216,18 @@ let private formatTrialBalance (report: TrialBalanceReport) : string =
     lines.Add(sprintf "  %-6s  %-32s  %12s  %12s" "" "Grand Total" (sprintf "%M" report.grandTotalDebits) (sprintf "%M" report.grandTotalCredits))
     let status = if report.isBalanced then "BALANCED" else "UNBALANCED"
     lines.Add(sprintf "  Status: %s" status)
+    match report.disclosure with
+    | Some d -> for l in formatDisclosureFooter d do lines.Add(l)
+    | None -> ()
     String.Join(Environment.NewLine, lines)
 
 // --- Balance Sheet formatting ---
 
 let private formatBalanceSheet (report: BalanceSheetReport) : string =
     let lines = ResizeArray<string>()
+    match report.disclosure with
+    | Some d -> for l in formatDisclosureHeader d do lines.Add(l)
+    | None -> ()
     lines.Add(sprintf "Balance Sheet -- As of %s" (report.asOfDate.ToString("yyyy-MM-dd")))
     lines.Add("")
     // Assets
@@ -217,6 +265,9 @@ let private formatBalanceSheet (report: BalanceSheetReport) : string =
     lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Total Liabilities + Equity" (sprintf "%M" (report.liabilities.sectionTotal + report.totalEquity)))
     let status = if report.isBalanced then "BALANCED" else "UNBALANCED"
     lines.Add(sprintf "  Status: %s" status)
+    match report.disclosure with
+    | Some d -> for l in formatDisclosureFooter d do lines.Add(l)
+    | None -> ()
     String.Join(Environment.NewLine, lines)
 
 // --- Income Statement formatting ---
@@ -233,6 +284,9 @@ let private formatIncomeStatementSection (lines: ResizeArray<string>) (section: 
 
 let private formatIncomeStatement (report: IncomeStatementReport) : string =
     let lines = ResizeArray<string>()
+    match report.disclosure with
+    | Some d -> for l in formatDisclosureHeader d do lines.Add(l)
+    | None -> ()
     lines.Add(sprintf "Income Statement -- Period %s (ID: %d)" report.periodKey report.fiscalPeriodId)
     lines.Add("")
     formatIncomeStatementSection lines report.revenue
@@ -240,12 +294,18 @@ let private formatIncomeStatement (report: IncomeStatementReport) : string =
     formatIncomeStatementSection lines report.expenses
     lines.Add("")
     lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Net Income" (sprintf "%M" report.netIncome))
+    match report.disclosure with
+    | Some d -> for l in formatDisclosureFooter d do lines.Add(l)
+    | None -> ()
     String.Join(Environment.NewLine, lines)
 
 // --- Subtree P&L formatting ---
 
 let private formatSubtreePL (report: SubtreePLReport) : string =
     let lines = ResizeArray<string>()
+    match report.disclosure with
+    | Some d -> for l in formatDisclosureHeader d do lines.Add(l)
+    | None -> ()
     lines.Add(sprintf "P&L Subtree -- %s %s -- Period %s (ID: %d)" report.rootAccountCode report.rootAccountName report.periodKey report.fiscalPeriodId)
     lines.Add("")
     formatIncomeStatementSection lines report.revenue
@@ -253,6 +313,9 @@ let private formatSubtreePL (report: SubtreePLReport) : string =
     formatIncomeStatementSection lines report.expenses
     lines.Add("")
     lines.Add(sprintf "  %-6s  %-32s  %12s" "" "Net Income" (sprintf "%M" report.netIncome))
+    match report.disclosure with
+    | Some d -> for l in formatDisclosureFooter d do lines.Add(l)
+    | None -> ()
     String.Join(Environment.NewLine, lines)
 
 // --- Account detail formatting ---

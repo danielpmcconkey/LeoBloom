@@ -263,13 +263,36 @@ module Ledger =
           groupDebitTotal: decimal
           groupCreditTotal: decimal }
 
+    // --- Period disclosure types (defined before report types that reference them) ---
+
+    type AdjustmentDetail =
+        { journalEntryId: int
+          entryDate: DateOnly
+          description: string
+          netAmount: decimal }
+
+    type PeriodDisclosure =
+        { fiscalPeriodId: int
+          periodKey: string
+          startDate: DateOnly
+          endDate: DateOnly
+          isOpen: bool
+          closedAt: DateTimeOffset option
+          closedBy: string option
+          reopenedCount: int
+          adjustmentCount: int
+          adjustmentNetImpact: decimal
+          adjustments: AdjustmentDetail list
+          asOriginallyClosed: bool }
+
     type TrialBalanceReport =
         { fiscalPeriodId: int
           periodKey: string
           groups: TrialBalanceGroup list
           grandTotalDebits: decimal
           grandTotalCredits: decimal
-          isBalanced: bool }
+          isBalanced: bool
+          disclosure: PeriodDisclosure option }
 
     // --- Income Statement types ---
 
@@ -289,7 +312,8 @@ module Ledger =
           periodKey: string
           revenue: IncomeStatementSection
           expenses: IncomeStatementSection
-          netIncome: decimal }
+          netIncome: decimal
+          disclosure: PeriodDisclosure option }
 
     // --- Balance Sheet types ---
 
@@ -311,7 +335,8 @@ module Ledger =
           equity: BalanceSheetSection
           retainedEarnings: decimal
           totalEquity: decimal
-          isBalanced: bool }
+          isBalanced: bool
+          disclosure: PeriodDisclosure option }
 
     // --- Subtree P&L types ---
 
@@ -322,7 +347,8 @@ module Ledger =
           periodKey: string
           revenue: IncomeStatementSection
           expenses: IncomeStatementSection
-          netIncome: decimal }
+          netIncome: decimal
+          disclosure: PeriodDisclosure option }
 
     // --- Additional pure validators for the write path ---
 

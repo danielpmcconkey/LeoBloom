@@ -102,23 +102,36 @@ module ExtractRepository =
         reader.Close()
         List.rev results
 
-    /// Extract all non-voided journal entry lines for a fiscal period.
+    /// Extract non-voided journal entry lines for a fiscal period.
+    /// includeAdjustments: when true, also includes JEs with adjustment_for_period_id = fiscalPeriodId.
+    /// closedAtCutoff: when Some, restricts results to JEs created at or before that timestamp.
     /// Ordered by account_code ASC, entry_date ASC, journal_entry_id ASC.
-    let getJournalEntryLines (txn: NpgsqlTransaction) (fiscalPeriodId: int) : JournalEntryLineRow list =
+    let getJournalEntryLines (txn: NpgsqlTransaction) (fiscalPeriodId: int) (includeAdjustments: bool) (closedAtCutoff: DateTimeOffset option) : JournalEntryLineRow list =
+        let periodFilter =
+            if includeAdjustments then
+                "(je.fiscal_period_id = @fiscal_period_id OR je.adjustment_for_period_id = @fiscal_period_id)"
+            else
+                "je.fiscal_period_id = @fiscal_period_id"
+        let cutoffFilter =
+            match closedAtCutoff with
+            | None -> ""
+            | Some _ -> "\n               AND je.created_at <= @closed_at"
         use sql = new NpgsqlCommand(
-            "SELECT je.id AS journal_entry_id, je.entry_date, je.description,
+            sprintf "SELECT je.id AS journal_entry_id, je.entry_date, je.description,
                     je.source, jel.account_id, a.code AS account_code,
                     a.name AS account_name, jel.amount,
                     jel.entry_type, jel.memo
              FROM ledger.journal_entry_line jel
              JOIN ledger.journal_entry je ON je.id = jel.journal_entry_id
              JOIN ledger.account a ON a.id = jel.account_id
-             JOIN ledger.fiscal_period fp ON fp.id = je.fiscal_period_id
              WHERE je.voided_at IS NULL
-               AND fp.id = @fiscal_period_id
-             ORDER BY a.code, je.entry_date, je.id",
+               AND %s%s
+             ORDER BY a.code, je.entry_date, je.id" periodFilter cutoffFilter,
             txn.Connection, txn)
         sql.Parameters.AddWithValue("@fiscal_period_id", fiscalPeriodId) |> ignore
+        match closedAtCutoff with
+        | Some dt -> sql.Parameters.AddWithValue("@closed_at", dt) |> ignore
+        | None -> ()
         use reader = sql.ExecuteReader()
         let mutable results = []
         while reader.Read() do

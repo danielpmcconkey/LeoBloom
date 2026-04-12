@@ -432,7 +432,8 @@ let ``BalanceSheetReport type has required fields`` () =
           equity = { sectionName = "equity"; lines = []; sectionTotal = 0m }
           retainedEarnings = 0m
           totalEquity = 0m
-          isBalanced = true }
+          isBalanced = true
+          disclosure = None }
     Assert.Equal(DateOnly(2026, 3, 31), report.asOfDate)
     Assert.Equal("asset", report.assets.sectionName)
     Assert.Equal("liability", report.liabilities.sectionName)

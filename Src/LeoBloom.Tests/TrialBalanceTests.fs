@@ -57,7 +57,7 @@ let ``balanced entries produce a balanced trial balance`` () =
     let revAcct = InsertHelpers.insertAccount txn (prefix + "RV") "Revenue" revenueTypeId true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn assetAcct revAcct fpId (DateOnly(2026, 3, 15)) "March rent" 500m |> ignore
-    let result = TrialBalanceService.getByPeriodId txn fpId
+    let result = TrialBalanceService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.True(report.isBalanced)
@@ -87,7 +87,7 @@ let ``report groups accounts by type with correct subtotals`` () =
         |> ignore
     // Entry 2: debit expense 200, credit asset1 200
     postEntry txn expAcct assetAcct1 fpId (DateOnly(2026, 3, 20)) "Supplies" 200m |> ignore
-    let result = TrialBalanceService.getByPeriodId txn fpId
+    let result = TrialBalanceService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.Equal(3, report.groups.Length)
@@ -117,7 +117,7 @@ let ``groups with no activity are omitted`` () =
     let revAcct = InsertHelpers.insertAccount txn (prefix + "RV") "Revenue" revenueTypeId true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn assetAcct revAcct fpId (DateOnly(2026, 3, 15)) "Simple entry" 300m |> ignore
-    let result = TrialBalanceService.getByPeriodId txn fpId
+    let result = TrialBalanceService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         // Only asset and revenue have activity — exactly 2 groups
@@ -146,7 +146,7 @@ let ``voided entries excluded from trial balance`` () =
     match JournalEntryService.voidEntry txn voidCmd with
     | Error errs -> Assert.Fail(sprintf "Void failed: %A" errs)
     | Ok _ -> ()
-    let result = TrialBalanceService.getByPeriodId txn fpId
+    let result = TrialBalanceService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.Equal(500m, report.grandTotalDebits)
@@ -161,7 +161,7 @@ let ``empty period returns balanced report with zero totals`` () =
     use txn = conn.BeginTransaction()
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
-    let result = TrialBalanceService.getByPeriodId txn fpId
+    let result = TrialBalanceService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.True(report.isBalanced)
@@ -185,7 +185,7 @@ let ``closed period trial balance still works`` () =
     closeCmd.Transaction <- txn
     closeCmd.Parameters.AddWithValue("@id", fpId) |> ignore
     closeCmd.ExecuteNonQuery() |> ignore
-    let result = TrialBalanceService.getByPeriodId txn fpId
+    let result = TrialBalanceService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         Assert.True(report.isBalanced)
@@ -203,7 +203,7 @@ let ``multiple entries in same period accumulate per account`` () =
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn assetAcct revAcct fpId (DateOnly(2026, 3, 10)) "First payment" 500m |> ignore
     postEntry txn assetAcct revAcct fpId (DateOnly(2026, 3, 20)) "Second payment" 300m |> ignore
-    let result = TrialBalanceService.getByPeriodId txn fpId
+    let result = TrialBalanceService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         let allLines = report.groups |> List.collect (fun g -> g.lines)
@@ -225,7 +225,7 @@ let ``net balance uses normal_balance formula`` () =
     let revAcct = InsertHelpers.insertAccount txn (prefix + "RV") "Revenue" revenueTypeId true
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn assetAcct revAcct fpId (DateOnly(2026, 3, 15)) "Net test" 700m |> ignore
-    let result = TrialBalanceService.getByPeriodId txn fpId
+    let result = TrialBalanceService.getByPeriodId txn fpId false
     match result with
     | Ok report ->
         let allLines = report.groups |> List.collect (fun g -> g.lines)
@@ -250,8 +250,8 @@ let ``lookup by period key returns same result as by period ID`` () =
     let periodKey = prefix + "FP"
     let fpId = InsertHelpers.insertFiscalPeriod txn periodKey (DateOnly(2026, 3, 1)) (DateOnly(2026, 3, 31)) true
     postEntry txn assetAcct revAcct fpId (DateOnly(2026, 3, 15)) "Lookup test" 250m |> ignore
-    let resultById = TrialBalanceService.getByPeriodId txn fpId
-    let resultByKey = TrialBalanceService.getByPeriodKey txn periodKey
+    let resultById = TrialBalanceService.getByPeriodId txn fpId false
+    let resultByKey = TrialBalanceService.getByPeriodKey txn periodKey false
     match resultById, resultByKey with
     | Ok reportById, Ok reportByKey ->
         Assert.Equal(reportById.grandTotalDebits, reportByKey.grandTotalDebits)
@@ -268,7 +268,7 @@ let ``lookup by period key returns same result as by period ID`` () =
 let ``nonexistent period ID returns error`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
-    let result = TrialBalanceService.getByPeriodId txn 999999
+    let result = TrialBalanceService.getByPeriodId txn 999999 false
     match result with
     | Ok _ -> Assert.Fail("Expected Error for nonexistent period ID")
     | Error err ->
@@ -279,7 +279,7 @@ let ``nonexistent period ID returns error`` () =
 let ``nonexistent period key returns error`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
-    let result = TrialBalanceService.getByPeriodKey txn "9999-99"
+    let result = TrialBalanceService.getByPeriodKey txn "9999-99" false
     match result with
     | Ok _ -> Assert.Fail("Expected Error for nonexistent period key")
     | Error err ->
@@ -298,7 +298,8 @@ let ``TrialBalanceReport type has required fields`` () =
           groups = []
           grandTotalDebits = 0m
           grandTotalCredits = 0m
-          isBalanced = true }
+          isBalanced = true
+          disclosure = None }
     Assert.Equal(1, report.fiscalPeriodId)
     Assert.Equal("2026-03", report.periodKey)
     Assert.Empty(report.groups)
@@ -343,7 +344,7 @@ let ``getByPeriodId returns Result of TrialBalanceReport or string`` () =
     // Call with a nonexistent ID to verify the return type is Result<TrialBalanceReport, string>
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
-    let result : Result<TrialBalanceReport, string> = TrialBalanceService.getByPeriodId txn 999998
+    let result : Result<TrialBalanceReport, string> = TrialBalanceService.getByPeriodId txn 999998 false
     match result with
     | Error err -> Assert.Contains("does not exist", err)
     | Ok _ -> Assert.Fail("Expected Error for nonexistent period")
@@ -353,7 +354,7 @@ let ``getByPeriodKey returns Result of TrialBalanceReport or string`` () =
     // Call with a nonexistent key to verify the return type is Result<TrialBalanceReport, string>
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
-    let result : Result<TrialBalanceReport, string> = TrialBalanceService.getByPeriodKey txn "0000-00"
+    let result : Result<TrialBalanceReport, string> = TrialBalanceService.getByPeriodKey txn "0000-00" false
     match result with
     | Error err -> Assert.Contains("does not exist", err)
     | Ok _ -> Assert.Fail("Expected Error for nonexistent period")

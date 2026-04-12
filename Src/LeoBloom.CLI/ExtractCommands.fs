@@ -3,6 +3,7 @@ module LeoBloom.CLI.ExtractCommands
 open System
 open Argu
 open LeoBloom.Reporting.ExtractRepository
+open LeoBloom.Reporting.ExtractTypes
 open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 open LeoBloom.CLI.CliHelpers
@@ -36,11 +37,15 @@ type ExtractPositionsArgs =
 
 type ExtractJeLinesArgs =
     | [<Mandatory>] Fiscal_Period_Id of int
+    | Exclude_Adjustments
+    | As_Originally_Closed
     | Json
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | Fiscal_Period_Id _ -> "Fiscal period ID"
+            | Exclude_Adjustments -> "Exclude adjustment journal entries"
+            | As_Originally_Closed -> "Show period as it was at close"
             | Json -> "Output in JSON format (default; flag accepted for consistency)"
 
 type ExtractArgs =
@@ -111,13 +116,47 @@ let private handlePositions (_isJson: bool) (args: ParseResults<ExtractPositions
 
 let private handleJeLines (_isJson: bool) (args: ParseResults<ExtractJeLinesArgs>) : int =
     let fiscalPeriodId = args.GetResult ExtractJeLinesArgs.Fiscal_Period_Id
+    let excludeAdjustments = args.Contains ExtractJeLinesArgs.Exclude_Adjustments
+    let asOriginallyClosed = args.Contains ExtractJeLinesArgs.As_Originally_Closed
+    let includeAdjustments = not excludeAdjustments
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
     try
-        let rows = getJournalEntryLines txn fiscalPeriodId
-        txn.Commit()
-        Console.Out.WriteLine(formatJson (box rows))
-        ExitCodes.success
+        // Resolve period metadata for envelope and cutoff
+        let disclosure = LeoBloom.Ledger.PeriodDisclosureRepository.getDisclosure txn fiscalPeriodId
+        match disclosure with
+        | None ->
+            // Period doesn't exist — return empty result (backward-compatible)
+            txn.Commit()
+            Console.Out.WriteLine(formatJson (box ([] : LeoBloom.Reporting.ExtractTypes.JournalEntryLineRow list)))
+            ExitCodes.success
+        | Some d ->
+            if asOriginallyClosed && d.isOpen then
+                txn.Rollback()
+                Console.Error.WriteLine("Error: Cannot use --as-originally-closed on an open period")
+                ExitCodes.businessError
+            elif asOriginallyClosed && d.closedAt.IsNone then
+                txn.Rollback()
+                Console.Error.WriteLine("Error: Period has no close timestamp")
+                ExitCodes.businessError
+            else
+                let cutoff = if asOriginallyClosed then d.closedAt else None
+                let rows = getJournalEntryLines txn fiscalPeriodId includeAdjustments cutoff
+                txn.Commit()
+                let status = if d.isOpen then "open" else "closed"
+                let envelope : PeriodMetadataEnvelope =
+                    { periodKey = d.periodKey
+                      startDate = d.startDate
+                      endDate = d.endDate
+                      status = status
+                      closedAt = d.closedAt
+                      closedBy = d.closedBy
+                      reopenedCount = d.reopenedCount
+                      adjustmentCount = d.adjustmentCount
+                      adjustmentNetImpact = d.adjustmentNetImpact
+                      lines = rows }
+                Console.Out.WriteLine(formatJson (box envelope))
+                ExitCodes.success
     with ex ->
         try txn.Rollback() with _ -> ()
         reraise()
