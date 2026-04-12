@@ -71,7 +71,7 @@ let ``close sets closed_at and closed_by on the period`` () =
     use txn = conn.BeginTransaction()
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2098, 1, 1)) (DateOnly(2098, 1, 31)) true
-    let cmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = None }
+    let cmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = None; force = false }
     let result = FiscalPeriodService.closePeriod txn cmd
     match result with
     | Ok period ->
@@ -91,7 +91,7 @@ let ``close writes audit row with actor and note`` () =
     use txn = conn.BeginTransaction()
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2098, 1, 1)) (DateOnly(2098, 1, 31)) true
-    let cmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = Some "month end" }
+    let cmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = Some "month end"; force = false }
     match FiscalPeriodService.closePeriod txn cmd with
     | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
     | Ok _ ->
@@ -113,13 +113,13 @@ let ``closing already-closed period is idempotent and produces no second audit r
     use txn = conn.BeginTransaction()
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2098, 1, 1)) (DateOnly(2098, 1, 31)) true
-    let aliceCmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = None }
+    let aliceCmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = None; force = false }
     // First close (transition)
     match FiscalPeriodService.closePeriod txn aliceCmd with
     | Error errs -> Assert.Fail(sprintf "First close failed: %A" errs)
     | Ok _ ->
         // Second close with different actor — must be idempotent (no new audit row)
-        let bobCmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "bob"; note = None }
+        let bobCmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "bob"; note = None; force = false }
         match FiscalPeriodService.closePeriod txn bobCmd with
         | Error errs -> Assert.Fail(sprintf "Second close (idempotent) failed: %A" errs)
         | Ok period ->
@@ -139,7 +139,7 @@ let ``reopen clears close metadata and increments reopened_count`` () =
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2098, 1, 1)) (DateOnly(2098, 1, 31)) true
     // Close first
-    let closeCmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = None }
+    let closeCmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = None; force = false }
     match FiscalPeriodService.closePeriod txn closeCmd with
     | Error errs -> Assert.Fail(sprintf "Setup close failed: %A" errs)
     | Ok _ ->
@@ -165,7 +165,7 @@ let ``reopen writes audit row with actor and reason as note`` () =
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2098, 1, 1)) (DateOnly(2098, 1, 31)) true
     // Close
-    let closeCmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = None }
+    let closeCmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = None; force = false }
     match FiscalPeriodService.closePeriod txn closeCmd with
     | Error errs -> Assert.Fail(sprintf "Setup close failed: %A" errs)
     | Ok _ ->
@@ -192,7 +192,7 @@ let ``full close-reopen-close cycle produces 3-entry audit trail in chronologica
     use txn = conn.BeginTransaction()
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2098, 1, 1)) (DateOnly(2098, 1, 31)) true
-    let closeCmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = None }
+    let closeCmd : CloseFiscalPeriodCommand = { fiscalPeriodId = fpId; actor = "alice"; note = None; force = false }
     // Close
     match FiscalPeriodService.closePeriod txn closeCmd with
     | Error errs -> Assert.Fail(sprintf "First close failed: %A" errs)

@@ -11,6 +11,8 @@
     <Compile Include="ObligationInstanceRepository.fs" />
     <Compile Include="ObligationInstanceService.fs" />
     <Compile Include="ObligationPostingService.fs" />
+    <Compile Include="FiscalPeriodValidation.fs" />
+    <Compile Include="FiscalPeriodCloseService.fs" />
     <Compile Include="TransferRepository.fs" />
     <Compile Include="TransferService.fs" />
     <Compile Include="InvoiceRepository.fs" />

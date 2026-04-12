@@ -5,6 +5,7 @@ open Argu
 open Npgsql
 open LeoBloom.Domain.Ledger
 open LeoBloom.Ledger
+open LeoBloom.Ops
 open LeoBloom.Utilities
 open LeoBloom.CLI.OutputFormatter
 open LeoBloom.CLI.CliHelpers
@@ -22,13 +23,24 @@ type PeriodCloseArgs =
     | [<MainCommand; Mandatory>] Period of string
     | Actor of string
     | Note of string
+    | Force
     | Json
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | Period _ -> "Fiscal period ID or period key"
             | Actor _ -> "Actor identifier (default: dan)"
-            | Note _  -> "Optional note for the close action"
+            | Note _  -> "Note for the close action (required with --force)"
+            | Force   -> "Bypass validation failures (requires --note)"
+            | Json -> "Output in JSON format"
+
+type PeriodValidateArgs =
+    | [<MainCommand; Mandatory>] Period of string
+    | Json
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Period _ -> "Fiscal period ID or period key"
             | Json -> "Output in JSON format"
 
 type PeriodReopenArgs =
@@ -72,14 +84,16 @@ type PeriodArgs =
     | [<CliPrefix(CliPrefix.None)>] Reopen of ParseResults<PeriodReopenArgs>
     | [<CliPrefix(CliPrefix.None)>] Create of ParseResults<PeriodCreateArgs>
     | [<CliPrefix(CliPrefix.None)>] Audit of ParseResults<PeriodAuditArgs>
+    | [<CliPrefix(CliPrefix.None)>] Validate of ParseResults<PeriodValidateArgs>
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | List _ -> "List all fiscal periods"
-            | Close _ -> "Close a fiscal period"
+            | Close _ -> "Close a fiscal period (runs pre-close validation)"
             | Reopen _ -> "Reopen a closed fiscal period"
             | Create _ -> "Create a new fiscal period"
             | Audit _ -> "List close/reopen audit trail for a fiscal period"
+            | Validate _ -> "Run pre-close validation checks without closing"
 
 // --- Helpers ---
 
@@ -116,6 +130,12 @@ let private handleClose (isJson: bool) (args: ParseResults<PeriodCloseArgs>) : i
     let periodRaw = args.GetResult PeriodCloseArgs.Period
     let actor = args.TryGetResult PeriodCloseArgs.Actor |> Option.defaultValue "dan"
     let note = args.TryGetResult PeriodCloseArgs.Note
+    let force = args.Contains PeriodCloseArgs.Force
+
+    // Reject --force without --note before touching the DB
+    if force && note.IsNone then
+        write isJson (Error [ "--note is required when using --force" ])
+    else
 
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
@@ -126,12 +146,12 @@ let private handleClose (isJson: bool) (args: ParseResults<PeriodCloseArgs>) : i
             write isJson (Error errs)
         | Ok periodId ->
             let cmd : CloseFiscalPeriodCommand =
-                { fiscalPeriodId = periodId; actor = actor; note = note }
-            let result = FiscalPeriodService.closePeriod txn cmd
+                { fiscalPeriodId = periodId; actor = actor; note = note; force = force }
+            let result = FiscalPeriodCloseService.closePeriodWithValidation txn cmd
             match result with
             | Ok _ -> txn.Commit()
             | Error _ -> txn.Rollback()
-            write isJson (result |> Result.map (fun v -> v :> obj))
+            write isJson (result |> Result.map (fun v -> v.Period :> obj))
     with ex ->
         try txn.Rollback() with _ -> ()
         reraise()
@@ -208,6 +228,53 @@ let private handleAudit (isJson: bool) (args: ParseResults<PeriodAuditArgs>) : i
         try txn.Rollback() with _ -> ()
         reraise()
 
+let private handleValidate (isJson: bool) (args: ParseResults<PeriodValidateArgs>) : int =
+    let isJson = isJson || args.Contains PeriodValidateArgs.Json
+    let periodRaw = args.GetResult PeriodValidateArgs.Period
+
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    try
+        match resolvePeriodId txn periodRaw with
+        | Error errs ->
+            txn.Rollback()
+            write isJson (Error errs)
+        | Ok periodId ->
+            let result = FiscalPeriodValidation.validatePreClose txn periodId
+            txn.Rollback()
+            match result with
+            | Error errs ->
+                write isJson (Error errs)
+            | Ok validationResult ->
+                if isJson then
+                    let lines =
+                        validationResult.Checks
+                        |> List.map (fun c ->
+                            sprintf "  { \"check\": \"%A\", \"passed\": %s, \"message\": \"%s\" }"
+                                c.Check
+                                (if c.Passed then "true" else "false")
+                                (c.Message.Replace("\"", "\\\"")))
+                    let json =
+                        sprintf "{\n  \"periodId\": %d,\n  \"allPassed\": %s,\n  \"checks\": [\n%s\n  ]\n}"
+                            validationResult.PeriodId
+                            (if validationResult.AllPassed then "true" else "false")
+                            (lines |> String.concat ",\n")
+                    Console.Out.WriteLine(json)
+                else
+                    Console.Out.WriteLine(sprintf "Pre-close validation for period %d:" validationResult.PeriodId)
+                    for c in validationResult.Checks do
+                        let status = if c.Passed then "PASS" else "FAIL"
+                        Console.Out.WriteLine(sprintf "  [%s] %A: %s" status c.Check c.Message)
+                    if validationResult.AllPassed then
+                        Console.Out.WriteLine("All checks passed.")
+                    else
+                        Console.Out.WriteLine("One or more checks failed.")
+                if validationResult.AllPassed then ExitCodes.success
+                else ExitCodes.businessError
+    with ex ->
+        try txn.Rollback() with _ -> ()
+        reraise()
+
 // --- Dispatch ---
 
 let dispatch (isJson: bool) (args: ParseResults<PeriodArgs>) : int =
@@ -217,6 +284,7 @@ let dispatch (isJson: bool) (args: ParseResults<PeriodArgs>) : int =
     | Some (Reopen reopenArgs) -> handleReopen isJson reopenArgs
     | Some (Create createArgs) -> handleCreate isJson createArgs
     | Some (Audit auditArgs) -> handleAudit isJson auditArgs
+    | Some (Validate validateArgs) -> handleValidate isJson validateArgs
     | None ->
         Console.Error.WriteLine(args.Parser.PrintUsage())
         ExitCodes.systemError

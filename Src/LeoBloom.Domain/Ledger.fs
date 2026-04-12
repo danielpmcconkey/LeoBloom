@@ -224,7 +224,8 @@ module Ledger =
     type CloseFiscalPeriodCommand =
         { fiscalPeriodId: int
           actor: string
-          note: string option }
+          note: string option
+          force: bool }
 
     type ReopenFiscalPeriodCommand =
         { fiscalPeriodId: int

@@ -34,7 +34,7 @@ let ``close an open period`` () =
     use txn = conn.BeginTransaction()
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
-    let cmd = { fiscalPeriodId = fpId; actor = "test"; note = None }
+    let cmd = { fiscalPeriodId = fpId; actor = "test"; note = None; force = false }
     let result = FiscalPeriodService.closePeriod txn cmd
     match result with
     | Ok period ->
@@ -54,7 +54,7 @@ let ``reopen a closed period with reason`` () =
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
     // Close first
-    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None }
+    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None; force = false }
     match FiscalPeriodService.closePeriod txn closeCmd with
     | Ok _ -> ()
     | Error errs -> Assert.Fail(sprintf "Setup close failed: %A" errs)
@@ -79,7 +79,7 @@ let ``close an already-closed period is idempotent`` () =
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
     // Close first
-    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None }
+    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None; force = false }
     match FiscalPeriodService.closePeriod txn closeCmd with
     | Ok _ -> ()
     | Error errs -> Assert.Fail(sprintf "Setup close failed: %A" errs)
@@ -122,7 +122,7 @@ let ``reopen with empty reason rejected`` () =
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
     // Close first
-    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None }
+    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None; force = false }
     match FiscalPeriodService.closePeriod txn closeCmd with
     | Ok _ -> ()
     | Error errs -> Assert.Fail(sprintf "Setup close failed: %A" errs)
@@ -147,7 +147,7 @@ let ``reopen with whitespace-only reason rejected`` () =
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
     // Close first
-    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None }
+    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None; force = false }
     match FiscalPeriodService.closePeriod txn closeCmd with
     | Ok _ -> ()
     | Error errs -> Assert.Fail(sprintf "Setup close failed: %A" errs)
@@ -169,7 +169,7 @@ let ``reopen with whitespace-only reason rejected`` () =
 let ``close nonexistent period rejected`` () =
     use conn = DataSource.openConnection()
     use txn = conn.BeginTransaction()
-    let cmd = { fiscalPeriodId = 999999; actor = "test"; note = None }
+    let cmd = { fiscalPeriodId = 999999; actor = "test"; note = None; force = false }
     let result = FiscalPeriodService.closePeriod txn cmd
     match result with
     | Ok _ -> Assert.Fail("Expected Error for nonexistent period")
@@ -207,7 +207,7 @@ let ``close then reopen then close again full cycle`` () =
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
 
     // Close
-    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None }
+    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None; force = false }
     match FiscalPeriodService.closePeriod txn closeCmd with
     | Ok p -> Assert.False(p.isOpen, "should be closed after first close")
     | Error errs -> Assert.Fail(sprintf "First close failed: %A" errs)
@@ -242,7 +242,7 @@ let ``posting rejected after close`` () =
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
 
     // Close the period via service
-    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None }
+    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None; force = false }
     match FiscalPeriodService.closePeriod txn closeCmd with
     | Ok _ -> ()
     | Error errs -> Assert.Fail(sprintf "Close failed: %A" errs)
@@ -277,7 +277,7 @@ let ``reopen reason is logged at info level`` () =
     let prefix = TestData.uniquePrefix()
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
     // Close first
-    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None }
+    let closeCmd = { fiscalPeriodId = fpId; actor = "test"; note = None; force = false }
     match FiscalPeriodService.closePeriod txn closeCmd with
     | Ok _ -> ()
     | Error errs -> Assert.Fail(sprintf "Setup close failed: %A" errs)
@@ -318,7 +318,7 @@ let ``closePeriod and reopenPeriod are symmetric on the same period`` () =
     let fpId = InsertHelpers.insertFiscalPeriod txn (prefix + "FP") (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
 
     // Close
-    match FiscalPeriodService.closePeriod txn { fiscalPeriodId = fpId; actor = "test"; note = None } with
+    match FiscalPeriodService.closePeriod txn { fiscalPeriodId = fpId; actor = "test"; note = None; force = false } with
     | Ok p -> Assert.False(p.isOpen)
     | Error errs -> Assert.Fail(sprintf "Close failed: %A" errs)
 
@@ -378,7 +378,7 @@ let ``closing a period does not modify account balances`` () =
         | Error e -> failwithf "Trial balance before close failed: %s" e
 
     // Close the period
-    match FiscalPeriodService.closePeriod txn { fiscalPeriodId = fpId; actor = "test"; note = None } with
+    match FiscalPeriodService.closePeriod txn { fiscalPeriodId = fpId; actor = "test"; note = None; force = false } with
     | Ok _ -> ()
     | Error errs -> failwithf "Close failed: %A" errs
 

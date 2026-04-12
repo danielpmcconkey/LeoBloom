@@ -51,6 +51,7 @@
     <Compile Include="AccountUpdateTests.fs" />
     <Compile Include="PeriodCommandsTests.fs" />
     <Compile Include="FiscalPeriodCloseMetadataTests.fs" />
+    <Compile Include="PreCloseValidationTests.fs" />
     <Compile Include="ObligationCommandsTests.fs" />
     <Compile Include="OrphanedPostingDetectionTests.fs" />
     <Compile Include="BalanceProjectionTests.fs" />
