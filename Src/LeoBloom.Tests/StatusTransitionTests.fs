@@ -454,3 +454,94 @@ let ``transition to skipped succeeds when instance already has notes`` () =
         Assert.True(updated.notes.IsSome, "Expected notes to be preserved")
         Assert.Contains("existing note", updated.notes.Value)
     | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+
+// =====================================================================
+// Field Passthrough — regression coverage for BUG-A and BUG-B
+// (FT-ST-024 through FT-ST-026)
+//
+// History: 2026-04-25 Saturday routine surfaced two silent-data-loss
+// bugs in ObligationInstanceService.transition — the `amountToSet` and
+// `notesToSet` matchers gated on target status and discarded caller
+// values for any non-Confirmed / non-Skipped target. CLI accepted the
+// flags, repository handled None correctly, but the service in between
+// dropped them on the floor. These tests lock the contract: when the
+// caller supplies a value that's semantically applicable, it gets
+// persisted.
+// =====================================================================
+
+[<Fact>]
+[<Trait("GherkinId", "FT-ST-024")>]
+let ``transition from expected to in_flight with amount preserves the amount`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let (_, instanceId) = setupInstance txn prefix "expected" None None true
+    let cmd =
+        { instanceId = instanceId; targetStatus = InFlight
+          amount = Some 62.03m; confirmedDate = None; journalEntryId = None; notes = None }
+    match ObligationInstanceService.transition txn cmd with
+    | Ok updated ->
+        Assert.Equal(InFlight, updated.status)
+        Assert.Equal(Some 62.03m, updated.amount)
+    | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+
+[<Fact>]
+[<Trait("GherkinId", "FT-ST-025")>]
+let ``transition with notes preserves the notes on a non-skipped target`` () =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    let (_, instanceId) = setupInstance txn prefix "expected" None None true
+    let cmd =
+        { instanceId = instanceId; targetStatus = InFlight
+          amount = None; confirmedDate = None; journalEntryId = None
+          notes = Some "autopay confirmed via portal" }
+    match ObligationInstanceService.transition txn cmd with
+    | Ok updated ->
+        Assert.Equal(InFlight, updated.status)
+        Assert.True(updated.notes.IsSome, "Expected notes to be set")
+        Assert.Contains("autopay confirmed via portal", updated.notes.Value)
+    | Error errs -> Assert.Fail(sprintf "Expected Ok: %A" errs)
+
+[<Theory>]
+[<Trait("GherkinId", "FT-ST-026")>]
+[<InlineData("expected", "in_flight")>]
+[<InlineData("expected", "confirmed")>]
+[<InlineData("expected", "overdue")>]
+[<InlineData("in_flight", "confirmed")>]
+[<InlineData("in_flight", "overdue")>]
+[<InlineData("overdue", "confirmed")>]
+[<InlineData("confirmed", "posted")>]
+let ``notes are preserved on every valid non-skipped transition`` (fromStatus: string) (toStatus: string) =
+    use conn = DataSource.openConnection()
+    use txn = conn.BeginTransaction()
+    let prefix = TestData.uniquePrefix()
+    // Pre-existing amount needed for any path leading into Confirmed/Posted
+    let priorAmount =
+        if fromStatus = "confirmed" || fromStatus = "posted" || toStatus = "confirmed" || toStatus = "posted"
+        then Some 500m else None
+    let (_, instanceId) = setupInstance txn prefix fromStatus priorAmount None true
+    // Posted needs a real journal entry; confirmed needs a confirmedDate
+    let journalEntryId =
+        if toStatus = "posted" then
+            let fpId = InsertHelpers.insertFiscalPeriod txn
+                           $"{prefix}FP" (DateOnly(2026, 4, 1)) (DateOnly(2026, 4, 30)) true
+            Some (InsertHelpers.insertJournalEntry txn (DateOnly(2026, 4, 1)) $"{prefix}_je" fpId)
+        else None
+    let confirmedDate = if toStatus = "confirmed" then Some (DateOnly(2026, 4, 1)) else None
+    let targetStatus =
+        match InstanceStatus.fromString toStatus with
+        | Ok s -> s
+        | Error e -> failwith e
+    let noteText = sprintf "note for %s" toStatus
+    let cmd =
+        { instanceId = instanceId; targetStatus = targetStatus
+          amount = None; confirmedDate = confirmedDate
+          journalEntryId = journalEntryId; notes = Some noteText }
+    match ObligationInstanceService.transition txn cmd with
+    | Ok updated ->
+        Assert.True(updated.notes.IsSome,
+                    sprintf "Expected notes preserved on %s -> %s but got None" fromStatus toStatus)
+        Assert.Contains(noteText, updated.notes.Value)
+    | Error errs ->
+        Assert.Fail(sprintf "Expected Ok for %s -> %s but got: %A" fromStatus toStatus errs)

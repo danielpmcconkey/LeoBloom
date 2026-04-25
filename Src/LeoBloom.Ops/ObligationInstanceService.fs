@@ -89,6 +89,7 @@ module ObligationInstanceService =
                                 let amountToSet =
                                     match cmd.targetStatus with
                                     | InstanceStatus.Confirmed -> effectiveAmount
+                                    | InstanceStatus.InFlight -> cmd.amount
                                     | _ -> None
 
                                 let journalEntryIdToSet =
@@ -101,10 +102,11 @@ module ObligationInstanceService =
                                     | InstanceStatus.Confirmed -> cmd.confirmedDate
                                     | _ -> None
 
-                                let notesToSet =
-                                    match cmd.targetStatus with
-                                    | InstanceStatus.Skipped -> cmd.notes
-                                    | _ -> None
+                                // Notes are decorative — caller-supplied value is
+                                // honoured on every transition. Repository skips
+                                // the column when None, so existing notes are
+                                // preserved if no new value is supplied.
+                                let notesToSet = cmd.notes
 
                                 let updated =
                                     ObligationInstanceRepository.updateStatus

@@ -164,6 +164,41 @@ Feature: Obligation Instance Status Transitions
         And the instance status is "skipped"
         And the instance notes contain "existing note"
 
+    # --- Field Passthrough (regression coverage for BUG-A and BUG-B) ---
+
+    @FT-ST-024
+    Scenario: Transition from expected to in_flight with amount preserves the amount
+        Given an obligation instance in status "expected"
+        When I transition it to "in_flight" with amount 62.03
+        Then the transition succeeds
+        And the instance status is "in_flight"
+        And the instance amount is 62.03
+
+    @FT-ST-025
+    Scenario: Transition with notes preserves the notes on a non-skipped target
+        Given an obligation instance in status "expected"
+        When I transition it to "in_flight" with notes "autopay confirmed via portal"
+        Then the transition succeeds
+        And the instance status is "in_flight"
+        And the instance notes contain "autopay confirmed via portal"
+
+    @FT-ST-026
+    Scenario Outline: Notes are preserved on every valid non-skipped transition
+        Given an obligation instance in status "<from>" suitable for transition to "<to>"
+        When I transition it to "<to>" with notes "note for <to>" and any required guard fields
+        Then the transition succeeds
+        And the instance notes contain "note for <to>"
+
+        Examples:
+            | from      | to        |
+            | expected  | in_flight |
+            | expected  | confirmed |
+            | expected  | overdue   |
+            | in_flight | confirmed |
+            | in_flight | overdue   |
+            | overdue   | confirmed |
+            | confirmed | posted    |
+
     # --- Complete Invalid Transition Coverage (REM-002) ---
 
     @FT-ST-023
