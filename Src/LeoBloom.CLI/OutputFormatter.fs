@@ -709,6 +709,20 @@ let private formatPositionList (positions: Position list) : string =
 
 // --- Dispatch formatting based on type ---
 
+// --- Net Worth formatting ---
+
+let private formatNetWorth (report: NetWorthReport) : string =
+    let lines = ResizeArray<string>()
+    lines.Add(sprintf "Net Worth as of %s" (report.asOfDate.ToString("yyyy-MM-dd")))
+    lines.Add("")
+    lines.Add(sprintf "  %-50s  %14s" "Label" "Amount")
+    lines.Add(sprintf "  %s  %s" (String.replicate 50 "-") (String.replicate 14 "-"))
+    for item in report.lines do
+        let indent = String.replicate (item.level * 2) " "
+        let label = if item.label.Length > (50 - (item.level * 2)) then item.label.Substring(0, 50 - (item.level * 2) - 3) + "..." else item.label
+        lines.Add(sprintf "  %s%-*s  %14M" indent (50 - (item.level * 2)) label item.amount)
+    String.Join(Environment.NewLine, lines)
+
 let formatHuman (value: obj) : string =
     match value with
     | :? PostedJournalEntry as p -> formatPostedEntry p
@@ -732,6 +746,7 @@ let formatHuman (value: obj) : string =
     | :? InvestmentAccount as a -> formatInvestmentAccount a
     | :? Fund as f -> formatFund f
     | :? Position as p -> formatPosition p
+    | :? NetWorthReport as r -> formatNetWorth r
     | _ -> sprintf "%A" value
 
 let formatJson (value: obj) : string =

@@ -24,6 +24,7 @@ Feature: Report CLI Commands
         And stdout contains "general-ledger"
         And stdout contains "cash-receipts"
         And stdout contains "cash-disbursements"
+        And stdout contains "net-worth"
         And stdout contains "projection"
         And the exit code is 0
 
@@ -242,6 +243,7 @@ Feature: Report CLI Commands
             | general-ledger      |
             | cash-receipts       |
             | cash-disbursements  |
+            | net-worth          |
             | projection          |
 
     # ===================================================================

@@ -67,3 +67,15 @@ module ReportingTypes =
           toDate: DateOnly
           entries: CashDisbursementEntry list
           totalDisbursements: decimal }
+
+    // --- Net Worth types ---
+
+    type NetWorthLineItem =
+        { ordinal: int
+          label: string
+          amount: decimal
+          level: int }
+
+    type NetWorthReport =
+        { asOfDate: DateOnly
+          lines: NetWorthLineItem list }

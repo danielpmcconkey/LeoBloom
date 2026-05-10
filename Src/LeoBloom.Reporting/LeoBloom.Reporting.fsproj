@@ -13,6 +13,8 @@
     <Compile Include="ScheduleERepository.fs" />
     <Compile Include="GeneralLedgerRepository.fs" />
     <Compile Include="CashFlowRepository.fs" />
+    <Compile Include="NetWorthRepository.fs" />
+    <Compile Include="NetWorthReportService.fs" />
     <Compile Include="ScheduleEService.fs" />
     <Compile Include="GeneralLedgerReportService.fs" />
     <Compile Include="CashFlowReportService.fs" />

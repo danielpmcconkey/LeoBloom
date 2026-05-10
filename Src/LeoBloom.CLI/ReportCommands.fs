@@ -107,6 +107,15 @@ type AccountBalanceArgs =
             | As_Of _ -> "As-of date (yyyy-MM-dd, defaults to today)"
             | Json -> "Output in JSON format"
 
+type NetWorthArgs =
+    | [<Mandatory>] As_Of of string
+    | Json
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | As_Of _ -> "As-of date (yyyy-MM-dd)"
+            | Json -> "Output in JSON format"
+
 type ProjectionArgs =
     | [<Mandatory>] Account of string
     | [<Mandatory>] Through of string
@@ -127,6 +136,7 @@ type ReportArgs =
     | [<CliPrefix(CliPrefix.None)>] Pnl_Subtree of ParseResults<PnlSubtreeArgs>
     | [<CliPrefix(CliPrefix.None)>] Account_Balance of ParseResults<AccountBalanceArgs>
     | [<CliPrefix(CliPrefix.None)>] Projection of ParseResults<ProjectionArgs>
+    | [<CliPrefix(CliPrefix.None)>] Net_Worth of ParseResults<NetWorthArgs>
     | [<CliPrefix(CliPrefix.None)>] Allocation of ParseResults<PortfolioReportCommands.AllocationArgs>
     | [<CliPrefix(CliPrefix.None)>] Portfolio_Summary of ParseResults<PortfolioReportCommands.PortfolioSummaryArgs>
     | [<CliPrefix(CliPrefix.None)>] Portfolio_History of ParseResults<PortfolioReportCommands.PortfolioHistoryArgs>
@@ -144,6 +154,7 @@ type ReportArgs =
             | Pnl_Subtree _ -> "P&L subtree for an account and period"
             | Account_Balance _ -> "Account balance as of a date"
             | Projection _ -> "Balance projection through a future date"
+            | Net_Worth _ -> "Net worth as of a date"
             | Allocation _        -> "Allocation breakdown by dimension"
             | Portfolio_Summary _ -> "Portfolio value and gain/loss summary"
             | Portfolio_History _ -> "Historical portfolio value time-series"
@@ -353,6 +364,24 @@ let private handleProjection (args: ParseResults<ProjectionArgs>) : int =
             try txn.Rollback() with _ -> ()
             reraise()
 
+let private handleNetWorth (isJson: bool) (args: ParseResults<NetWorthArgs>) : int =
+    let isJson = isJson || args.Contains NetWorthArgs.Json
+    let asOfRaw = args.GetResult NetWorthArgs.As_Of
+
+    match parseDate asOfRaw with
+    | Error e ->
+        write isJson (Error [e])
+    | Ok asOfDate ->
+        use conn = DataSource.openConnection()
+        use txn = conn.BeginTransaction()
+        try
+            let result = NetWorthReportService.generate txn asOfDate
+            txn.Commit()
+            write isJson (Ok (result :> obj))
+        with ex ->
+            try txn.Rollback() with _ -> ()
+            reraise()
+
 let private handleAccountBalance (isJson: bool) (args: ParseResults<AccountBalanceArgs>) : int =
     let isJson = isJson || args.Contains AccountBalanceArgs.Json
     let account = args.GetResult AccountBalanceArgs.Account
@@ -393,6 +422,7 @@ let dispatch (isJson: bool) (args: ParseResults<ReportArgs>) : int =
     | Some (Pnl_Subtree plArgs) -> handlePnlSubtree isJson plArgs
     | Some (Account_Balance abArgs) -> handleAccountBalance isJson abArgs
     | Some (Projection projArgs) -> handleProjection projArgs
+    | Some (Net_Worth nwArgs) -> handleNetWorth isJson nwArgs
     | Some (Allocation allocArgs)         -> PortfolioReportCommands.handleAllocation allocArgs
     | Some (Portfolio_Summary psArgs)     -> PortfolioReportCommands.handlePortfolioSummary psArgs
     | Some (Portfolio_History phArgs)     -> PortfolioReportCommands.handlePortfolioHistory phArgs
