@@ -85,6 +85,61 @@ Feature: Net Worth Report
         When I request the net worth report as of 2026-05-31
         Then "Cash A" has a balance of 1000.00
 
+    @FT-NW-008
+    Scenario: Report output is a flat list of line items with hierarchical structure
+        Given the net worth reporting schema exists
+        And a net-worth-test portfolio account "IRA" in "Tax deferred"
+        And a net-worth-test fund "VTSAX" of type "Stock" named "Total Stock Market"
+        And a net-worth-test position for "IRA" in "VTSAX" dated 2026-05-01 with value 80000.00
+        And a net-worth-test portfolio account "Roth" in "Tax free Roth"
+        And a net-worth-test fund "VXUS" of type "Stock" named "International Stock"
+        And a net-worth-test position for "Roth" in "VXUS" dated 2026-05-01 with value 20000.00
+        And a net-worth-test portfolio account "House" in "Real Estate"
+        And a net-worth-test fund "RE1" of type "Real estate" named "Primary Residence"
+        And a net-worth-test position for "House" in "RE1" dated 2026-05-01 with value 350000.00
+        And a net-worth-test ledger account "Checking" of subtype "Cash" with balance 5000.00
+        And a net-worth-test ledger account "Escrow" with code "1150" and balance 2000.00
+        And a net-worth-test ledger account "Mortgage" of type "liability" with balance 200000.00
+        When I request the net worth report as of 2026-05-01
+        Then the report lines are in this exact order:
+            | level | label                            | amount    |
+            | 0     | Total Net Worth                  | 257000.00 |
+            | 1     | Assets                           | 457000.00 |
+            | 2     | Securities                       | 100000.00 |
+            | 3     | Tax deferred                     | 80000.00  |
+            | 4     | VTSAX — Total Stock Market       | 80000.00  |
+            | 3     | Tax free Roth                    | 20000.00  |
+            | 4     | VXUS — International Stock       | 20000.00  |
+            | 2     | Real Estate                      | 350000.00 |
+            | 3     | House                            | 350000.00 |
+            | 2     | Cash                             | 5000.00   |
+            | 3     | Checking                         | 5000.00   |
+            | 2     | Frozen                           | 2000.00   |
+            | 3     | Escrow                           | 2000.00   |
+            | 1     | Liabilities                      | 200000.00 |
+            | 2     | Mortgage                         | 200000.00 |
+        And each line has a sequential ordinal starting at 1
+        And fund positions use the format "{symbol} — {fund name}" as label
+        And real estate entries use the investment account name as label
+
+    @FT-NW-009
+    Scenario: Empty asset categories are omitted from the report
+        Given the net worth reporting schema exists
+        And a net-worth-test ledger account "Cash Only" of subtype "Cash" with balance 1000.00
+        And a net-worth-test ledger account "Credit Card" of type "liability" with balance 500.00
+        When I request the net worth report as of 2026-05-01
+        Then the report lines are in this exact order:
+            | level | label           | amount  |
+            | 0     | Total Net Worth | 500.00  |
+            | 1     | Assets          | 1000.00 |
+            | 2     | Cash            | 1000.00 |
+            | 3     | Cash Only       | 1000.00 |
+            | 1     | Liabilities     | 500.00  |
+            | 2     | Credit Card     | 500.00  |
+        And the report does not contain "Securities"
+        And the report does not contain "Real Estate"
+        And the report does not contain "Frozen"
+
     # ===================================================================
     # CLI Specs
     # ===================================================================
